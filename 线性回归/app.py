@@ -10,7 +10,24 @@ from flask import Flask, jsonify, render_template, request
 app = Flask(__name__)
 
 BOSTON_DATA_URL = "http://lib.stat.cmu.edu/datasets/boston"
-FEATURE_NAME = "RM"
+FEATURE_NAMES = [
+    "CRIM（城镇人均犯罪率）",
+    "ZN（非零售用地比例）",
+    "INDUS（城镇中非住宅用地比例）",
+    "CHAS（是否邻近河流）",
+    "NOX（一氧化氮浓度）",
+    "RM（平均房间数）",
+    "AGE（建造于1940年之前的房屋比例）",
+    "DIS（到波士顿中心的距离）",
+    "RAD（道路便利性指数）",
+    "TAX（每万美元的财产税率）",
+    "PTRATIO（师生比例）",
+    "B（黑人比例）",
+    "LSTAT（低收入人群比例）",
+]
+DEFAULT_FEATURE_NAME = FEATURE_NAMES[5]
+FEATURE_SET = set(FEATURE_NAMES)
+TARGET_NAME = "MEDV"
 
 
 @dataclass
@@ -24,27 +41,27 @@ class TrainingResult:
     x_line: List[float]
 
 
-def load_boston_data() -> Dict[str, np.ndarray]:
-    """加载波士顿房价数据，只取 RM 作为单特征。"""
+def load_boston_data() -> pd.DataFrame:
+    """加载波士顿房价数据，保留全部 13 个特征。"""
     raw_df = pd.read_csv(BOSTON_DATA_URL, sep=r"\s+", skiprows=22, header=None)
     data_array = np.hstack([raw_df.values[::2, :], raw_df.values[1::2, :2]])
     target = raw_df.values[1::2, 2].astype(float)
-    feature_names = [
-        "CRIM", "ZN", "INDUS", "CHAS", "NOX", "RM", "AGE",
-        "DIS", "RAD", "TAX", "PTRATIO", "B", "LSTAT",
-    ]
-    df = pd.DataFrame(data_array, columns=feature_names)
-    df["MEDV"] = target
-
-    x = df[FEATURE_NAME].to_numpy(dtype=float)
-    y = df["MEDV"].to_numpy(dtype=float)
-    return {"x": x, "y": y}
+    df = pd.DataFrame(data_array, columns=FEATURE_NAMES)
+    df[TARGET_NAME] = target
+    return df
 
 
 DATASET = load_boston_data()
-X_RAW = DATASET["x"]
-Y_RAW = DATASET["y"]
-X_LINE = np.linspace(X_RAW.min(), X_RAW.max(), 160)
+
+
+def get_feature_arrays(feature_name: str) -> tuple[np.ndarray, np.ndarray]:
+    normalized = str(feature_name).strip().upper()
+    if normalized not in FEATURE_SET:
+        raise ValueError(f"不支持的特征：{feature_name}")
+
+    x = DATASET[normalized].to_numpy(dtype=float)
+    y = DATASET[TARGET_NAME].to_numpy(dtype=float)
+    return x, y
 
 
 def mse(y_true: np.ndarray, y_pred: np.ndarray) -> float:
@@ -79,9 +96,9 @@ def train_gradient_descent(
 ) -> Dict[str, Any]:
     """手写梯度下降，返回每轮参数、loss 曲线和最终回归线。"""
     x_mean = float(np.mean(x))
-    x_std = float(np.std(x))
+    x_std = float(np.std(x)) or 1.0
     y_mean = float(np.mean(y))
-    y_std = float(np.std(y))
+    y_std = float(np.std(y)) or 1.0
 
     x_norm = (x - x_mean) / x_std
     y_norm = (y - y_mean) / y_std
@@ -128,7 +145,8 @@ def train_gradient_descent(
     else:
         final_params = {"epoch": 0, "w": 0.0, "b": float(np.mean(y)), "loss": mse(y, np.full_like(y, np.mean(y)))}
 
-    line_y = final_params["w"] * X_LINE + final_params["b"]
+    x_line = np.linspace(float(np.min(x)), float(np.max(x)), 160)
+    line_y = final_params["w"] * x_line + final_params["b"]
     y_pred_all = final_params["w"] * x + final_params["b"]
 
     metrics = {
@@ -141,12 +159,12 @@ def train_gradient_descent(
 
     return {
         "scatter": {"x": x.tolist(), "y": y.tolist()},
-        "line": {"x": X_LINE.tolist(), "y": line_y.tolist()},
+        "line": {"x": x_line.tolist(), "y": line_y.tolist()},
         "loss_curve": loss_curve,
         "params_history": params_history,
         "final_params": final_params,
         "metrics": metrics,
-        "x_line": X_LINE.tolist(),
+        "x_line": x_line.tolist(),
     }
 
 
@@ -167,15 +185,21 @@ def compare_learning_rates(x: np.ndarray, y: np.ndarray, learning_rates: List[fl
 
 @app.route("/")
 def index() -> str:
-    return render_template("index.html")
+    return render_template(
+        "index.html",
+        feature_names=FEATURE_NAMES,
+        default_feature=DEFAULT_FEATURE_NAME,
+    )
 
 
 @app.route("/api/data", methods=["GET"])
 def api_data():
+    x, y = get_feature_arrays(DEFAULT_FEATURE_NAME)
     return jsonify(
         {
-            "scatter": {"x": X_RAW.tolist(), "y": Y_RAW.tolist()},
-            "feature": FEATURE_NAME,
+            "scatter": {"x": x.tolist(), "y": y.tolist()},
+            "feature": DEFAULT_FEATURE_NAME,
+            "feature_options": FEATURE_NAMES,
         }
     )
 
@@ -186,16 +210,21 @@ def api_train():
     learning_rate = float(payload.get("learning_rate", 0.05))
     epochs = int(payload.get("epochs", 120))
     compare_lrs = payload.get("compare_learning_rates", [])
+    feature_name = str(payload.get("feature_name", DEFAULT_FEATURE_NAME)).strip().upper()
 
     if learning_rate <= 0:
         return jsonify({"error": "learning_rate 必须大于 0"}), 400
     if epochs <= 0:
         return jsonify({"error": "epochs 必须大于 0"}), 400
+    if feature_name not in FEATURE_SET:
+        return jsonify({"error": f"feature_name 必须是以下之一：{', '.join(FEATURE_NAMES)}"}), 400
 
-    result = train_gradient_descent(X_RAW, Y_RAW, learning_rate, epochs)
+    x_raw, y_raw = get_feature_arrays(feature_name)
+    result = train_gradient_descent(x_raw, y_raw, learning_rate, epochs)
 
     response = {
-        "feature": FEATURE_NAME,
+        "feature": feature_name,
+        "feature_options": FEATURE_NAMES,
         "scatter": result["scatter"],
         "line": result["line"],
         "loss_curve": result["loss_curve"],
@@ -219,7 +248,7 @@ def api_train():
             except (TypeError, ValueError):
                 continue
         if cleaned:
-            response["compare_results"] = compare_learning_rates(X_RAW, Y_RAW, cleaned, epochs)
+            response["compare_results"] = compare_learning_rates(x_raw, y_raw, cleaned, epochs)
 
     return jsonify(response)
 
