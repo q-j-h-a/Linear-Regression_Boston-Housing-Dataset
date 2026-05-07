@@ -171,6 +171,18 @@
       font-weight: 500;
     }
 
+    .control select {
+      width: 100%;
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 12px 14px;
+      font-size: 14px;
+      color: var(--text);
+      background: rgba(255,255,255,0.95);
+      outline: none;
+      cursor: pointer;
+    }
+
     input[type="range"] {
       width: 100%;
       accent-color: var(--primary);
@@ -320,7 +332,7 @@
       <div class="hero-card">
         <h1>线性回归可视化教学系统</h1>
         <p>
-          本系统使用波士顿房价数据中的 RM（平均房间数）作为单特征，完整展示手写梯度下降训练、回归线拟合、损失曲线变化、每一轮参数更新，以及多学习率对比。
+          本系统使用波士顿房价数据中的 13 个特征之一作为单特征，完整展示手写梯度下降训练、回归线拟合、损失曲线变化、每一轮参数更新，以及多学习率对比。
           学生可以通过拖动滑条、点击按钮和播放训练动画，直观看到 learning rate 和 epochs 如何影响模型收敛。
         </p>
       </div>
@@ -348,6 +360,16 @@
         <div class="panel-header">控制面板</div>
         <div class="panel-body">
           <div class="control-grid">
+            <div class="control">
+              <label><span>Feature</span><small id="featureValueText">{{ default_feature }}</small></label>
+              <select id="featureSelect">
+                {% for feature in feature_names %}
+                  <option value="{{ feature }}" {% if feature == default_feature %}selected{% endif %}>{{ feature }}</option>
+                {% endfor %}
+              </select>
+              <div class="value-row"><span>从 13 个特征中切换</span><span>单特征回归</span></div>
+            </div>
+
             <div class="control">
               <label><span>Learning Rate</span><small id="lrValueText">0.050</small></label>
               <input id="lrSlider" type="range" min="0.001" max="0.5" step="0.001" value="0.05" />
@@ -381,7 +403,7 @@
       <main class="dashboard">
         <section class="panel chart-card">
           <div class="chart-title">散点图 + 回归线</div>
-          <div class="chart-subtitle">蓝色点为原始数据，红线为训练后的回归结果。</div>
+          <div class="chart-subtitle" id="scatterSubtitle">当前特征：{{ default_feature }}，蓝色点为原始数据，红线为训练后的回归结果。</div>
           <div id="scatterChart" class="chart"></div>
         </section>
 
@@ -426,6 +448,8 @@
   </div>
 
   <script>
+    const featureSelect = document.getElementById('featureSelect');
+    const featureValueText = document.getElementById('featureValueText');
     const lrSlider = document.getElementById('lrSlider');
     const epochSlider = document.getElementById('epochSlider');
     const lrValueText = document.getElementById('lrValueText');
@@ -439,6 +463,7 @@
     const statEpochs = document.getElementById('statEpochs');
     const statState = document.getElementById('statState');
     const comparePanel = document.getElementById('comparePanel');
+    const scatterSubtitle = document.getElementById('scatterSubtitle');
 
     const scatterChart = echarts.init(document.getElementById('scatterChart'));
     const lossChart = echarts.init(document.getElementById('lossChart'));
@@ -452,15 +477,18 @@
     }
 
     function syncControlText() {
+      const feature = featureSelect.value;
       const lr = Number(lrSlider.value);
       const epochs = Number(epochSlider.value);
+      featureValueText.textContent = feature;
       lrValueText.textContent = lr.toFixed(3);
       epochValueText.textContent = String(epochs);
       statLr.textContent = lr.toFixed(3);
       statEpochs.textContent = String(epochs);
+      scatterSubtitle.textContent = `当前特征：${feature}，蓝色点为原始数据，红线为训练后的回归结果。`;
     }
 
-    function buildScatterOption(scatter, line, currentPoint = null) {
+    function buildScatterOption(scatter, line, featureName, currentPoint = null) {
       const lineSeries = line ? line.x.map((x, idx) => [x, line.y[idx]]) : [];
       const series = [
         {
@@ -500,7 +528,7 @@
         tooltip: { trigger: 'axis' },
         legend: { top: 8 },
         grid: { left: 52, right: 22, top: 56, bottom: 48 },
-        xAxis: { type: 'value', name: 'RM', nameLocation: 'middle', nameGap: 28, splitLine: { show: true } },
+        xAxis: { type: 'value', name: featureName, nameLocation: 'middle', nameGap: 28, splitLine: { show: true } },
         yAxis: { type: 'value', name: 'MEDV', nameLocation: 'middle', nameGap: 40, splitLine: { show: true } },
         series,
       };
@@ -578,17 +606,19 @@
       const trainedEpochs = data.training_summary?.trained_epochs ?? 0;
       const converged = metrics.converged ? '已收敛' : '提前停止';
       statState.textContent = converged;
-      setStatus(`训练完成：${trainedEpochs} 轮。最终 w=${Number(finalParams.w || 0).toFixed(5)}，b=${Number(finalParams.b || 0).toFixed(5)}，Loss=${Number(metrics.final_loss || 0).toFixed(6)}。`);
+      setStatus(`使用 ${data.feature} 特征训练完成：${trainedEpochs} 轮。最终 w=${Number(finalParams.w || 0).toFixed(5)}，b=${Number(finalParams.b || 0).toFixed(5)}，Loss=${Number(metrics.final_loss || 0).toFixed(6)}。`);
       document.getElementById('statusBox').style.background = metrics.converged ? 'rgba(15,118,110,0.08)' : 'rgba(245,158,11,0.10)';
     }
 
     function renderMainCharts(data) {
       latestResponse = data;
+      featureSelect.value = data.feature || featureSelect.value;
+      scatterSubtitle.textContent = `当前特征：${featureSelect.value}，蓝色点为原始数据，红线为训练后的回归结果。`;
       const currentPoint = data.params_history?.length ? {
         x: data.params_history[data.params_history.length - 1].w,
         y: data.params_history[data.params_history.length - 1].b,
       } : null;
-      scatterChart.setOption(buildScatterOption(data.scatter, data.line, currentPoint), true);
+      scatterChart.setOption(buildScatterOption(data.scatter, data.line, data.feature || featureSelect.value, currentPoint), true);
       lossChart.setOption(buildLossOption(data.loss_curve), true);
       renderHistoryTable(data.params_history);
       updateMetrics(data);
@@ -601,6 +631,7 @@
       const payload = {
         learning_rate: Number(lrSlider.value),
         epochs: Number(epochSlider.value),
+        feature_name: featureSelect.value,
       };
       if (withCompare) {
         payload.compare_learning_rates = [0.001, 0.005, 0.01, 0.05, 0.1];
@@ -635,6 +666,10 @@
         animateBtn.disabled = false;
         compareBtn.disabled = false;
       }
+    }
+
+    async function handleFeatureChange() {
+      await trainModel(false);
     }
 
     function animateTraining() {
@@ -685,6 +720,7 @@
 
     lrSlider.addEventListener('input', syncControlText);
     epochSlider.addEventListener('input', syncControlText);
+    featureSelect.addEventListener('change', handleFeatureChange);
     trainBtn.addEventListener('click', () => trainModel(false));
     animateBtn.addEventListener('click', animateTraining);
     compareBtn.addEventListener('click', () => trainModel(true));
