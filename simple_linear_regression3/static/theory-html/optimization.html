@@ -1,0 +1,82 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>参数优化</h1>
+    <p>参数优化的目标是找到合适的 w 和 b，使简单线性回归模型在当前特征上的 MSE 尽可能小。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. 优化对象</h2>
+    <p>对于模型 ŷ = wx + b，需要优化的参数只有两个：</p>
+    <table>
+      <tr><th>参数</th><th>含义</th><th>影响</th></tr>
+      <tr><td>w</td><td>斜率</td><td>控制回归线倾斜方向和倾斜程度</td></tr>
+      <tr><td>b</td><td>截距</td><td>控制回归线整体上下移动</td></tr>
+    </table>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 最小二乘法</h2>
+    <p>最小二乘法希望找到一条直线，使所有样本点到直线的误差平方和最小。</p>
+    <span class="formula">目标：min Σ(ŷᵢ - yᵢ)²</span>
+    <p>它可以作为“最优参考线”的来源，帮助学生比较梯度下降当前训练结果与理论较优结果之间的差距。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 梯度下降法</h2>
+    <p>梯度下降不是一次性得到答案，而是从初始 w、b 出发，按照损失下降方向逐步更新。</p>
+    <span class="formula">w := w - learning_rate × dw<br>b := b - learning_rate × db</span>
+    <p>其中 learning_rate 是学习率，决定每次参数更新走多远。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 参数调优</h2>
+    <p>实验界面中可以调节学习率和训练轮数，观察模型收敛效果。</p>
+    <table>
+      <tr><th>参数</th><th>过小</th><th>过大</th><th>合适时表现</th></tr>
+      <tr><td>学习率</td><td>收敛很慢</td><td>震荡或发散</td><td>Loss 稳定下降</td></tr>
+      <tr><td>训练轮数</td><td>模型还未充分学习</td><td>可能浪费计算时间</td><td>指标逐渐稳定</td></tr>
+    </table>
+  </div>
+
+  <div class="theory-card">
+    <h2>5. 可视化理解优化过程</h2>
+    <ul class="theory-list">
+      <li><strong>Loss 等高线图：</strong>把 w 和 b 看作坐标，观察当前参数点如何移动到低损失区域。</li>
+      <li><strong>Loss 三维曲面图：</strong>把损失函数看成一个地形，梯度下降就是沿着坡面往低处走。</li>
+      <li><strong>w 参数轨迹：</strong>观察斜率如何随训练轮数变化。</li>
+      <li><strong>b 参数轨迹：</strong>观察截距如何随训练轮数变化。</li>
+      <li><strong>每轮参数表：</strong>记录 epoch、w、b、MSE、RMSE、MAE、R²、dw、db。</li>
+    </ul>
+  </div>
+
+  <div class="warn">
+    学习率不是越大越好。过大的学习率可能让参数越过最低点，导致 Loss 不降反升。
+  </div>
+</div>

@@ -1,0 +1,74 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>前置知识</h1>
+    <p>本实验需要具备少量 Python 编程基础和基础数学知识，重点理解导数、偏导数、损失函数和二维坐标系中的直线关系。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. Python 基础编程</h2>
+    <p>学生需要能够阅读和编写基本 Python 代码，包括变量、函数、循环、列表和数组操作。</p>
+    <ul class="theory-list">
+      <li>能够使用变量保存特征值、标签值、参数 w 和 b。</li>
+      <li>能够使用循环执行多轮训练。</li>
+      <li>能够使用函数封装预测、损失计算和参数更新过程。</li>
+      <li>能够使用 NumPy 完成数组计算。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 一次函数与直线</h2>
+    <p>简单线性回归的模型本质上就是一条直线：</p>
+    <span class="formula">y = wx + b</span>
+    <ul class="theory-list">
+      <li><strong>w：</strong>斜率，决定直线倾斜方向和倾斜程度。</li>
+      <li><strong>b：</strong>截距，决定直线整体上下位置。</li>
+      <li><strong>x：</strong>输入特征，例如 RM。</li>
+      <li><strong>y：</strong>标签值，例如 MEDV。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 导数和偏导数</h2>
+    <p>导数可以理解为函数在某一点变化的快慢。在线性回归训练中，我们关心的是损失函数对参数 w 和 b 的变化方向。</p>
+    <span class="formula">如果 ∂Loss/∂w > 0，说明 w 增大可能使 Loss 增大，需要减小 w<br>如果 ∂Loss/∂w < 0，说明 w 增大可能使 Loss 减小，可以增大 w</span>
+    <p>偏导数表示在多个变量中，只研究其中一个变量变化时函数如何变化。梯度下降更新 w 和 b 时，就会分别用到对 w 和 b 的偏导。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 均值、标准差与标准化</h2>
+    <p>实验界面中支持原始特征和标准化特征切换。标准化用于把不同特征调整到相似尺度，方便观察和训练。</p>
+    <span class="formula">x_standardized = (x - mean) / std</span>
+    <p>标准化不会改变特征与 MEDV 的整体相关方向，但会改变横轴数值范围，也会改变参数 w 和 b 的数值大小。</p>
+  </div>
+
+  <div class="tip">
+    对初学者来说，先把线性回归理解成“在散点图中找一条合适的直线”，再理解梯度下降和损失函数，会更容易。
+  </div>
+</div>

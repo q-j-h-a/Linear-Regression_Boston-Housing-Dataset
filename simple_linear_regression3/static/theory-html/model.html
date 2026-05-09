@@ -1,0 +1,76 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>训练模型</h1>
+    <p>本实验训练的是简单线性回归模型。每次只使用一个特征 x，预测房价标签 MEDV。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. 核心模型</h2>
+    <span class="formula">ŷ = wx + b</span>
+    <p>在房价预测实验中，x 可以是 RM、LSTAT、PTRATIO 等任意一个被选中的特征，ŷ 是预测的 MEDV。</p>
+    <ul class="theory-list">
+      <li><strong>w：</strong>权重或斜率，表示特征 x 增加时预测房价的变化趋势。</li>
+      <li><strong>b：</strong>偏置或截距，表示回归线的整体上下位置。</li>
+      <li><strong>ŷ：</strong>模型预测的房价中位数。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 手动实现模型训练</h2>
+    <p>本实验强调从零实现梯度下降算法，不依赖高级模型库直接完成训练。学生需要理解预测、误差、损失、梯度和参数更新之间的关系。</p>
+    <div class="step"><div class="step-num">1</div><div class="step-body">初始化参数 w 和 b，例如 w = 0，b = 0。</div></div>
+    <div class="step"><div class="step-num">2</div><div class="step-body">根据当前参数计算预测值 ŷ = wx + b。</div></div>
+    <div class="step"><div class="step-num">3</div><div class="step-body">计算预测值与真实 MEDV 的误差。</div></div>
+    <div class="step"><div class="step-num">4</div><div class="step-body">计算 MSE 损失函数。</div></div>
+    <div class="step"><div class="step-num">5</div><div class="step-body">根据梯度更新 w 和 b。</div></div>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 模型训练可视化</h2>
+    <p>实验界面可以同时展示样本点、当前回归线和最优参考线。随着训练轮数增加，当前回归线会逐渐靠近更合理的位置。</p>
+    <table>
+      <tr><th>可视化内容</th><th>作用</th></tr>
+      <tr><td>样本点</td><td>显示特征 x 与 MEDV 的真实分布</td></tr>
+      <tr><td>当前回归线</td><td>显示当前参数 w、b 对应的模型</td></tr>
+      <tr><td>最优参考线</td><td>帮助观察当前模型与较优模型的差距</td></tr>
+      <tr><td>Loss 曲线</td><td>观察训练过程是否收敛</td></tr>
+    </table>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 不同特征对应不同模型</h2>
+    <p>选择 RM 时，训练的是 RM → MEDV 的简单线性模型；选择 LSTAT 时，训练的是 LSTAT → MEDV 的简单线性模型。不同特征会得到不同的 w、b 和评价指标。</p>
+    <span class="formula">RM 模型：MEDV = w × RM + b<br>LSTAT 模型：MEDV = w × LSTAT + b<br>PTRATIO 模型：MEDV = w × PTRATIO + b</span>
+  </div>
+
+  <div class="tip">
+    判断模型是否训练成功，不只看回归线是否“看起来合理”，还要看 Loss 是否下降，以及 RMSE、MAE、R² 是否改善。
+  </div>
+</div>

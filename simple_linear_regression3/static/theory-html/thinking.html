@@ -1,0 +1,89 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>思考拓展</h1>
+    <p>本部分用于引导学生从简单线性回归出发，进一步思考模型适用条件、过拟合问题和更复杂的回归模型。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. 一个特征真的足够预测房价吗？</h2>
+    <p>简单线性回归只使用一个特征，例如 RM 或 LSTAT。它适合教学和解释，但真实房价往往受到多个因素共同影响。因此单特征模型可能无法捕捉全部房价变化。</p>
+    <div class="note">
+      简单线性回归适合理解“特征与标签的基本关系”，但不一定是最终预测效果最好的模型。
+    </div>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 当特征数量远大于样本数量时会怎样？</h2>
+    <p>如果特征数量远大于样本数量，模型可能过度依赖训练数据中的偶然规律，导致在训练集上表现很好，但在新数据上表现很差。这就是过拟合风险。</p>
+    <ul class="theory-list">
+      <li>模型参数过多，容易记住训练样本。</li>
+      <li>不同特征之间可能存在强相关，导致参数不稳定。</li>
+      <li>训练误差低，不代表预测新样本也准确。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 如何判断模型是否过拟合？</h2>
+    <p>可以把数据划分为训练集和测试集，对比两部分的指标。</p>
+    <table>
+      <tr><th>现象</th><th>可能含义</th></tr>
+      <tr><td>训练集误差低，测试集误差也低</td><td>模型泛化较好</td></tr>
+      <tr><td>训练集误差低，测试集误差高</td><td>可能过拟合</td></tr>
+      <tr><td>训练集误差高，测试集误差也高</td><td>可能欠拟合</td></tr>
+    </table>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 过拟合有哪些解决方法？</h2>
+    <ul class="theory-list">
+      <li>增加训练数据量。</li>
+      <li>减少无关特征或弱相关特征。</li>
+      <li>使用正则化方法，例如 Ridge 或 Lasso。</li>
+      <li>使用交叉验证选择更合适的模型。</li>
+      <li>控制模型复杂度，避免盲目增加特征或高阶项。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>5. 可继续拓展的方向</h2>
+    <table>
+      <tr><th>拓展方向</th><th>说明</th></tr>
+      <tr><td>多元线性回归</td><td>把多个特征同时输入模型，比较与简单线性回归的效果差异</td></tr>
+      <tr><td>多项式回归</td><td>用于拟合非线性关系，例如 LSTAT 与 MEDV 可能不是严格直线</td></tr>
+      <tr><td>Ridge 回归</td><td>加入 L2 正则化，缓解参数过大和共线性问题</td></tr>
+      <tr><td>Lasso 回归</td><td>加入 L1 正则化，可用于特征选择</td></tr>
+      <tr><td>交叉验证</td><td>更稳定地评估模型泛化能力</td></tr>
+    </table>
+  </div>
+
+  <div class="tip">
+    可以把本实验看作回归模型学习的起点：先理解一个特征和一条直线，再逐步扩展到多个特征、非线性关系和正则化模型。
+  </div>
+</div>

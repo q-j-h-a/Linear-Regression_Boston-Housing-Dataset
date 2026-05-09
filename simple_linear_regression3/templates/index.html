@@ -1,0 +1,2718 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>简单线性回归教学实验</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts-gl@2/dist/echarts-gl.min.js"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
+  <style>
+    :root {
+      --bg: #f7f8fb;
+      --surface: #ffffff;
+      --soft: #f6f7fb;
+      --text: #172033;
+      --muted: #6b7280;
+      --line: #e6e8ef;
+      --purple: #5b35f5;
+      --purple-soft: #f1efff;
+      --green: #0f9f78;
+      --green-soft: #eafaf4;
+      --amber: #c47a11;
+      --amber-soft: #fff7e8;
+      --rose: #d9354f;
+      --blue: #2563eb;
+      --shadow: 0 18px 46px rgba(31, 41, 55, .08);
+      --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    * {
+      scrollbar-width: thin;
+      scrollbar-color: rgba(91, 53, 245, .38) transparent;
+    }
+    *::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    *::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    *::-webkit-scrollbar-thumb {
+      background: linear-gradient(180deg, rgba(91, 53, 245, .42), rgba(15, 159, 120, .38));
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: padding-box;
+    }
+    *::-webkit-scrollbar-thumb:hover {
+      background: linear-gradient(180deg, rgba(91, 53, 245, .72), rgba(15, 159, 120, .62));
+      background-clip: padding-box;
+    }
+    html, body {
+      height: 100%;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      background: var(--bg);
+      font-family: "Microsoft YaHei", "Noto Sans SC", system-ui, sans-serif;
+      letter-spacing: 0;
+      overflow: hidden;
+    }
+    button, select, input { font: inherit; }
+    button { cursor: pointer; }
+    .app {
+      height: 100vh;
+      min-height: 0;
+      display: grid;
+      grid-template-rows: 44px minmax(0, 1fr);
+      background: #fff;
+      overflow: hidden;
+    }
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 0 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .92);
+      backdrop-filter: blur(16px);
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+    .logo {
+      width: 28px;
+      height: 28px;
+      border-radius: 8px;
+      background: #111827;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-weight: 900;
+      letter-spacing: 0;
+    }
+    .brand h1 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.25;
+    }
+    .brand p {
+      margin: 1px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .top-actions.hidden-top {
+      display: none;
+    }
+    .pill {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .shell {
+      min-height: 0;
+      height: calc(100vh - 44px);
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr) 320px;
+      overflow: hidden;
+    }
+    .shell.theory {
+      grid-template-columns: 250px minmax(0, 1fr);
+    }
+    .shell.theory .assistant {
+      display: none;
+    }
+    .sidebar {
+      border-right: 1px solid var(--line);
+      background: #fff;
+      padding: 22px 16px;
+      min-height: 0;
+      height: 100%;
+      overflow: auto;
+    }
+    .main {
+      min-width: 0;
+      min-height: 0;
+      height: 100%;
+      background: linear-gradient(180deg, #fbfcff 0%, #f7f8fb 100%);
+      overflow: auto;
+      padding: 32px;
+    }
+    .assistant {
+      border-left: 1px solid var(--line);
+      background: #fff;
+      padding: 28px 24px;
+      min-height: 0;
+      height: 100%;
+      overflow: auto;
+    }
+    details.nav-section {
+      border-bottom: 1px solid var(--line);
+      padding: 0 0 16px;
+      margin-bottom: 18px;
+    }
+    details.nav-section summary {
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 15px;
+      font-weight: 900;
+      color: #111827;
+      margin-bottom: 14px;
+    }
+    details.nav-section summary::-webkit-details-marker { display: none; }
+    .chev {
+      width: 22px;
+      height: 22px;
+      border-radius: 999px;
+      background: var(--soft);
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      transition: transform .18s ease;
+    }
+    details[open] .chev { transform: rotate(90deg); }
+    .step-list {
+      position: relative;
+      display: grid;
+      gap: 0;
+      padding-left: 14px;
+    }
+    .step-list:before {
+      content: "";
+      position: absolute;
+      left: 10px;
+      top: 14px;
+      bottom: 14px;
+      width: 1px;
+      background: var(--line);
+    }
+    .nav-btn {
+      position: relative;
+      width: 100%;
+      border: 0;
+      background: transparent;
+      display: grid;
+      grid-template-columns: 22px 1fr;
+      gap: 10px;
+      align-items: start;
+      text-align: left;
+      padding: 10px 0;
+      color: var(--text);
+      border-radius: 12px;
+    }
+    .nav-btn:focus,
+    .nav-btn:focus-visible,
+    details.nested-section summary:focus,
+    details.nested-section summary:focus-visible {
+      outline: none;
+    }
+    .nav-btn:hover {
+      background: var(--purple-soft);
+    }
+    .dot {
+      position: relative;
+      z-index: 1;
+      width: 18px;
+      height: 18px;
+      border-radius: 999px;
+      border: 2px solid #cfd5df;
+      background: #fff;
+      margin-top: 2px;
+      transition: all .18s ease;
+    }
+    .nav-btn strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .nav-btn > span:not(.dot) {
+      display: block !important;
+      min-width: 0;
+    }
+    .nav-btn > span:not(.dot) strong {
+      display: block !important;
+      visibility: visible !important;
+      opacity: 1 !important;
+    }
+    .nav-btn > span:not(.dot) > span:not(.chev) {
+      display: none;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 3px;
+    }
+    .nav-btn:hover strong { color: var(--purple); }
+    .nav-btn:hover .dot {
+      border-color: var(--purple);
+    }
+    .nav-btn.active .dot {
+      border-color: var(--purple);
+      background: var(--purple);
+      box-shadow: 0 0 0 5px var(--purple-soft);
+    }
+    .nav-btn.active strong { color: var(--purple); }
+    .nav-subhead {
+      margin: 8px 0 4px 32px;
+      color: #111827;
+      font-weight: 900;
+      font-size: 13px;
+    }
+    details.nested-section {
+      position: relative;
+      padding: 0;
+      margin: 0;
+    }
+    details.nested-section summary {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 22px 1fr 22px;
+      align-items: start;
+      gap: 10px;
+      color: var(--text);
+      cursor: pointer;
+      border-radius: 12px;
+      padding: 10px 0 6px;
+    }
+    details.nested-section summary::-webkit-details-marker { display: none; }
+    details.nested-section summary:hover {
+      background: var(--purple-soft);
+      color: var(--purple);
+    }
+    details.nested-section summary strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    details.nested-section summary span.sub {
+      display: none;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+      margin-top: 3px;
+      font-weight: 400;
+    }
+    details.nested-section summary:hover .dot {
+      border-color: var(--purple);
+    }
+    details.nested-section.active summary strong {
+      color: var(--purple);
+    }
+    details.nested-section.active summary > .dot {
+      border-color: var(--purple);
+      background: var(--purple);
+      box-shadow: 0 0 0 5px var(--purple-soft);
+    }
+    details.nested-section .step-list {
+      padding-left: 22px;
+      margin-top: 0;
+      gap: 0;
+    }
+    details.nested-section .step-list:before {
+      left: 18px;
+      top: 6px;
+    }
+    details.nested-section .nav-btn {
+      padding: 7px 0;
+    }
+    details.nested-section .nav-btn strong {
+      font-size: 14px;
+    }
+    details.nested-section .chev {
+      margin-top: 0;
+    }
+    .hero-card {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 26px;
+      margin-bottom: 20px;
+    }
+    .hero-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: flex-start;
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 22px;
+      margin-bottom: 22px;
+    }
+    .eyebrow {
+      color: var(--purple);
+      font-size: 13px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+    h2 {
+      margin: 0;
+      font-size: 26px;
+      line-height: 1.25;
+      letter-spacing: 0;
+    }
+    .lead {
+      margin: 10px 0 0;
+      color: #4b5563;
+      line-height: 1.75;
+      max-width: 900px;
+    }
+    .primary-btn {
+      border: 0;
+      border-radius: 10px;
+      padding: 12px 18px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--purple), #3919d8);
+      font-weight: 900;
+      white-space: nowrap;
+      box-shadow: 0 12px 22px rgba(91, 53, 245, .22);
+    }
+    .stat-cards {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 16px;
+    }
+    .stat-card {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 18px;
+      background: #fff;
+      min-height: 112px;
+    }
+    .stat-card.purple { background: #f7f5ff; }
+    .stat-card.green { background: #effcf6; }
+    .stat-card.amber { background: #fffaf0; }
+    .stat-card span {
+      display: block;
+      color: var(--muted);
+      font-weight: 800;
+      margin-bottom: 10px;
+    }
+    .stat-card strong {
+      display: block;
+      font-size: 34px;
+      line-height: 1;
+    }
+    .content-card {
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      padding: 24px;
+      margin-bottom: 20px;
+    }
+    .content-card p {
+      margin: 10px 0;
+      line-height: 1.9;
+      color: #283449;
+      font-size: 16px;
+    }
+    .html-lesson {
+      margin-top: 18px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      overflow: hidden;
+      padding: 0;
+    }
+    .html-lesson iframe {
+      width: 100%;
+      min-height: 120px;
+      border: 0;
+      background: #fff;
+      display: block;
+    }
+    .formula {
+      white-space: pre-wrap;
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      line-height: 1.75;
+      overflow: auto;
+      color: #172033;
+    }
+    .best-param-panel {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+    .best-param {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fbfcff;
+      padding: 12px;
+      min-width: 0;
+    }
+    .best-param span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+    .best-param strong {
+      display: block;
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      font-size: 17px;
+      line-height: 1.25;
+      overflow-wrap: anywhere;
+    }
+    @media (max-width: 860px) {
+      .best-param-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .chart-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    .chart-grid.single {
+      grid-template-columns: minmax(min(680px, 100%), 980px);
+      justify-content: center;
+    }
+    .chart-card {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 455px;
+      height: clamp(455px, 54vh, 620px);
+      max-height: 820px;
+      resize: vertical;
+    }
+    .chart-card::after {
+      content: "";
+      position: absolute;
+      right: 10px;
+      bottom: 9px;
+      width: 18px;
+      height: 18px;
+      pointer-events: none;
+      opacity: .42;
+      background:
+        linear-gradient(135deg, transparent 54%, #9aa3b2 56%, #9aa3b2 62%, transparent 64%),
+        linear-gradient(135deg, transparent 68%, #9aa3b2 70%, #9aa3b2 76%, transparent 78%);
+    }
+    .chart-card.wide { grid-column: 1 / -1; }
+    .chart-card.small {
+      min-height: 340px;
+      height: clamp(340px, 42vh, 480px);
+    }
+    .chart-head {
+      padding: 16px 18px 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .chart-title {
+      font-weight: 900;
+      font-size: 16px;
+    }
+    .chart-sub {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+    }
+    .chart {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+    }
+    .chart-grid.single .chart-card {
+      min-height: 540px;
+      height: clamp(540px, 66vh, 740px);
+    }
+    .chart-card.wide {
+      min-height: 500px;
+      height: clamp(500px, 58vh, 680px);
+    }
+    .info-card-body {
+      min-height: 0;
+      overflow: auto;
+    }
+    .chart-card.wide > div[style*="padding:18px"] {
+      min-height: 0;
+      overflow: auto;
+    }
+    .dashboard-grid {
+      display: block;
+      position: relative;
+      min-height: 640px;
+    }
+    .dashboard-grid.grid-stack {
+      width: 100%;
+      overflow: visible;
+    }
+    .dashboard-grid.grid-stack > .grid-stack-item {
+      position: absolute;
+      min-width: 0;
+    }
+    .dashboard-grid .grid-stack-item-content {
+      position: absolute;
+      inset: 8px;
+      overflow: visible;
+    }
+    .dashboard-grid .chart-card {
+      height: 100%;
+      min-height: 0;
+      max-height: none;
+      resize: none;
+    }
+    .dashboard-grid .chart-head {
+      cursor: grab;
+    }
+    .dashboard-grid .chart-head:active {
+      cursor: grabbing;
+    }
+    .dashboard-grid .ui-resizable-se {
+      width: 22px;
+      height: 22px;
+      right: 8px;
+      bottom: 8px;
+    }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-x="0"] { left: 0%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-x="1"] { left: 25%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-x="2"] { left: 50%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-x="3"] { left: 75%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-w="1"] { width: 25%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-w="2"] { width: 50%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-w="3"] { width: 75%; }
+    .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-w="4"] { width: 100%; }
+    .empty-state {
+      border: 1px dashed #cfd5df;
+      border-radius: var(--radius);
+      background: #fff;
+      display: grid;
+      place-items: center;
+      min-height: 420px;
+      text-align: center;
+      color: var(--muted);
+      padding: 30px;
+    }
+    .right-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 900;
+      margin-bottom: 18px;
+    }
+    .right-title:before {
+      content: "";
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--purple);
+      box-shadow: 0 0 0 5px var(--purple-soft);
+    }
+    .helper-card, .control-card {
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 16px;
+      margin-bottom: 16px;
+    }
+    .helper-card h3, .control-card h3 {
+      margin: 0 0 10px;
+      font-size: 16px;
+    }
+    .helper-card p {
+      color: #4b5563;
+      line-height: 1.75;
+      margin: 0 0 10px;
+      font-size: 14px;
+    }
+    .mini-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .mini-stat {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 12px;
+      background: #fbfcff;
+      text-align: center;
+    }
+    .mini-stat span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+    .mini-stat strong {
+      display: block;
+      font-size: 23px;
+    }
+    label.control-label {
+      display: block;
+      font-weight: 900;
+      margin: 14px 0 8px;
+      font-size: 13px;
+    }
+    select, input[type="number"] {
+      width: 100%;
+      height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      outline: none;
+      padding: 0 12px;
+      color: var(--text);
+    }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--purple);
+    }
+    .check-list {
+      display: grid;
+      gap: 8px;
+    }
+    details.mode-menu {
+      position: relative;
+    }
+    details.mode-menu summary {
+      list-style: none;
+      min-height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fff;
+      padding: 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-weight: 900;
+      color: var(--text);
+    }
+    details.mode-menu summary::-webkit-details-marker { display: none; }
+    details.mode-menu summary:after {
+      content: "⌄";
+      color: var(--muted);
+      font-size: 18px;
+    }
+    details.mode-menu[open] summary:after {
+      transform: rotate(180deg);
+    }
+    details.mode-menu .check-list {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: #fff;
+      padding: 8px;
+      box-shadow: var(--shadow);
+    }
+    .check-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 10px 11px;
+      color: #273244;
+      background: #fff;
+      user-select: none;
+    }
+    .check-row input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--purple);
+    }
+    .check-row:has(input:checked) {
+      border-color: #c9c1ff;
+      background: var(--purple-soft);
+      color: #321aa2;
+      font-weight: 800;
+    }
+    .field-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+    .range-line {
+      display: flex;
+      justify-content: space-between;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 6px;
+    }
+    .button-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+    .btn {
+      border: 0;
+      border-radius: 10px;
+      color: #fff;
+      height: 38px;
+      font-weight: 900;
+    }
+    .btn.primary { background: var(--purple); }
+    .btn.green { background: var(--green); }
+    .btn.dark { background: #4b5563; }
+    .btn.rose { background: var(--rose); }
+    .runtime {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+    .runtime div {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+    .runtime strong { color: var(--text); }
+    .table-wrap {
+      overflow: auto;
+      max-height: 430px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+    }
+    .table-note {
+      margin: 0 0 10px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      font-size: 13px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      white-space: nowrap;
+      text-align: left;
+    }
+    th {
+      position: sticky;
+      top: 0;
+      background: #f8fafc;
+      z-index: 1;
+    }
+    .hidden { display: none !important; }
+    @media (max-width: 1260px) {
+      .shell { grid-template-columns: 240px minmax(0, 1fr); }
+      .shell.theory { grid-template-columns: 240px minmax(0, 1fr); }
+      .assistant { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+    }
+    @media (max-width: 860px) {
+      .app { grid-template-rows: auto minmax(0, 1fr); }
+      .topbar { align-items: flex-start; flex-direction: column; padding: 18px; }
+      .shell, .shell.theory, .chart-grid, .chart-grid.single, .stat-cards { grid-template-columns: 1fr; }
+      .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+      .chart-card.wide { grid-column: auto; }
+    }
+  </style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">ML</div>
+      <div>
+        <h1>简单线性回归教学实验</h1>
+        <p>机器学习基础实验 / Boston Housing 房价预测</p>
+      </div>
+    </div>
+    <div class="top-actions hidden-top">
+      <span class="pill" id="topFeature">当前特征 RM</span>
+      <button class="primary-btn" type="button" id="jumpExperiment">开始实验</button>
+    </div>
+  </header>
+
+  <div class="shell">
+    <aside class="sidebar">
+      <details class="nav-section" open>
+        <summary>理论部分 <span class="chev">›</span></summary>
+        <div class="step-list">
+          <button class="nav-btn" data-page="basic" type="button"><span class="dot"></span><span><strong>实验基本信息</strong><span>实验背景与任务</span></span></button>
+          <button class="nav-btn" data-page="purpose" type="button"><span class="dot"></span><span><strong>实验目的</strong><span>你需要掌握什么</span></span></button>
+          <button class="nav-btn" data-page="knowledge" type="button"><span class="dot"></span><span><strong>前置知识</strong><span>线性函数与误差</span></span></button>
+          <details class="nested-section" open>
+            <summary><span class="dot"></span><span><strong>模型介绍</strong><span class="sub">数据、模型和指标</span></span><span class="chev">›</span></summary>
+            <div class="step-list">
+              <button class="nav-btn" data-page="dataset" type="button"><span class="dot"></span><span><strong>数据集</strong><span>特征、标签和标准化</span></span></button>
+              <button class="nav-btn" data-page="model" type="button"><span class="dot"></span><span><strong>训练模型</strong><span>y = wx + b</span></span></button>
+              <button class="nav-btn" data-page="criterion" type="button"><span class="dot"></span><span><strong>学习准则</strong><span>MSE 损失函数</span></span></button>
+              <button class="nav-btn" data-page="optimization" type="button"><span class="dot"></span><span><strong>参数优化</strong><span>梯度下降更新</span></span></button>
+              <button class="nav-btn" data-page="evaluation" type="button"><span class="dot"></span><span><strong>评价指标</strong><span>RMSE、MAE、R 平方</span></span></button>
+            </div>
+          </details>
+          <button class="nav-btn" data-page="result" type="button"><span class="dot"></span><span><strong>预期成果</strong><span>实验完成标准</span></span></button>
+          <button class="nav-btn" data-page="thinking" type="button"><span class="dot"></span><span><strong>思考拓展</strong><span>从单特征到多特征</span></span></button>
+        </div>
+      </details>
+
+      <details class="nav-section" open>
+        <summary>实验部分 <span class="chev">›</span></summary>
+        <div class="step-list">
+          <button class="nav-btn" data-page="preprocess" type="button"><span class="dot"></span><span><strong>数据预处理</strong><span>观察数据与相关性</span></span></button>
+          <button class="nav-btn" data-page="train_eval" type="button"><span class="dot"></span><span><strong>模型训练与评估</strong><span>训练、优化和指标</span></span></button>
+          <button class="nav-btn" data-page="predict" type="button"><span class="dot"></span><span><strong>模型预测</strong><span>后续接入预测流程</span></span></button>
+        </div>
+      </details>
+
+      <details class="nav-section" open>
+        <summary>学生训练 <span class="chev">›</span></summary>
+        <div class="step-list">
+          <button class="nav-btn" data-page="student" type="button"><span class="dot"></span><span><strong>练习任务</strong><span>后续接入任务提交</span></span></button>
+        </div>
+      </details>
+    </aside>
+
+    <main class="main" id="main"></main>
+
+    <aside class="assistant">
+      <div id="rightPanel"></div>
+    </aside>
+  </div>
+</div>
+
+<script>
+const FEATURE_NAMES = {{ feature_names | tojson }};
+const DEFAULT_FEATURE = {{ default_feature | tojson }};
+
+const $ = (id) => document.getElementById(id);
+const charts = new Map();
+const chartResizeObservers = new Map();
+let dataGrid = null;
+let dataGridMode = null;
+let currentPage = "basic";
+let dataCache = null;
+let trainData = null;
+let predictData = null;
+let currentFrame = 0;
+let timer = null;
+let trainRenderViewsKey = "";
+
+const theoryPages = {
+  basic: {
+    title: "实验基本信息",
+    sub: "本实验用真实 Boston Housing 数据演示简单线性回归的完整流程。",
+    body: [
+      "实验围绕一个输入特征 x 和一个目标变量 y 展开，目标是学习一条直线来预测房价。",
+      "页面左侧是教学流程，中间是理论内容或实验图表，右侧在理论阶段提供学习提示，在实验阶段显示可操作参数。"
+    ],
+    helper: ["先理解任务目标，再进入数据预处理。", "本实验当前默认使用 RM 作为输入特征，目标变量为 MEDV。"]
+  },
+  purpose: {
+    title: "实验目的",
+    sub: "完成本实验后，学生应能解释线性回归训练过程中的关键概念。",
+    body: ["理解数据标准化、相关系数、回归直线、损失函数、梯度下降和评价指标。", "能够观察 w、b 的变化，并用 RMSE、MAE、R 平方判断模型效果。"],
+    helper: ["重点不是只看最终答案，而是看参数如何一步步接近更合适的位置。"]
+  },
+  knowledge: {
+    title: "前置知识",
+    sub: "进入实验前需要了解的数学与机器学习基础。",
+    body: ["线性函数 y = wx + b 描述一条直线。w 控制斜率，b 控制截距。", "误差表示预测值和真实值之间的差距，训练过程会不断减小整体误差。"],
+    helper: ["如果对梯度不熟，可以先把它理解为参数应该调整的方向。"]
+  },
+  dataset: {
+    title: "数据集",
+    sub: "认识特征、标签和标准化数据。",
+    body: ["数据集包含 13 个输入特征，目标变量为 MEDV。实验默认选择 RM 作为输入特征。", "数据预处理模块中可以同时选择多个图表，例如原始散点图、预处理散点图和相关系数图。"],
+    helper: ["特征是模型用来做预测的信息。目标变量是我们希望模型预测的结果。", "标准化不会改变线性相关性的方向，但会让梯度下降更容易控制。"]
+  },
+  model: {
+    title: "训练模型",
+    sub: "简单线性回归使用一条直线建立 x 和 y 的关系。",
+    formula: "预测函数：y_hat = w * x + b\n\nw：斜率，表示 x 每变化 1 个单位时预测值的变化量。\nb：截距，表示 x 为 0 时模型给出的基础预测值。",
+    helper: ["在图中，w 改变直线倾斜程度，b 改变直线上下位置。"]
+  },
+  criterion: {
+    title: "学习准则",
+    sub: "用 MSE 衡量当前模型的整体误差。",
+    formula: "MSE = mean((y_hat - y)^2)\n\n训练目标：找到让 MSE 尽可能小的 w 和 b。",
+    helper: ["平方误差会放大较大的预测偏差，因此模型会更关注偏差大的样本。"]
+  },
+  optimization: {
+    title: "参数优化",
+    sub: "梯度下降根据损失函数的梯度更新参数。",
+    formula: "dw = 2 / n * sum((y_hat - y) * x)\ndb = 2 / n * sum(y_hat - y)\n\nw_new = w - learning_rate * dw\nb_new = b - learning_rate * db",
+    helper: ["学习率太大可能震荡，太小会训练很慢。可以在实验里调节学习率观察变化。"]
+  },
+  evaluation: {
+    title: "评价指标",
+    sub: "从不同角度观察模型预测效果。",
+    body: ["RMSE 越小，说明预测偏差通常越小。MAE 越小，说明平均绝对误差越小。", "R 平方越接近 1，说明模型对目标变量变化的解释能力越强。"],
+    helper: ["单个指标不能说明全部问题，教学展示中可以把 Loss、RMSE、MAE、R 平方一起观察。"]
+  },
+  result: {
+    title: "预期成果",
+    sub: "学生完成实验后应能独立解释图表与参数。",
+    body: ["能够说明标准化前后散点图的区别。", "能够解释训练过程中 w、b、Loss 和评价指标的变化。"],
+    helper: ["检查学生是否真的理解，可以让他解释某一轮参数为什么这样更新。"]
+  },
+  thinking: {
+    title: "思考拓展",
+    sub: "从简单线性回归延伸到更复杂的模型。",
+    body: ["如果同时使用多个特征，模型会从 y = wx + b 扩展为多元线性回归。", "当特征与目标之间不是线性关系时，简单线性回归可能无法充分拟合数据。"],
+    helper: ["可以比较 RM、LSTAT、PTRATIO 等特征，看哪个单特征预测效果更好。"]
+  },
+  predict: {
+    title: "模型预测",
+    sub: "该模块暂时保留入口，后续接入预测流程。",
+    body: ["后续可以在这里加入输入样本、标准化转换、预测结果和解释说明。"],
+    helper: ["预测模块可以复用当前训练得到的 w 和 b。"]
+  },
+  student: {
+    title: "学生训练",
+    sub: "该模块暂时保留入口，后续接入学生练习。",
+    body: ["后续可以加入任务卡、学生提交、自动判分和过程记录。"],
+    helper: ["学生训练区适合放分层任务：基础观察、参数调节、结果解释。"]
+  }
+};
+
+function featureOptions(selected = DEFAULT_FEATURE) {
+  return FEATURE_NAMES.map(f => `<option value="${f}" ${f === selected ? "selected" : ""}>${f}</option>`).join("");
+}
+
+function setActive(page) {
+  document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
+  const modelPages = ["dataset", "model", "criterion", "optimization", "evaluation"];
+  document.querySelectorAll(".nested-section").forEach(section => {
+    section.classList.toggle("active", modelPages.includes(page));
+  });
+}
+
+function disposeCharts() {
+  chartResizeObservers.forEach(observer => observer.disconnect());
+  chartResizeObservers.clear();
+  charts.forEach(ch => ch.dispose());
+  charts.clear();
+}
+
+function saveDataGridLayout() {
+  if (!dataGrid) return;
+  const layout = {};
+  dataGrid.getGridItems().forEach(item => {
+    const node = item.gridstackNode;
+    const view = item.dataset.view;
+    if (!node || !view) return;
+    layout[view] = { x: node.x, y: node.y, w: node.w, h: node.h };
+  });
+  localStorage.setItem(gridLayoutStorageKey(dataGridMode), JSON.stringify(layout));
+}
+
+function gridLayoutStorageKey(mode) {
+  if (mode === "train") return "trainGridLayoutV1";
+  if (mode === "predict") return "predictGridLayoutV1";
+  return "preprocessGridLayoutV4";
+}
+
+function destroyDataGrid() {
+  if (!dataGrid) return;
+  saveDataGridLayout();
+  dataGrid.destroy(false);
+  dataGrid = null;
+  dataGridMode = null;
+  trainRenderViewsKey = "";
+}
+
+function initChart(id) {
+  const el = $(id);
+  const ch = echarts.init(el);
+  charts.set(id, ch);
+  const resize = () => ch.resize();
+  if ("ResizeObserver" in window) {
+    const observer = new ResizeObserver(resize);
+    observer.observe(el);
+    if (el.parentElement) observer.observe(el.parentElement);
+    chartResizeObservers.set(id, observer);
+  }
+  requestAnimationFrame(resize);
+  return ch;
+}
+
+function renderTheory(page) {
+  document.querySelector(".shell").classList.add("theory");
+  const item = theoryPages[page] || theoryPages.dataset;
+  $("main").innerHTML = `
+    <section class="hero-card">
+      <div class="hero-line">
+        <div>
+          <div class="eyebrow">理论部分</div>
+          <h2>${item.title}</h2>
+        </div>
+      </div>
+      ${renderTheoryHtmlSlot(page)}
+    </section>
+  `;
+  $("rightPanel").innerHTML = "";
+  loadTheoryHtml(page);
+}
+
+function setPage(page) {
+  persistActiveViewSelection();
+  stopAuto();
+  currentPage = page;
+  setActive(page);
+  destroyDataGrid();
+  disposeCharts();
+  $("topFeature").textContent = `当前特征 ${currentFeature()}`;
+  if (page === "preprocess") {
+    renderDataShell();
+    loadDataView();
+  } else if (page === "train_eval") {
+    renderTrainShell();
+    prepareTraining();
+  } else if (page === "predict") {
+    renderPredictShell();
+    loadPrediction();
+  } else {
+    renderTheory(page);
+  }
+}
+
+function persistActiveViewSelection() {
+  if (currentPage === "preprocess" && document.querySelector('input[name="dataViews"]')) {
+    saveCheckedValues("dataViews", "preprocessSelectedViewsV1");
+  }
+  if (currentPage === "train_eval" && document.querySelector('input[name="trainViews"]')) {
+    saveCheckedValues("trainViews", "trainSelectedViewsV1");
+  }
+  if (currentPage === "predict" && document.querySelector('input[name="predictViews"]')) {
+    saveCheckedValues("predictViews", "predictSelectedViewsV1");
+  }
+}
+
+function currentFeature() {
+  const dataFeature = $("dataFeature");
+  const trainFeature = $("trainFeature");
+  const predictFeature = $("predictFeature");
+  return dataFeature?.value || trainFeature?.value || predictFeature?.value || DEFAULT_FEATURE;
+}
+
+function selectedValues(name) {
+  return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(el => el.value);
+}
+
+function restoreCheckedValues(name, storageKey) {
+  let values = null;
+  try {
+    values = JSON.parse(localStorage.getItem(storageKey) || "null");
+  } catch (err) {}
+  if (!Array.isArray(values)) return;
+  const inputs = [...document.querySelectorAll(`input[name="${name}"]`)];
+  const validValues = new Set(inputs.map(el => el.value));
+  const allowed = new Set(values.filter(value => validValues.has(value)));
+  if (values.length && !allowed.size) return;
+  inputs.forEach(el => {
+    el.checked = allowed.has(el.value);
+  });
+}
+
+function saveCheckedValues(name, storageKey) {
+  localStorage.setItem(storageKey, JSON.stringify(selectedValues(name)));
+}
+
+function renderDataShell() {
+  document.querySelector(".shell").classList.remove("theory");
+  $("main").innerHTML = `
+    <section class="hero-card">
+      <div class="hero-line">
+        <div>
+          <div class="eyebrow">实验部分</div>
+          <h2>数据预处理</h2>
+        </div>
+      </div>
+      <div class="chart-grid" id="chartGrid"></div>
+    </section>`;
+  $("rightPanel").innerHTML = `
+    <div class="right-title">控制面板</div>
+    <div class="control-card">
+      <div class="mini-stats">
+        <div class="mini-stat"><span>样本总数</span><strong id="sampleCount">--</strong></div>
+        <div class="mini-stat"><span>特征数量</span><strong id="featureCount">13</strong></div>
+      </div>
+      <label class="control-label" for="dataFeature">特征选择</label>
+      <select id="dataFeature">${featureOptions(currentFeature())}</select>
+      <label class="control-label">显示模式</label>
+      <details class="mode-menu">
+        <summary id="dataModeSummary">已选择 1 项</summary>
+        <div class="check-list">
+          <label class="check-row"><input type="checkbox" name="dataViews" value="raw" checked> 原始散点图</label>
+          <label class="check-row"><input type="checkbox" name="dataViews" value="standardized"> 预处理散点图</label>
+          <label class="check-row"><input type="checkbox" name="dataViews" value="single_corr"> 单特征线性相关系数</label>
+          <label class="check-row"><input type="checkbox" name="dataViews" value="all_corr"> 全特征线性相关系数</label>
+        </div>
+      </details>
+    </div>`;
+  $("dataFeature").addEventListener("change", loadDataView);
+  restoreCheckedValues("dataViews", "preprocessSelectedViewsV1");
+  document.querySelectorAll('input[name="dataViews"]').forEach(el => el.addEventListener("change", () => {
+    saveCheckedValues("dataViews", "preprocessSelectedViewsV1");
+    renderDataCharts();
+  }));
+}
+
+async function loadDataView() {
+  const feature = $("dataFeature").value;
+  $("topFeature").textContent = `当前特征 ${feature}`;
+  try {
+    dataCache = await postJson("/api/data_view", { feature });
+    $("sampleCount").textContent = dataCache.raw.summary.sample_count;
+    $("featureCount").textContent = dataCache.correlations.length;
+    renderDataCharts();
+  } catch (err) {
+    renderError(err.message);
+  }
+}
+
+function renderDataCharts() {
+  if (!dataCache) return;
+  destroyDataGrid();
+  disposeCharts();
+  const views = selectedValues("dataViews");
+  saveCheckedValues("dataViews", "preprocessSelectedViewsV1");
+  const grid = $("chartGrid");
+  $("dataModeSummary").textContent = views.length ? `已选择 ${views.length} 项` : "请选择显示模式";
+  grid.classList.toggle("single", views.length === 1);
+  grid.classList.remove("dashboard-grid", "grid-stack");
+  if (!views.length) {
+    grid.innerHTML = `<div class="empty-state">请选择至少一个显示模式。</div>`;
+    return;
+  }
+  if (window.GridStack) {
+    renderDataDashboard(grid, views);
+  } else {
+    grid.innerHTML = views.map(view => chartCardHtml(view, chartTitle(view), chartSub(view, dataCache), dataCardSize(view))).join("");
+  }
+  views.forEach(view => {
+    const ch = initChart(`chart_${view}`);
+    if (view === "raw") ch.setOption(scatterOption(dataCache.raw.scatter, dataCache.raw.trend_line, dataCache.feature, "原始散点图"), true);
+    if (view === "standardized") ch.setOption(scatterOption(dataCache.standardized.scatter, dataCache.standardized.trend_line, dataCache.standardized.feature_name, "预处理散点图"), true);
+    if (view === "single_corr") ch.setOption(singleCorrOption(dataCache), true);
+    if (view === "all_corr") ch.setOption(allCorrOption(dataCache.correlations, dataCache.feature), true);
+  });
+}
+
+function renderDataDashboard(grid, views) {
+  dataGridMode = "preprocess";
+  grid.classList.add("dashboard-grid", "grid-stack");
+  grid.classList.remove("single");
+  const saved = loadDataGridLayout();
+  grid.innerHTML = views.map(view => dataGridItemHtml(view, normalizeDataGridLayout(view, saved[view] || defaultDataGridLayout(view, views.length)))).join("");
+  dataGrid = GridStack.init({
+    column: 4,
+    cellHeight: 260,
+    margin: 8,
+    float: true,
+    animate: true,
+    draggable: { handle: ".chart-head" },
+    resizable: { handles: "se" }
+  }, grid);
+  grid.setAttribute("gs-column", "4");
+  updateDataGridCellHeight();
+  dataGrid.compact();
+  dataGrid.on("change dragstop resizestop", () => {
+    syncDataGridAttributes();
+    saveDataGridLayout();
+    requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+  });
+  syncDataGridAttributes();
+  requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+}
+
+function updateDataGridCellHeight() {
+  if (!dataGrid) return;
+  const grid = $("chartGrid");
+  if (!grid) return;
+  const columnWidth = grid.clientWidth / 4;
+  dataGrid.cellHeight(Math.max(220, Math.round(columnWidth)));
+}
+
+function syncDataGridAttributes() {
+  if (!dataGrid) return;
+  dataGrid.getGridItems().forEach(item => {
+    const node = item.gridstackNode;
+    if (!node) return;
+    item.setAttribute("gs-x", node.x);
+    item.setAttribute("gs-y", node.y);
+    item.setAttribute("gs-w", node.w);
+    item.setAttribute("gs-h", node.h);
+  });
+}
+
+function loadDataGridLayout() {
+  try {
+    return JSON.parse(localStorage.getItem("preprocessGridLayoutV4") || "{}");
+  } catch (err) {
+    return {};
+  }
+}
+
+function loadTrainGridLayout() {
+  try {
+    return JSON.parse(localStorage.getItem("trainGridLayoutV1") || "{}");
+  } catch (err) {
+    return {};
+  }
+}
+
+function loadPredictGridLayout() {
+  try {
+    return JSON.parse(localStorage.getItem("predictGridLayoutV1") || "{}");
+  } catch (err) {
+    return {};
+  }
+}
+
+function defaultDataGridLayout(view, viewCount = 2) {
+  return ({
+    raw: { x: 0, y: 0, w: 2, h: 2 },
+    standardized: { x: 2, y: 0, w: 2, h: 2 },
+    single_corr: { x: 0, y: 2, w: 2, h: 2 },
+    all_corr: { x: 2, y: 2, w: 2, h: 2 }
+  })[view] || { x: 0, y: 0, w: 2, h: 2 };
+}
+
+function dataGridMinWidth(view) {
+  return 1;
+}
+
+function normalizeDataGridLayout(view, layout) {
+  const minW = dataGridMinWidth(view);
+  const next = { ...defaultDataGridLayout(view), ...layout };
+  next.w = Math.max(minW, Math.min(4, Number(next.w) || minW));
+  next.h = Math.max(1, Number(next.h) || 1);
+  next.x = Math.max(0, Math.min(4 - next.w, Number(next.x) || 0));
+  next.y = Math.max(0, Number(next.y) || 0);
+  return next;
+}
+
+function dataGridItemHtml(view, layout) {
+  const minW = dataGridMinWidth(view);
+  return `<div class="grid-stack-item" data-view="${view}" gs-x="${layout.x}" gs-y="${layout.y}" gs-w="${layout.w}" gs-h="${layout.h}" gs-min-w="${minW}" gs-min-h="1"><div class="grid-stack-item-content">${chartCardHtml(view, chartTitle(view), chartSub(view, dataCache), dataCardSize(view))}</div></div>`;
+}
+
+function renderPredictShell() {
+  document.querySelector(".shell").classList.remove("theory");
+  $("main").innerHTML = `
+    <section class="hero-card">
+      <div class="hero-line">
+        <div>
+          <div class="eyebrow">实验部分</div>
+          <h2>模型预测</h2>
+        </div>
+      </div>
+      <div class="chart-grid" id="chartGrid"></div>
+    </section>`;
+  $("rightPanel").innerHTML = `
+    <div class="right-title">控制面板</div>
+    <div class="control-card">
+      <div class="mini-stats">
+        <div class="mini-stat"><span>预测 MEDV</span><strong id="predictValue">--</strong></div>
+        <div class="mini-stat"><span>模型输入 x</span><strong id="predictModelX">--</strong></div>
+      </div>
+      <label class="control-label" for="predictFeature">特征选择</label>
+      <select id="predictFeature">${featureOptions(currentFeature())}</select>
+      <label class="control-label" for="predictStd">数据版本</label>
+      <select id="predictStd"><option value="1">标准化特征</option><option value="0">原始特征</option></select>
+      <label class="control-label" for="predictInput">输入特征值</label>
+      <input id="predictInput" type="number" value="6.5" step="0.1">
+      <label class="control-label">显示模式</label>
+      <details class="mode-menu">
+        <summary id="predictModeSummary">已选择 4 项</summary>
+        <div class="check-list">
+          <label class="check-row"><input type="checkbox" name="predictViews" value="result" checked> 预测输入与结果</label>
+          <label class="check-row"><input type="checkbox" name="predictViews" value="calc" checked> 预测计算过程</label>
+          <label class="check-row"><input type="checkbox" name="predictViews" value="chart" checked> 预测可视化</label>
+          <label class="check-row"><input type="checkbox" name="predictViews" value="nearby" checked> 相近样本对比</label>
+        </div>
+      </details>
+      <div class="btn-row">
+        <button class="primary-btn" id="predictRun" type="button">开始预测</button>
+      </div>
+    </div>`;
+  $("predictFeature").addEventListener("change", loadPrediction);
+  $("predictStd").addEventListener("change", loadPrediction);
+  $("predictRun").addEventListener("click", loadPrediction);
+  $("predictInput").addEventListener("keydown", event => {
+    if (event.key === "Enter") loadPrediction();
+  });
+  restoreCheckedValues("predictViews", "predictSelectedViewsV1");
+  document.querySelectorAll('input[name="predictViews"]').forEach(el => el.addEventListener("change", () => {
+    saveCheckedValues("predictViews", "predictSelectedViewsV1");
+    renderPredictCharts();
+  }));
+}
+
+async function loadPrediction() {
+  const feature = $("predictFeature").value;
+  $("topFeature").textContent = `当前特征 ${feature}`;
+  try {
+    predictData = await postJson("/api/predict", {
+      feature,
+      value: Number($("predictInput").value || 0),
+      use_standardized: $("predictStd").value === "1"
+    });
+    $("predictValue").textContent = Number(predictData.prediction).toFixed(2);
+    $("predictModelX").textContent = Number(predictData.model_x).toFixed(3);
+    renderPredictCharts();
+  } catch (err) {
+    renderError(err.message);
+  }
+}
+
+function renderPredictCharts() {
+  if (!predictData) return;
+  destroyDataGrid();
+  disposeCharts();
+  const views = selectedValues("predictViews");
+  saveCheckedValues("predictViews", "predictSelectedViewsV1");
+  let grid = $("chartGrid");
+  if (!grid) {
+    $("main").innerHTML = `
+      <section class="hero-card">
+        <div class="hero-line">
+          <div>
+            <div class="eyebrow">实验部分</div>
+            <h2>模型预测</h2>
+          </div>
+        </div>
+        <div class="chart-grid" id="chartGrid"></div>
+      </section>`;
+    grid = $("chartGrid");
+  }
+  $("predictModeSummary").textContent = views.length ? `已选择 ${views.length} 项` : "请选择显示模式";
+  grid.classList.toggle("single", views.length === 1);
+  grid.classList.remove("dashboard-grid", "grid-stack");
+  if (!views.length) {
+    grid.innerHTML = `<div class="empty-state">请选择至少一个显示模式。</div>`;
+    return;
+  }
+  if (window.GridStack) {
+    renderPredictDashboard(grid, views);
+  } else {
+    grid.innerHTML = views.map(view => predictViewHtml(view)).join("");
+  }
+  views.forEach(view => {
+    if (view !== "chart") return;
+    const ch = initChart("chart_predict_chart");
+    ch.setOption(predictChartOption(), true);
+  });
+}
+
+function renderPredictDashboard(grid, views) {
+  dataGridMode = "predict";
+  grid.classList.add("dashboard-grid", "grid-stack");
+  grid.classList.remove("single");
+  const saved = loadPredictGridLayout();
+  grid.innerHTML = views.map(view => {
+    const layout = normalizePredictGridLayout(view, saved[view] || defaultPredictGridLayout(view));
+    return `<div class="grid-stack-item" data-view="${view}" gs-x="${layout.x}" gs-y="${layout.y}" gs-w="${layout.w}" gs-h="${layout.h}" gs-min-w="1" gs-min-h="1"><div class="grid-stack-item-content">${predictViewHtml(view)}</div></div>`;
+  }).join("");
+  dataGrid = GridStack.init({
+    column: 4,
+    cellHeight: 260,
+    margin: 8,
+    float: true,
+    animate: true,
+    draggable: { handle: ".chart-head" },
+    resizable: { handles: "se" }
+  }, grid);
+  grid.setAttribute("gs-column", "4");
+  updateDataGridCellHeight();
+  dataGrid.compact();
+  dataGrid.on("change dragstop resizestop", () => {
+    syncDataGridAttributes();
+    saveDataGridLayout();
+    requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+  });
+  syncDataGridAttributes();
+  requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+}
+
+function defaultPredictGridLayout(view) {
+  return ({
+    result: { x: 0, y: 0, w: 1, h: 1 },
+    calc: { x: 1, y: 0, w: 3, h: 1 },
+    chart: { x: 0, y: 1, w: 3, h: 2 },
+    nearby: { x: 3, y: 1, w: 1, h: 2 }
+  })[view] || { x: 0, y: 0, w: 2, h: 1 };
+}
+
+function normalizePredictGridLayout(view, layout) {
+  const next = { ...defaultPredictGridLayout(view), ...layout };
+  next.w = Math.max(1, Math.min(4, Number(next.w) || 1));
+  next.h = Math.max(1, Number(next.h) || 1);
+  next.x = Math.max(0, Math.min(4 - next.w, Number(next.x) || 0));
+  next.y = Math.max(0, Number(next.y) || 0);
+  return next;
+}
+
+function predictViewHtml(view) {
+  if (view === "result") return predictInfoCard("predict_result", "预测输入与结果", predictResultHtml());
+  if (view === "calc") return predictInfoCard("predict_calc", "预测计算过程", predictCalcHtml());
+  if (view === "nearby") return predictInfoCard("predict_nearby", "相近样本对比", predictNearbyHtml());
+  return chartCardHtml("predict_chart", "预测可视化", "样本点、回归线、输入点与预测点", "wide");
+}
+
+function predictInfoCard(key, title, html) {
+  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${title}</div><div class="chart-sub">使用最优线性拟合参数预测</div></div></div><div style="padding:18px">${html}</div></section>`;
+}
+
+function num(value, digits = 4) {
+  return Number(value).toFixed(digits);
+}
+
+function predictResultHtml() {
+  const d = predictData;
+  return `<div class="best-param-grid">
+    <div class="best-param"><span>输入特征</span><strong>${d.feature}</strong></div>
+    <div class="best-param"><span>原始输入</span><strong>${num(d.raw_value, 4)}</strong></div>
+    <div class="best-param"><span>模型输入 x</span><strong>${num(d.model_x, 4)}</strong></div>
+    <div class="best-param"><span>预测 MEDV</span><strong>${num(d.prediction, 2)}</strong></div>
+  </div>
+  <div class="formula-box">当前使用参数：w = ${num(d.w, 6)}, b = ${num(d.b, 6)}
+MEDV 表示房价中位数，单位通常按千美元理解。</div>`;
+}
+
+function predictCalcHtml() {
+  const d = predictData;
+  const standardize = d.use_standardized
+    ? `1. 输入标准化
+x_standardized = (x - mean) / std
+               = (${num(d.raw_value, 6)} - ${num(d.mean, 6)}) / ${num(d.std, 6)}
+               = ${num(d.model_x, 6)}
+
+`
+    : `1. 使用原始特征
+x = ${num(d.model_x, 6)}
+
+`;
+  return `<div class="formula-box">${standardize}2. 代入线性模型
+y_hat = w * x + b
+      = ${num(d.w, 6)} * ${num(d.model_x, 6)} + ${num(d.b, 6)}
+      = ${num(d.prediction, 6)}
+
+3. 预测结果
+预测 MEDV = ${num(d.prediction, 2)}</div>`;
+}
+
+function predictNearbyHtml() {
+  const rows = predictData.nearby || [];
+  return `<div class="table-wrap"><table><thead><tr><th>#</th><th>${predictData.feature}</th><th>MEDV</th><th>距离</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${num(r.raw_x, 3)}</td><td>${num(r.y, 2)}</td><td>${num(r.distance, 3)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function predictChartOption() {
+  const d = predictData;
+  const points = d.scatter.x.map((x, i) => [x, d.scatter.y[i]]);
+  const lineData = d.line.x.map((x, i) => [x, d.line.y[i]]);
+  const inputPoint = [d.model_x, d.prediction];
+  const guideLine = [[d.model_x, 0], inputPoint];
+  return {
+    tooltip: {
+      trigger: "item",
+      formatter: p => {
+        if (p.seriesName === "预测点") return `预测点<br>${d.x_column}=${num(d.model_x, 4)}<br>MEDV=${num(d.prediction, 2)}`;
+        return `${p.seriesName}<br>x=${num(p.value[0], 4)}<br>MEDV=${num(p.value[1], 2)}`;
+      }
+    },
+    legend: { top: 12 },
+    grid: { left: 58, right: 28, top: 56, bottom: 50 },
+    xAxis: { type: "value", name: d.x_column, nameLocation: "middle", nameGap: 30 },
+    yAxis: { type: "value", name: "MEDV", nameLocation: "middle", nameGap: 40 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" }
+    ],
+    series: [
+      { name: "样本点", type: "scatter", data: points, symbolSize: 7, itemStyle: { color: "rgba(91, 53, 245, .42)" } },
+      { name: "回归线", type: "line", data: lineData, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } },
+      { name: "预测辅助线", type: "line", data: guideLine, showSymbol: false, lineStyle: { color: "#f59e0b", width: 2, type: "dashed" } },
+      { name: "预测点", type: "scatter", data: [inputPoint], symbolSize: 16, itemStyle: { color: "#e23b5a", borderColor: "#fff", borderWidth: 3 } }
+    ]
+  };
+}
+
+function renderTrainDashboard(grid, views, frame) {
+  dataGridMode = "train";
+  grid.classList.add("dashboard-grid", "grid-stack");
+  grid.classList.remove("single");
+  const saved = loadTrainGridLayout();
+  grid.innerHTML = views.map(view => {
+    const layout = normalizeTrainGridLayout(view, saved[view] || defaultTrainGridLayout(view));
+    return trainGridItemHtml(view, layout, frame);
+  }).join("");
+  dataGrid = GridStack.init({
+    column: 4,
+    cellHeight: 260,
+    margin: 8,
+    float: true,
+    animate: true,
+    draggable: { handle: ".chart-head" },
+    resizable: { handles: "se" }
+  }, grid);
+  grid.setAttribute("gs-column", "4");
+  updateDataGridCellHeight();
+  dataGrid.compact();
+  dataGrid.on("change dragstop resizestop", () => {
+    syncDataGridAttributes();
+    saveDataGridLayout();
+    requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+  });
+  syncDataGridAttributes();
+  requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+}
+
+function trainViewHtml(view, frame) {
+  if (view === "calc") return infoCardHtml("calc", "本轮计算过程", calcHtml(frame));
+  if (view === "table") return infoCardHtml("table", "每轮参数表", tableHtml(currentFrame));
+  return chartCardHtml(view, chartTitle(view), chartSub(view, trainData), trainCardSize(view));
+}
+
+function defaultTrainGridLayout(view) {
+  return ({
+    model_train: { x: 0, y: 0, w: 2, h: 2 },
+    learning: { x: 2, y: 0, w: 2, h: 2 },
+    gradient: { x: 0, y: 2, w: 2, h: 2 },
+    loss_surface_3d: { x: 0, y: 4, w: 2, h: 2 },
+    w_path: { x: 2, y: 2, w: 1, h: 1 },
+    b_path: { x: 2, y: 3, w: 1, h: 1 },
+    rmse: { x: 3, y: 2, w: 1, h: 2 },
+    mae: { x: 2, y: 4, w: 1, h: 2 },
+    r2: { x: 3, y: 4, w: 1, h: 2 },
+    gradient_descent: { x: 0, y: 6, w: 1, h: 2 },
+    calc: { x: 0, y: 8, w: 4, h: 6 },
+    table: { x: 0, y: 14, w: 4, h: 1 }
+  })[view] || { x: 0, y: 0, w: 1, h: 1 };
+}
+
+function normalizeTrainGridLayout(view, layout) {
+  const next = { ...defaultTrainGridLayout(view), ...layout };
+  next.w = Math.max(1, Math.min(4, Number(next.w) || 1));
+  next.h = Math.max(1, Number(next.h) || 1);
+  next.x = Math.max(0, Math.min(4 - next.w, Number(next.x) || 0));
+  next.y = Math.max(0, Number(next.y) || 0);
+  return next;
+}
+
+function trainGridItemHtml(view, layout, frame) {
+  return `<div class="grid-stack-item" data-view="${view}" gs-x="${layout.x}" gs-y="${layout.y}" gs-w="${layout.w}" gs-h="${layout.h}" gs-min-w="1" gs-min-h="1"><div class="grid-stack-item-content">${trainViewHtml(view, frame)}</div></div>`;
+}
+
+function updateTrainInfoCards(frame) {
+  const calcItem = document.querySelector('.grid-stack-item[data-view="calc"] .grid-stack-item-content');
+  if (calcItem) calcItem.innerHTML = trainViewHtml("calc", frame);
+  const tableItem = document.querySelector('.grid-stack-item[data-view="table"] .grid-stack-item-content');
+  if (tableItem) tableItem.innerHTML = trainViewHtml("table", frame);
+}
+
+function renderTrainShell() {
+  document.querySelector(".shell").classList.remove("theory");
+  $("main").innerHTML = `
+    <section class="hero-card">
+      <div class="hero-line">
+        <div>
+          <div class="eyebrow">实验部分</div>
+          <h2>模型训练与评估</h2>
+        </div>
+      </div>
+      <div class="chart-grid" id="chartGrid"></div>
+    </section>`;
+  $("rightPanel").innerHTML = `
+    <div class="right-title">控制面板</div>
+    <div class="control-card">
+      <div class="mini-stats">
+        <div class="mini-stat"><span>样本总数</span><strong id="sampleCount">--</strong></div>
+        <div class="mini-stat"><span>特征数量</span><strong id="featureCount">13</strong></div>
+      </div>
+      <label class="control-label" for="trainFeature">特征选择</label>
+      <select id="trainFeature">${featureOptions(currentFeature())}</select>
+      <label class="control-label" for="trainStd">数据版本</label>
+      <select id="trainStd"><option value="1">标准化特征</option><option value="0">原始特征</option></select>
+      <label class="control-label">显示模式</label>
+      <details class="mode-menu">
+        <summary id="trainModeSummary">已选择 1 项</summary>
+        <div class="check-list">
+          <label class="check-row"><input type="checkbox" name="trainViews" value="model_train" checked> 模型训练</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="learning"> 学习准则</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="gradient"> 梯度下降图</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="loss_surface_3d"> Loss 三维曲面图</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="gradient_descent"> 梯度下降图</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="w_path"> w 参数轨迹</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="b_path"> b 参数轨迹</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="rmse"> RMSE</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="mae"> MAE</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="r2"> R 平方</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="calc"> 本轮计算过程</label>
+          <label class="check-row"><input type="checkbox" name="trainViews" value="table"> 每轮参数表</label>
+        </div>
+      </details>
+      <div class="field-grid">
+        <label class="control-label">初始 w<input id="w0" type="number" value="0" step="0.1"></label>
+        <label class="control-label">初始 b<input id="b0" type="number" value="0" step="0.1"></label>
+      </div>
+      <label class="control-label" for="lr">学习率</label>
+      <input id="lr" type="range" min="0.001" max="0.2" step="0.001" value="0.03">
+      <div class="range-line"><span>0.001</span><strong id="lrText">0.030</strong><span>0.200</span></div>
+      <label class="control-label" for="epochs">训练轮数</label>
+      <input id="epochs" type="range" min="1" max="500" step="1" value="120">
+      <div class="range-line"><span>1</span><strong id="epochsText">120</strong><span>500</span></div>
+      <label class="control-label" for="speed">动画速度</label>
+      <input id="speed" type="range" min="30" max="600" step="10" value="90">
+      <div class="range-line"><span>快</span><strong id="speedText">90ms</strong><span>慢</span></div>
+      <div class="button-grid">
+        <button class="btn primary" type="button" id="stepBtn">训练一轮</button>
+        <button class="btn green" type="button" id="autoBtn">自动训练</button>
+        <button class="btn dark" type="button" id="pauseBtn">暂停</button>
+        <button class="btn rose" type="button" id="resetBtn">重置</button>
+      </div>
+      <div class="runtime">
+        <div><span>当前 epoch</span><strong id="epochNow">--</strong></div>
+        <div><span>当前 Loss</span><strong id="lossNow">--</strong></div>
+      </div>
+    </div>`;
+  $("trainFeature").addEventListener("change", prepareTraining);
+  $("trainStd").addEventListener("change", prepareTraining);
+  $("w0").addEventListener("change", prepareTraining);
+  $("b0").addEventListener("change", prepareTraining);
+  $("lr").addEventListener("input", () => $("lrText").textContent = Number($("lr").value).toFixed(3));
+  $("epochs").addEventListener("input", () => $("epochsText").textContent = $("epochs").value);
+  $("speed").addEventListener("input", () => $("speedText").textContent = `${$("speed").value}ms`);
+  $("lr").addEventListener("change", prepareTraining);
+  $("epochs").addEventListener("change", prepareTraining);
+  const r2TrainLabel = document.querySelector('input[name="trainViews"][value="r2"]')?.parentElement;
+  const gradientDescentLabel = document.querySelector('input[name="trainViews"][value="gradient_descent"]')?.parentElement;
+  const lossSurface3dLabel = document.querySelector('input[name="trainViews"][value="loss_surface_3d"]')?.parentElement;
+  if (lossSurface3dLabel) lossSurface3dLabel.childNodes[lossSurface3dLabel.childNodes.length - 1].textContent = " Loss 三维曲面图";
+  if (gradientDescentLabel) gradientDescentLabel.childNodes[gradientDescentLabel.childNodes.length - 1].textContent = " 梯度下降图";
+  const lossContourLabel = document.querySelector('input[name="trainViews"][value="gradient"]')?.parentElement;
+  if (lossContourLabel) lossContourLabel.childNodes[lossContourLabel.childNodes.length - 1].textContent = " Loss 等高线图";
+  if (r2TrainLabel) r2TrainLabel.childNodes[r2TrainLabel.childNodes.length - 1].textContent = " R²";
+  restoreCheckedValues("trainViews", "trainSelectedViewsV1");
+  document.querySelectorAll('input[name="trainViews"]').forEach(el => el.addEventListener("change", () => {
+    saveCheckedValues("trainViews", "trainSelectedViewsV1");
+    renderTrainFrame(currentFrame);
+  }));
+  $("stepBtn").addEventListener("click", () => renderTrainFrame(currentFrame + 1));
+  $("autoBtn").addEventListener("click", startAuto);
+  $("pauseBtn").addEventListener("click", stopAuto);
+  $("resetBtn").addEventListener("click", () => { stopAuto(); renderTrainFrame(0); });
+}
+
+async function prepareTraining() {
+  const feature = $("trainFeature").value;
+  $("topFeature").textContent = `当前特征 ${feature}`;
+  try {
+    trainData = await postJson("/api/train_prepare", {
+      feature,
+      use_standardized: $("trainStd").value === "1",
+      learning_rate: Number($("lr").value),
+      epochs: Number($("epochs").value),
+      w0: Number($("w0").value),
+      b0: Number($("b0").value)
+    });
+    $("sampleCount").textContent = trainData.scatter.x.length;
+  $("featureCount").textContent = FEATURE_NAMES.length;
+  currentFrame = 0;
+  renderTrainFrame(0);
+  } catch (err) {
+    renderError(err.message);
+  }
+}
+
+function renderTrainFrame(index) {
+  if (!trainData) return;
+  currentFrame = Math.max(0, Math.min(index, trainData.history.length - 1));
+  const frame = trainData.history[currentFrame];
+  $("epochNow").textContent = frame.epoch;
+  $("lossNow").textContent = Number(frame.loss).toFixed(4);
+
+  const views = selectedValues("trainViews");
+  const viewsKey = views.join("|");
+  saveCheckedValues("trainViews", "trainSelectedViewsV1");
+  const grid = $("chartGrid");
+  $("trainModeSummary").textContent = views.length ? `已选择 ${views.length} 项` : "请选择显示模式";
+  grid.classList.toggle("single", views.length === 1);
+
+  const canReuseTrainGrid = dataGridMode === "train" && dataGrid && trainRenderViewsKey === viewsKey;
+  if (!views.length) {
+    destroyDataGrid();
+    disposeCharts();
+    grid.classList.remove("dashboard-grid", "grid-stack");
+    grid.innerHTML = `<div class="empty-state">请选择至少一个显示模式。</div>`;
+    return;
+  }
+
+  if (canReuseTrainGrid) {
+    updateTrainInfoCards(frame);
+  } else {
+    destroyDataGrid();
+    disposeCharts();
+    grid.classList.remove("dashboard-grid", "grid-stack");
+    if (window.GridStack) {
+      renderTrainDashboard(grid, views, frame);
+    } else {
+      grid.innerHTML = views.map(view => trainViewHtml(view, frame)).join("");
+    }
+    trainRenderViewsKey = viewsKey;
+  }
+  /*
+    if (view === "calc") return infoCardHtml("calc", "本轮计算过程", calcHtml(frame));
+    if (view === "table") return infoCardHtml("table", "每轮参数表", tableHtml(currentFrame));
+    return chartCardHtml(view, chartTitle(view), chartSub(view, trainData), trainCardSize(view));
+  }).join("");
+  */
+  views.forEach(view => {
+    if (view === "calc" || view === "table") return;
+    const chartId = `chart_${view}`;
+    const ch = charts.get(chartId) || initChart(chartId);
+    if (view === "model_train") ch.setOption(trainScatterOption(currentFrame), true);
+    if (view === "learning") ch.setOption(lossOption(currentFrame), true);
+    if (view === "gradient") ch.setOption(contourOption(currentFrame), true);
+    if (view === "loss_surface_3d") ch.setOption(lossSurface3DOption(currentFrame), false);
+    if (view === "gradient_descent") ch.setOption(gradientDescentOption(currentFrame), true);
+    if (view === "w_path") ch.setOption(paramPathOption("w", currentFrame), true);
+    if (view === "b_path") ch.setOption(paramPathOption("b", currentFrame), true);
+    if (view === "rmse") ch.setOption(metricOption("rmse", currentFrame), true);
+    if (view === "mae") ch.setOption(metricOption("mae", currentFrame), true);
+    if (view === "r2") ch.setOption(metricOption("r2", currentFrame), true);
+  });
+}
+
+function chartCardHtml(key, title, sub, size = "") {
+  return `<section class="chart-card ${size}"><div class="chart-head"><div><div class="chart-title">${title}</div><div class="chart-sub">${sub}</div></div></div><div class="chart" id="chart_${key}"></div></section>`;
+}
+
+function infoCardHtml(key, title, html) {
+  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${title}</div><div class="chart-sub">随当前 epoch 更新</div></div></div><div style="padding:18px">${html}</div></section>`;
+}
+
+function dataCardSize(view) {
+  return view === "all_corr" ? "wide" : "";
+}
+
+function trainCardSize(view) {
+  if (["gradient", "loss_surface_3d", "model_train"].includes(view)) return "wide";
+  if (["w_path", "b_path", "rmse", "mae", "r2", "gradient_descent"].includes(view)) return "small";
+  return "";
+}
+
+function chartTitle(view) {
+  if (view === "loss_surface_3d") return "Loss 三维曲面图";
+  if (view === "gradient_descent") return "梯度下降图";
+  if (view === "gradient") return "Loss 等高线图";
+  if (view === "r2") return "R²";
+  return ({
+    raw: "原始散点图",
+    standardized: "预处理散点图",
+    single_corr: "单特征线性相关系数",
+    all_corr: "全特征线性相关系数",
+    model_train: "模型训练",
+    learning: "学习准则",
+    gradient: "梯度下降图",
+    w_path: "w 参数轨迹",
+    b_path: "b 参数轨迹",
+    rmse: "RMSE",
+    mae: "MAE",
+    r2: "R 平方"
+  })[view] || view;
+}
+
+function chartSub(view, data) {
+  if (view === "loss_surface_3d") return "J(w,b) 曲面、下降轨迹与偏导切线";
+  if (view === "gradient_descent") return "dw、db 随训练轮数的变化";
+  if (view === "gradient") return "w-b 参数空间中的 MSE 损失等高线";
+  if (view === "raw") return `${data.feature} 与 MEDV 的原始关系`;
+  if (view === "standardized") return `${data.standardized?.feature_name || data.x_column} 与 MEDV 的关系`;
+  if (view === "single_corr") return "当前特征与 MEDV 的 Pearson 相关系数";
+  if (view === "all_corr") return "所有特征与 MEDV 的 Pearson 相关系数";
+  if (view === "model_train") return "样本点、当前回归线和最优参考线";
+  if (view === "learning") return "MSE Loss 随 epoch 的变化";
+  if (view === "gradient") return "w-b 参数空间中的损失变化";
+  if (view === "w_path") return "w 随训练轮数的变化";
+  if (view === "b_path") return "b 随训练轮数的变化";
+  if (["rmse", "mae", "r2"].includes(view)) return "评价指标随训练轮数的变化";
+  return "";
+}
+
+async function postJson(url, payload) {
+  const resp = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error || "请求失败");
+  return data;
+}
+
+function scatterOption(scatter, line, xName, title) {
+  const points = scatter.x.map((x, i) => [x, scatter.y[i]]);
+  const lineData = line.x.map((x, i) => [x, line.y[i]]);
+  return {
+    tooltip: { trigger: "item" },
+    legend: { top: 12 },
+    grid: { left: 58, right: 24, top: 56, bottom: 48 },
+    xAxis: { type: "value", name: xName, nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: "MEDV", nameLocation: "middle", nameGap: 38 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" }
+    ],
+    media: [
+      {
+        query: { maxWidth: 360 },
+        option: {
+          legend: { show: false },
+          grid: { left: 42, right: 10, top: 18, bottom: 34 },
+          xAxis: { nameGap: 20, nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+          yAxis: { nameGap: 26, nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+          series: [
+            { symbolSize: 5 },
+            { lineStyle: { width: 2.4 } }
+          ]
+        }
+      },
+      {
+        query: { maxHeight: 260 },
+        option: {
+          legend: { show: false },
+          grid: { left: 38, right: 8, top: 12, bottom: 28 },
+          xAxis: { name: "", axisLabel: { fontSize: 9 } },
+          yAxis: { name: "", axisLabel: { fontSize: 9 } },
+          series: [
+            { symbolSize: 4 },
+            { lineStyle: { width: 2 } }
+          ]
+        }
+      }
+    ],
+    series: [
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(91,53,245,.72)" } },
+      { name: "线性趋势", type: "line", data: lineData, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } }
+    ]
+  };
+}
+
+function singleCorrOption(data) {
+  const corr = data.raw.summary.corr;
+  return {
+    tooltip: { trigger: "axis" },
+    grid: { left: 58, right: 28, top: 42, bottom: 46 },
+    xAxis: { type: "category", data: [data.feature] },
+    yAxis: { type: "value", min: -1, max: 1, name: "Pearson r" },
+    media: [
+      {
+        query: { maxWidth: 360 },
+        option: {
+          grid: { left: 38, right: 8, top: 28, bottom: 36 },
+          xAxis: { axisLabel: { fontSize: 10 } },
+          yAxis: { nameGap: 20, nameTextStyle: { fontSize: 10 }, axisLabel: { fontSize: 10 } },
+          series: [{ barWidth: 34, label: { fontSize: 10 } }]
+        }
+      },
+      {
+        query: { maxHeight: 260 },
+        option: {
+          grid: { left: 34, right: 8, top: 12, bottom: 26 },
+          xAxis: { axisLabel: { fontSize: 9 } },
+          yAxis: { name: "", axisLabel: { fontSize: 9 } },
+          series: [{ barWidth: 28, label: { fontSize: 9 } }]
+        }
+      }
+    ],
+    series: [{ type: "bar", barWidth: 56, data: [{ value: corr, itemStyle: { color: corr >= 0 ? "#5b35f5" : "#d9354f" } }], label: { show: true, position: corr >= 0 ? "top" : "bottom", formatter: corr.toFixed(4), fontWeight: 900 } }]
+  };
+}
+
+function allCorrOption(rows, currentFeature) {
+  const ordered = [...rows].reverse();
+  return {
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    grid: { left: 84, right: 28, top: 42, bottom: 42 },
+    xAxis: { type: "value", min: -1, max: 1, name: "Pearson r" },
+    yAxis: { type: "category", data: ordered.map(r => r.feature) },
+    media: [
+      {
+        query: { maxWidth: 360 },
+        option: {
+          grid: { left: 54, right: 8, top: 18, bottom: 26 },
+          xAxis: { name: "", axisLabel: { fontSize: 10 } },
+          yAxis: { axisLabel: { fontSize: 10 } },
+          series: [{ barWidth: 10 }]
+        }
+      },
+      {
+        query: { maxHeight: 260 },
+        option: {
+          grid: { left: 48, right: 8, top: 12, bottom: 20 },
+          xAxis: { name: "", axisLabel: { fontSize: 9 } },
+          yAxis: { axisLabel: { fontSize: 9 } },
+          series: [{ barWidth: 8 }]
+        }
+      }
+    ],
+    series: [{ type: "bar", barWidth: 14, data: ordered.map(r => ({ value: r.corr, itemStyle: { color: r.feature === currentFeature ? "#c47a11" : (r.corr >= 0 ? "#5b35f5" : "#d9354f") } })) }]
+  };
+}
+
+function lineForParams(w, b) {
+  return trainData.line_x.map(x => [x, w * x + b]);
+}
+
+function trainScatterOption(frameIndex) {
+  const frame = trainData.history[frameIndex];
+  const points = trainData.scatter.x.map((x, i) => [x, trainData.scatter.y[i]]);
+  return {
+    tooltip: { trigger: "item" },
+    legend: { top: 12 },
+    grid: { left: 58, right: 24, top: 56, bottom: 48 },
+    xAxis: { type: "value", name: trainData.x_column, nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: "MEDV", nameLocation: "middle", nameGap: 38 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" }
+    ],
+    series: [
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(91,53,245,.7)" } },
+      { name: "当前回归线", type: "line", data: lineForParams(frame.w, frame.b), showSymbol: false, lineStyle: { color: "#d9354f", width: 3 } },
+      { name: "最优参考线", type: "line", data: lineForParams(trainData.best.w, trainData.best.b), showSymbol: false, lineStyle: { color: "#0f9f78", width: 2.6, type: "dashed" } }
+    ]
+  };
+}
+
+function lossOption(frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  return lineOption("学习准则：MSE Loss", "MSE", rows.map(r => [r.epoch, r.loss]), "#5b35f5");
+}
+
+function paramPathOption(key, frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  return lineOption(key === "w" ? "w 参数轨迹" : "b 参数轨迹", key, rows.map(r => [r.epoch, r[key]]), key === "w" ? "#0f9f78" : "#c47a11");
+}
+
+function metricOption(key, frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  const label = key === "rmse" ? "RMSE" : key === "mae" ? "MAE" : "R 平方";
+  const metricTitle = key === "r2" ? "R²" : label;
+  return lineOption(metricTitle, metricTitle, rows.map(r => [r.epoch, r[key]]), key === "r2" ? "#0f9f78" : "#c47a11");
+}
+
+function metricOption(key, frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  const current = rows[rows.length - 1]?.[key] ?? 0;
+  const config = metricGaugeConfig(key, rows);
+  const trend = rows.map(r => [r.epoch, r[key]]);
+  return {
+    tooltip: { trigger: "axis" },
+    grid: { left: 42, right: 16, top: "62%", bottom: 28 },
+    xAxis: { type: "value", name: "epoch", nameGap: 18, axisLabel: { fontSize: 10 } },
+    yAxis: { type: "value", min: config.yMin, max: config.yMax, axisLabel: { fontSize: 10 } },
+    series: [
+      {
+        name: config.label,
+        type: "gauge",
+        center: ["50%", "32%"],
+        radius: "72%",
+        startAngle: 205,
+        endAngle: -25,
+        min: config.min,
+        max: config.max,
+        splitNumber: 5,
+        progress: {
+          show: true,
+          width: 12,
+          itemStyle: { color: config.color }
+        },
+        axisLine: {
+          lineStyle: {
+            width: 12,
+            color: [[1, "#e8ecf4"]]
+          }
+        },
+        axisTick: { distance: -18, length: 4, lineStyle: { color: "#8b95a5", width: 1 } },
+        splitLine: { distance: -20, length: 8, lineStyle: { color: "#8b95a5", width: 1.2 } },
+        axisLabel: { distance: -7, color: "#6b7280", fontSize: 9 },
+        pointer: { length: "58%", width: 4, itemStyle: { color: "#172033" } },
+        anchor: { show: true, size: 7, itemStyle: { color: "#172033" } },
+        detail: {
+          valueAnimation: true,
+          offsetCenter: [0, "34%"],
+          fontSize: 22,
+          fontWeight: 900,
+          color: "#172033",
+          formatter: () => Number(current).toFixed(2)
+        },
+        title: {
+          offsetCenter: [0, "56%"],
+          fontSize: 11,
+          fontWeight: 800,
+          color: "#6b7280"
+        },
+        data: [{ value: config.gaugeValue(current), name: config.label }]
+      },
+      {
+        name: `${config.label}趋势`,
+        type: "line",
+        smooth: true,
+        symbolSize: 4,
+        data: trend,
+        lineStyle: { color: config.color, width: 2.5 },
+        itemStyle: { color: config.color },
+        areaStyle: { color: config.color + "18" }
+      }
+    ]
+  };
+}
+
+function metricGaugeConfig(key, rows) {
+  const values = rows.map(r => Number(r[key])).filter(Number.isFinite);
+  const maxValue = values.length ? Math.max(...values) : 1;
+  const minValue = values.length ? Math.min(...values) : 0;
+  if (key === "r2") {
+    return {
+      label: "R²",
+      color: "#d9354f",
+      min: -1,
+      max: 1,
+      yMin: Math.min(-1, Math.floor(minValue)),
+      yMax: 1,
+      gaugeValue: value => Math.max(-1, Math.min(1, value))
+    };
+  }
+  const upper = Math.max(10, Math.ceil(maxValue / 10) * 10);
+  return {
+    label: key.toUpperCase(),
+    color: key === "rmse" ? "#5b35f5" : "#0f9f78",
+    min: 0,
+    max: upper,
+    yMin: 0,
+    yMax: upper,
+    gaugeValue: value => Math.max(0, Math.min(upper, value))
+  };
+}
+
+function gradientDescentOption(frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  const dwData = rows.map(r => [r.epoch, r.dw]);
+  const dbData = rows.map(r => [r.epoch, r.db]);
+  return {
+    tooltip: { trigger: "axis" },
+    grid: [
+      { left: 52, right: 18, top: 34, height: "34%" },
+      { left: 52, right: 18, top: "58%", height: "30%" }
+    ],
+    xAxis: [
+      { type: "value", gridIndex: 0, axisLabel: { fontSize: 10 }, name: "epoch", nameGap: 18 },
+      { type: "value", gridIndex: 1, axisLabel: { fontSize: 10 }, name: "epoch", nameGap: 18 }
+    ],
+    yAxis: [
+      { type: "value", gridIndex: 0, name: "dw", nameGap: 28, axisLabel: { fontSize: 10 } },
+      { type: "value", gridIndex: 1, name: "db", nameGap: 28, axisLabel: { fontSize: 10 } }
+    ],
+    dataZoom: [
+      { type: "inside", xAxisIndex: [0, 1], filterMode: "none" }
+    ],
+    series: [
+      {
+        name: "dw",
+        type: "line",
+        xAxisIndex: 0,
+        yAxisIndex: 0,
+        smooth: true,
+        symbolSize: 4,
+        data: dwData,
+        lineStyle: { color: "#5b35f5", width: 2.6 },
+        itemStyle: { color: "#5b35f5" },
+        areaStyle: { color: "#5b35f518" }
+      },
+      {
+        name: "db",
+        type: "line",
+        xAxisIndex: 1,
+        yAxisIndex: 1,
+        smooth: true,
+        symbolSize: 4,
+        data: dbData,
+        lineStyle: { color: "#0f9f78", width: 2.6 },
+        itemStyle: { color: "#0f9f78" },
+        areaStyle: { color: "#0f9f7818" }
+      }
+    ]
+  };
+}
+
+function lossSurface3DOption(frameIndex) {
+  const c = trainData.contour;
+  const frame = trainData.history[frameIndex];
+  const best = trainData.best;
+  const surfaceData = c.values.map(v => [c.w_axis[v[0]], c.b_axis[v[1]], v[2]]);
+  const pathData = trainData.history.slice(0, frameIndex + 1).map(r => [r.w, r.b, r.mse]);
+  const bestZ = mseAtParams(best.w, best.b);
+  const currentPoint = [frame.w, frame.b, frame.mse];
+  const wTangent = tangentLine3D(frame, "w", c);
+  const bTangent = tangentLine3D(frame, "b", c);
+  const existingChart = charts.get("chart_loss_surface_3d");
+  const hasExistingChart = Boolean(existingChart?.getOption?.()?.series?.length);
+
+  const option = {
+    tooltip: {
+      formatter: p => {
+        const v = Array.isArray(p.value) ? p.value : [];
+        if (v.length >= 3) return `${p.seriesName}<br>w=${Number(v[0]).toFixed(3)}<br>b=${Number(v[1]).toFixed(3)}<br>MSE=${Number(v[2]).toFixed(3)}`;
+        return p.seriesName;
+      }
+    },
+    xAxis3D: { type: "value", name: "w" },
+    yAxis3D: { type: "value", name: "b" },
+    zAxis3D: { type: "value", name: "MSE" },
+    grid3D: {
+      boxWidth: 120,
+      boxDepth: 90,
+      boxHeight: 72,
+      axisLine: { lineStyle: { color: "#9aa3b2" } },
+      axisPointer: { lineStyle: { color: "#5b35f5" } },
+      light: {
+        main: { intensity: 1.25, shadow: true },
+        ambient: { intensity: 0.35 }
+      }
+    },
+    series: [
+      {
+        name: "Loss surface",
+        type: "surface",
+        data: surfaceData,
+        silent: true,
+        wireframe: { show: true, lineStyle: { color: "rgba(91,53,245,.10)", width: 1 } },
+        itemStyle: { color: "rgba(219,234,254,.58)", opacity: 0.58 },
+        shading: "lambert"
+      },
+      {
+        name: "parameter path",
+        type: "line3D",
+        data: pathData,
+        lineStyle: { color: "#111827", width: 4 },
+        zlevel: 2
+      },
+      {
+        name: "current params",
+        type: "scatter3D",
+        data: [currentPoint],
+        symbolSize: 15,
+        itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 2 }
+      },
+      {
+        name: "best params",
+        type: "scatter3D",
+        data: [[best.w, best.b, bestZ]],
+        symbolSize: 10,
+        itemStyle: { color: "#0f9f78", borderColor: "#fff", borderWidth: 2 }
+      },
+      {
+        name: "dJ/dw tangent",
+        type: "line3D",
+        data: wTangent,
+        lineStyle: { color: "#7c3aed", width: 5, type: "dashed" }
+      },
+      {
+        name: "dJ/db tangent",
+        type: "line3D",
+        data: bTangent,
+        lineStyle: { color: "#00b894", width: 5, type: "dashed" }
+      }
+    ]
+  };
+  if (!hasExistingChart) {
+    option.grid3D.viewControl = {
+      projection: "perspective",
+      alpha: 34,
+      beta: 38,
+      distance: 170,
+      rotateSensitivity: 1,
+      zoomSensitivity: 1.25,
+      panSensitivity: 1.6
+    };
+  }
+  return option;
+}
+
+function mseAtParams(w, b) {
+  const xs = trainData?.scatter?.x || [];
+  const ys = trainData?.scatter?.y || [];
+  if (!xs.length || xs.length !== ys.length) return 0;
+  let total = 0;
+  for (let i = 0; i < xs.length; i++) {
+    const err = w * xs[i] + b - ys[i];
+    total += err * err;
+  }
+  return total / xs.length;
+}
+
+function tangentLine3D(frame, axis, c) {
+  const wSpan = Math.max(...c.w_axis) - Math.min(...c.w_axis);
+  const bSpan = Math.max(...c.b_axis) - Math.min(...c.b_axis);
+  const delta = axis === "w" ? Math.max(wSpan * 0.12, 0.35) : Math.max(bSpan * 0.12, 1.2);
+  const slope = axis === "w" ? frame.dw : frame.db;
+  if (axis === "w") {
+    return [
+      [frame.w - delta, frame.b, frame.mse - slope * delta],
+      [frame.w + delta, frame.b, frame.mse + slope * delta]
+    ];
+  }
+  return [
+    [frame.w, frame.b - delta, frame.mse - slope * delta],
+    [frame.w, frame.b + delta, frame.mse + slope * delta]
+  ];
+}
+
+function lineOption(title, yName, data, color) {
+  return {
+    tooltip: { trigger: "axis" },
+    grid: { left: 58, right: 24, top: 42, bottom: 42 },
+    xAxis: { type: "value", name: "epoch" },
+    yAxis: { type: "value", name: yName },
+    dataZoom: [{ type: "inside", xAxisIndex: 0, filterMode: "none" }],
+    series: [{ type: "line", smooth: true, symbolSize: 5, data, lineStyle: { color, width: 3 }, areaStyle: { color: color + "22" } }]
+  };
+}
+
+function contourOption(frameIndex) {
+  const c = trainData.contour;
+  const frame = trainData.history[frameIndex];
+  const values = c.values.map(v => [c.w_axis[v[0]], c.b_axis[v[1]], v[2]]);
+  return {
+    tooltip: { formatter: p => `w=${p.value[0].toFixed(3)}<br>b=${p.value[1].toFixed(3)}<br>MSE=${p.value[2].toFixed(3)}` },
+    grid: { left: 58, right: 92, top: 42, bottom: 44 },
+    xAxis: { type: "value", name: "w" },
+    yAxis: { type: "value", name: "b" },
+    visualMap: { min: c.z_min, max: c.z_max, calculable: true, right: 8, top: 70, inRange: { color: ["#f1efff", "#ffe4a3", "#d9354f"] } },
+    series: [
+      { type: "heatmap", data: values },
+      { name: "参数轨迹", type: "line", data: trainData.history.slice(0, frameIndex + 1).map(r => [r.w, r.b]), symbolSize: 6, lineStyle: { color: "#111827", width: 2 } },
+      { name: "当前位置", type: "scatter", data: [[frame.w, frame.b]], symbolSize: 15, itemStyle: { color: "#fff", borderColor: "#111827", borderWidth: 3 } }
+    ]
+  };
+}
+
+function contourOption(frameIndex) {
+  const c = trainData.contour;
+  const frame = trainData.history[frameIndex];
+  const best = trainData.best;
+  const values = c.values.map(v => [c.w_axis[v[0]], c.b_axis[v[1]], v[2]]);
+  const path = trainData.history.slice(0, frameIndex + 1).map(r => [r.w, r.b]);
+  return {
+    tooltip: {
+      trigger: "item",
+      formatter: p => {
+        if (p.seriesName === "loss_surface") return `w=${p.value[0].toFixed(3)}<br>b=${p.value[1].toFixed(3)}<br>MSE=${p.value[2].toFixed(3)}`;
+        if (p.seriesName === "best_params") return `best params<br>w=${best.w.toFixed(3)}<br>b=${best.b.toFixed(3)}`;
+        return `current params<br>w=${frame.w.toFixed(3)}<br>b=${frame.b.toFixed(3)}<br>MSE=${frame.mse.toFixed(3)}`;
+      }
+    },
+    grid: { left: 58, right: 52, top: 42, bottom: 48 },
+    xAxis: { type: "value", name: "w", nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: "b", nameLocation: "middle", nameGap: 38 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" }
+    ],
+    visualMap: {
+      min: c.z_min,
+      max: c.z_max,
+      calculable: true,
+      right: 6,
+      top: 64,
+      itemWidth: 10,
+      itemHeight: 120,
+      textStyle: { color: "#6b7280", fontSize: 10 },
+      inRange: { color: ["#eef2ff", "#dbeafe", "#fde68a", "#fb7185"] }
+    },
+    series: [
+      { name: "loss_surface", type: "heatmap", data: values, emphasis: { disabled: true } },
+      {
+        name: "update_path",
+        type: "line",
+        data: path,
+        symbol: "circle",
+        symbolSize: 5,
+        lineStyle: { color: "#111827", width: 3 },
+        itemStyle: { color: "#fff", borderColor: "#111827", borderWidth: 1.5 },
+        z: 3
+      },
+      {
+        name: "current_params",
+        type: "scatter",
+        data: [[frame.w, frame.b]],
+        symbolSize: 18,
+        itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 3 },
+        z: 5
+      },
+      {
+        name: "best_params",
+        type: "scatter",
+        data: [[best.w, best.b]],
+        symbol: "diamond",
+        symbolSize: 16,
+        itemStyle: { color: "#0f9f78", borderColor: "#fff", borderWidth: 2 },
+        z: 4
+      }
+    ]
+  };
+}
+function contourOption(frameIndex) {
+  const c = trainData.contour;
+  const frame = trainData.history[frameIndex];
+  const best = trainData.best;
+  const path = trainData.history.slice(0, frameIndex + 1).map(r => [r.w, r.b]);
+  return {
+    tooltip: {
+      trigger: "item",
+      formatter: p => {
+        if (p.seriesName === "best_params") return `best params<br>w=${best.w.toFixed(3)}<br>b=${best.b.toFixed(3)}`;
+        if (p.seriesName === "update_path") return `path<br>w=${p.value[0].toFixed(3)}<br>b=${p.value[1].toFixed(3)}`;
+        return `current params<br>w=${frame.w.toFixed(3)}<br>b=${frame.b.toFixed(3)}<br>MSE=${frame.mse.toFixed(3)}`;
+      }
+    },
+    grid: { left: 58, right: 28, top: 42, bottom: 48 },
+    xAxis: { type: "value", name: "w", nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: "b", nameLocation: "middle", nameGap: 38 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" }
+    ],
+    series: [
+      ...lossContourSeries(c),
+      {
+        name: "update_path",
+        type: "line",
+        data: path,
+        symbol: "circle",
+        symbolSize: 5,
+        lineStyle: { color: "#111827", width: 3 },
+        itemStyle: { color: "#fff", borderColor: "#111827", borderWidth: 1.5 },
+        z: 8
+      },
+      {
+        name: "current_params",
+        type: "scatter",
+        data: [[frame.w, frame.b]],
+        symbolSize: 18,
+        itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 3 },
+        z: 10
+      },
+      {
+        name: "best_params",
+        type: "scatter",
+        data: [[best.w, best.b]],
+        symbol: "diamond",
+        symbolSize: 16,
+        itemStyle: { color: "#0f9f78", borderColor: "#fff", borderWidth: 2 },
+        z: 9
+      }
+    ]
+  };
+}
+
+function lossContourSeries(c) {
+  const levels = contourLevels(c.values, 11);
+  const colors = ["#c7d2fe", "#93c5fd", "#60a5fa", "#22c55e", "#84cc16", "#eab308", "#f59e0b", "#fb7185", "#f43f5e", "#be123c", "#881337"];
+  return levels.map((level, index) => ({
+    name: `loss_level_${index + 1}`,
+    type: "lines",
+    coordinateSystem: "cartesian2d",
+    polyline: false,
+    silent: true,
+    data: contourSegments(c, level),
+    lineStyle: {
+      color: colors[index % colors.length],
+      width: index === 0 ? 1.5 : 1.8,
+      opacity: 0.9
+    },
+    z: 2
+  })).filter(series => series.data.length);
+}
+
+function contourLevels(values, count) {
+  const sorted = values.map(v => Number(v[2])).filter(Number.isFinite).sort((a, b) => a - b);
+  if (!sorted.length) return [];
+  const levels = [];
+  for (let i = 0; i < count; i++) {
+    const p = 0.06 + (0.88 * i) / Math.max(1, count - 1);
+    const idx = Math.min(sorted.length - 1, Math.max(0, Math.round(p * (sorted.length - 1))));
+    const level = sorted[idx];
+    if (!levels.some(v => Math.abs(v - level) <= Math.max(1e-9, Math.abs(level) * 1e-8))) levels.push(level);
+  }
+  return levels;
+}
+
+function contourSegments(c, level) {
+  const cols = c.w_axis.length;
+  const rows = c.b_axis.length;
+  const z = Array.from({ length: rows }, () => Array(cols).fill(NaN));
+  c.values.forEach(([j, i, value]) => {
+    if (i >= 0 && i < rows && j >= 0 && j < cols) z[i][j] = value;
+  });
+
+  const segments = [];
+  for (let i = 0; i < rows - 1; i++) {
+    for (let j = 0; j < cols - 1; j++) {
+      const p00 = [c.w_axis[j], c.b_axis[i], z[i][j]];
+      const p10 = [c.w_axis[j + 1], c.b_axis[i], z[i][j + 1]];
+      const p11 = [c.w_axis[j + 1], c.b_axis[i + 1], z[i + 1][j + 1]];
+      const p01 = [c.w_axis[j], c.b_axis[i + 1], z[i + 1][j]];
+      const points = [
+        contourEdgePoint(p00, p10, level),
+        contourEdgePoint(p10, p11, level),
+        contourEdgePoint(p11, p01, level),
+        contourEdgePoint(p01, p00, level)
+      ].filter(Boolean);
+
+      if (points.length === 2) {
+        segments.push({ coords: points });
+      } else if (points.length === 4) {
+        segments.push({ coords: [points[0], points[1]] }, { coords: [points[2], points[3]] });
+      }
+    }
+  }
+  return segments;
+}
+
+function contourEdgePoint(a, b, level) {
+  const z1 = a[2];
+  const z2 = b[2];
+  if (!Number.isFinite(z1) || !Number.isFinite(z2) || z1 === z2) return null;
+  const crosses = (level >= Math.min(z1, z2)) && (level <= Math.max(z1, z2));
+  if (!crosses) return null;
+  const t = (level - z1) / (z2 - z1);
+  return [
+    a[0] + t * (b[0] - a[0]),
+    a[1] + t * (b[1] - a[1])
+  ];
+}
+
+function calcHtmlLegacy(frame) {
+  const bestW = trainData?.best?.w ?? 0;
+  const bestB = trainData?.best?.b ?? 0;
+  const distanceW = bestW - frame.w;
+  const distanceB = bestB - frame.b;
+  const bestBlock = `
+
+最优参考参数
+best w = ${bestW.toFixed(6)}
+best b = ${bestB.toFixed(6)}
+
+当前距离最优参数
+best w - current w = ${distanceW.toFixed(6)}
+best b - current b = ${distanceB.toFixed(6)}</div>`;
+  return calcHtmlBase(frame).replace("</div>", bestBlock);
+}
+
+function calcHtmlBase(frame) {
+  return `<div class="formula">epoch = ${frame.epoch}
+w = ${frame.w.toFixed(6)}
+b = ${frame.b.toFixed(6)}
+
+MSE = ${frame.mse.toFixed(6)}
+RMSE = ${frame.rmse.toFixed(6)}
+MAE = ${frame.mae.toFixed(6)}
+R 平方 = ${frame.r2.toFixed(6)}
+
+dw = ${frame.dw.toFixed(6)}
+db = ${frame.db.toFixed(6)}
+
+下一轮 w = ${frame.new_w.toFixed(6)}
+下一轮 b = ${frame.new_b.toFixed(6)}</div>`;
+}
+
+function calcHtml(frame) {
+  const bestW = trainData?.best?.w ?? 0;
+  const bestB = trainData?.best?.b ?? 0;
+  const distanceW = bestW - frame.w;
+  const distanceB = bestB - frame.b;
+  const bestBlock = `<div class="best-param-panel">
+    <div class="best-param"><span>最优 w</span><strong>${bestW.toFixed(6)}</strong></div>
+    <div class="best-param"><span>最优 b</span><strong>${bestB.toFixed(6)}</strong></div>
+    <div class="best-param"><span>w 距离</span><strong>${distanceW.toFixed(6)}</strong></div>
+    <div class="best-param"><span>b 距离</span><strong>${distanceB.toFixed(6)}</strong></div>
+  </div>`;
+  return bestBlock + calcHtmlDetailed(frame);
+}
+
+function calcHtmlDetailed(frame) {
+  const lr = trainData?.learning_rate ?? Number($("lr")?.value || 0);
+  const m = trainData?.scatter?.x?.length || 0;
+  const rows = (frame.x_first5 || []).map((x, i) => {
+    const y = frame.y_first5?.[i] ?? 0;
+    const pred = frame.pred_first5?.[i] ?? 0;
+    const err = frame.err_first5?.[i] ?? 0;
+    return `  ${i + 1}. x=${Number(x).toFixed(4)}, y=${Number(y).toFixed(4)}, y_hat=${Number(pred).toFixed(4)}, 预测误差=${Number(err).toFixed(4)}`;
+  }).join("\n");
+
+  return `<div class="formula">epoch = ${frame.epoch}
+
+1. 当前参数
+w = ${frame.w.toFixed(6)}
+b = ${frame.b.toFixed(6)}
+
+2. 前 5 个样本的预测与误差
+y_hat = w * x + b
+预测误差 = y_hat - y
+${rows}
+
+3. 本轮损失与评价指标
+MSE = mean(预测误差^2) = ${frame.mse.toFixed(6)}
+RMSE = sqrt(MSE) = ${frame.rmse.toFixed(6)}
+MAE = mean(abs(预测误差)) = ${frame.mae.toFixed(6)}
+R 平方 = ${frame.r2.toFixed(6)}
+
+4. 梯度计算
+dw = (2 / m) * sum(预测误差 * x), m = ${m}
+db = (2 / m) * sum(预测误差)
+dw = ${frame.dw.toFixed(6)}
+db = ${frame.db.toFixed(6)}
+
+5. 参数更新
+learning_rate = ${Number(lr).toFixed(6)}
+new_w = w - learning_rate * dw
+      = ${frame.w.toFixed(6)} - ${Number(lr).toFixed(6)} * ${frame.dw.toFixed(6)}
+      = ${frame.new_w.toFixed(6)}
+new_b = b - learning_rate * db
+      = ${frame.b.toFixed(6)} - ${Number(lr).toFixed(6)} * ${frame.db.toFixed(6)}
+      = ${frame.new_b.toFixed(6)}</div>`;
+}
+
+function tableHtml(frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  return `<div class="table-wrap"><table><thead><tr><th>Epoch</th><th>w</th><th>b</th><th>MSE</th><th>RMSE</th><th>MAE</th><th>R 平方</th><th>dw</th><th>db</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.epoch}</td><td>${r.w.toFixed(6)}</td><td>${r.b.toFixed(6)}</td><td>${r.mse.toFixed(6)}</td><td>${r.rmse.toFixed(6)}</td><td>${r.mae.toFixed(6)}</td><td>${r.r2.toFixed(6)}</td><td>${r.dw.toFixed(6)}</td><td>${r.db.toFixed(6)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function tableHtml(frameIndex) {
+  const allRows = trainData.history.slice(0, frameIndex + 1);
+  const rows = allRows.slice(-50);
+  const firstEpoch = rows[0]?.epoch ?? 0;
+  const lastEpoch = rows[rows.length - 1]?.epoch ?? 0;
+  const note = allRows.length > 50
+    ? `<div class="table-note">当前显示最近 50 条：epoch ${firstEpoch} - ${lastEpoch}，已运行 ${allRows.length} 条</div>`
+    : `<div class="table-note">当前显示 ${allRows.length} 条：epoch ${firstEpoch} - ${lastEpoch}</div>`;
+  return `${note}<div class="table-wrap"><table><thead><tr><th>Epoch</th><th>w</th><th>b</th><th>MSE</th><th>RMSE</th><th>MAE</th><th>R 平方</th><th>dw</th><th>db</th></tr></thead><tbody>${rows.map(r => `<tr><td>${r.epoch}</td><td>${r.w.toFixed(6)}</td><td>${r.b.toFixed(6)}</td><td>${r.mse.toFixed(6)}</td><td>${r.rmse.toFixed(6)}</td><td>${r.mae.toFixed(6)}</td><td>${r.r2.toFixed(6)}</td><td>${r.dw.toFixed(6)}</td><td>${r.db.toFixed(6)}</td></tr>`).join("")}</tbody></table></div>`;
+}
+
+function startAuto() {
+  if (!trainData) return;
+  stopAuto();
+  timer = setInterval(() => {
+    if (currentFrame >= trainData.history.length - 1) {
+      stopAuto();
+      return;
+    }
+    renderTrainFrame(currentFrame + 1);
+  }, Number($("speed").value));
+}
+
+function stopAuto() {
+  if (timer) {
+    clearInterval(timer);
+    timer = null;
+  }
+}
+
+function renderError(message) {
+  $("main").innerHTML = `<section class="content-card"><h2>加载失败</h2><p>${message}</p></section>`;
+}
+
+function renderTheoryHtmlSlot(page) {
+  const src = `/static/theory-html/${page}.html`;
+  return `<div class="html-lesson hidden" data-theory-html="${src}"><iframe title="理论讲义"></iframe></div>`;
+}
+
+async function loadTheoryHtml(page) {
+  const wrap = document.querySelector("[data-theory-html]");
+  if (!wrap) return;
+  const src = wrap.dataset.theoryHtml;
+  try {
+    const resp = await fetch(src, { cache: "no-store" });
+    if (!resp.ok) return;
+    const html = await resp.text();
+    const iframe = wrap.querySelector("iframe");
+    iframe.setAttribute("scrolling", "no");
+    iframe.onload = () => fitTheoryIframe(iframe);
+    iframe.srcdoc = html;
+    wrap.classList.remove("hidden");
+  } catch (err) {
+    // Converted HTML is optional; missing files should not affect the lesson page.
+  }
+}
+
+function fitTheoryIframe(iframe) {
+  const resize = () => {
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!doc || !doc.body) return;
+      doc.documentElement.style.overflow = "hidden";
+      doc.body.style.overflow = "hidden";
+      const height = Math.max(
+        doc.body.scrollHeight,
+        doc.documentElement.scrollHeight,
+        doc.body.offsetHeight,
+        doc.documentElement.offsetHeight
+      );
+      iframe.style.height = `${height + 20}px`;
+    } catch (err) {
+      iframe.style.height = "680px";
+    }
+  };
+  resize();
+  setTimeout(resize, 100);
+  setTimeout(resize, 500);
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    if (doc && "ResizeObserver" in window) {
+      const observer = new ResizeObserver(resize);
+      observer.observe(doc.body);
+    }
+  } catch (err) {}
+}
+
+document.querySelectorAll(".nav-btn").forEach(btn => btn.addEventListener("click", () => setPage(btn.dataset.page)));
+const jumpExperiment = $("jumpExperiment");
+if (jumpExperiment) jumpExperiment.addEventListener("click", () => setPage("preprocess"));
+window.addEventListener("resize", () => {
+  updateDataGridCellHeight();
+  charts.forEach(ch => ch.resize());
+});
+setPage("basic");
+</script>
+</body>
+</html>
+
+
+
+
+
+
+
