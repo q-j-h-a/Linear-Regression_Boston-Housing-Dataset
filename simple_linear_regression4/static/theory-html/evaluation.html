@@ -1,0 +1,78 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>评价指标</h1>
+    <p>模型训练完成后，需要使用评价指标判断当前单特征模型对 MEDV 的解释能力和预测误差。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. MSE：均方误差</h2>
+    <span class="formula">MSE = (1/n) × Σ(ŷᵢ - yᵢ)²</span>
+    <p>MSE 越小，说明预测误差整体越小。由于误差被平方，大误差会被明显放大。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. RMSE：均方根误差</h2>
+    <span class="formula">RMSE = √MSE</span>
+    <p>RMSE 把 MSE 开根号，单位回到房价单位，更便于解释模型平均预测偏差的大致量级。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. MAE：平均绝对误差</h2>
+    <span class="formula">MAE = (1/n) × Σ|ŷᵢ - yᵢ|</span>
+    <p>MAE 表示预测值与真实值之间的平均绝对差距。它比 MSE 更不容易被极端误差影响，解释也更直观。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. R²：决定系数</h2>
+    <span class="formula">R² = 1 - SS_res / SS_tot</span>
+    <p>R² 表示模型对房价变化的解释能力。R² 越接近 1，说明当前特征对 MEDV 的线性解释能力越强。</p>
+    <ul class="theory-list">
+      <li>R² 接近 1：拟合效果较好。</li>
+      <li>R² 接近 0：模型效果接近直接预测平均房价。</li>
+      <li>R² 小于 0：模型可能比平均值预测还差。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>5. 指标仪表盘</h2>
+    <p>在可视化界面中，RMSE、MAE、R² 可以通过仪表盘或曲线实时展示。随着训练进行，RMSE 和 MAE 通常应下降，R² 通常应上升。</p>
+    <table>
+      <tr><th>指标</th><th>方向</th><th>适合回答的问题</th></tr>
+      <tr><td>MSE</td><td>越小越好</td><td>整体平方误差是否下降？</td></tr>
+      <tr><td>RMSE</td><td>越小越好</td><td>预测误差大约有多大？</td></tr>
+      <tr><td>MAE</td><td>越小越好</td><td>平均绝对偏差是多少？</td></tr>
+      <tr><td>R²</td><td>越接近 1 越好</td><td>当前特征能解释多少房价变化？</td></tr>
+    </table>
+  </div>
+
+  <div class="note">
+    不同特征训练出的模型指标不同。比较 RM、LSTAT、PTRATIO 等特征的 R² 和 RMSE，可以判断哪个单特征更适合做简单线性回归。
+  </div>
+</div>

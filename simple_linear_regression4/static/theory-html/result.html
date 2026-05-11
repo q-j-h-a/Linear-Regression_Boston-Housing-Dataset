@@ -1,0 +1,81 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>预期成果</h1>
+    <p>完成本实验后，学生应能够手动实现简单线性回归算法，理解梯度下降原理，并完成一个可交互的房价预测 Demo。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. 算法实现成果</h2>
+    <ul class="theory-list">
+      <li>能够手动实现 ŷ = wx + b 的预测过程。</li>
+      <li>能够手动计算 MSE 损失函数。</li>
+      <li>能够根据梯度下降公式更新 w 和 b。</li>
+      <li>能够记录每一轮训练的 w、b、Loss 和评价指标。</li>
+      <li>能够不调用高级模型库，完成从零训练简单线性回归。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 可视化成果</h2>
+    <table>
+      <tr><th>可视化模块</th><th>预期作用</th></tr>
+      <tr><td>特征与 MEDV 散点图</td><td>观察单特征线性关系</td></tr>
+      <tr><td>回归线动态更新</td><td>观察模型训练过程</td></tr>
+      <tr><td>Loss 曲线</td><td>观察 MSE 是否下降</td></tr>
+      <tr><td>Loss 等高线图</td><td>观察参数在损失地形中的移动路径</td></tr>
+      <tr><td>w、b 参数轨迹</td><td>观察参数如何逐渐收敛</td></tr>
+      <tr><td>指标仪表盘</td><td>实时查看 RMSE、MAE、R²</td></tr>
+    </table>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 交互 Demo 成果</h2>
+    <p>学生应能够完成一个房价预测交互 Demo：</p>
+    <ul class="theory-list">
+      <li>选择一个输入特征，例如 RM。</li>
+      <li>选择原始特征或标准化特征。</li>
+      <li>输入新的特征值。</li>
+      <li>系统自动代入训练好的模型进行预测。</li>
+      <li>显示预测 MEDV、计算过程和预测点可视化。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 学习理解成果</h2>
+    <p>学生应能够用自己的语言解释：</p>
+    <div class="note">
+      简单线性回归通过一条直线描述单个特征与房价 MEDV 的关系。训练过程通过最小化 MSE 调整 w 和 b。学习率会影响训练速度和稳定性，RMSE、MAE 和 R² 可以从不同角度评价模型效果。
+    </div>
+  </div>
+
+  <div class="tip">
+    最终成果应包含代码、图表、训练过程、评价指标和预测交互，而不只是静态的预测结果。
+  </div>
+</div>

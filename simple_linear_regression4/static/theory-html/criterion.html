@@ -1,0 +1,74 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>学习准则</h1>
+    <p>学习准则用于衡量当前模型预测得好不好。本实验使用均方误差 MSE 作为损失函数，指导 w 和 b 的更新。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. 预测误差</h2>
+    <p>对每一个样本，模型都会根据特征 x 预测一个房价 ŷ，再与真实房价 y = MEDV 比较。</p>
+    <span class="formula">预测值：ŷ = wx + b<br>误差：e = ŷ - y</span>
+    <p>误差为正，说明预测房价偏高；误差为负，说明预测房价偏低。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 均方误差 MSE</h2>
+    <p>MSE 会把每个样本的误差平方后求平均，用一个数表示模型整体预测偏差。</p>
+    <span class="formula">MSE = (1/n) × Σ(ŷᵢ - yᵢ)²</span>
+    <ul class="theory-list">
+      <li>平方可以避免正误差和负误差互相抵消。</li>
+      <li>平方会放大较大的预测误差。</li>
+      <li>MSE 越小，说明模型整体预测越接近真实房价。</li>
+      <li>MSE 可导，便于使用梯度下降更新参数。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 从 MSE 到梯度下降</h2>
+    <p>梯度下降需要知道：如果改变 w 或 b，MSE 会如何变化。这个变化方向由偏导数决定。</p>
+    <span class="formula">dw = ∂MSE/∂w<br>db = ∂MSE/∂b</span>
+    <p>如果 dw 较大，说明当前 w 对损失影响明显；如果 db 较大，说明需要明显调整截距 b。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 学习准则在界面中的体现</h2>
+    <table>
+      <tr><th>界面模块</th><th>对应理论</th></tr>
+      <tr><td>Loss 曲线</td><td>MSE 随 epoch 的变化</td></tr>
+      <tr><td>Loss 等高线图</td><td>w-b 参数空间中的 MSE 地形</td></tr>
+      <tr><td>Loss 三维曲面图</td><td>直观看到不同 w、b 对应的损失高低</td></tr>
+      <tr><td>本轮计算过程</td><td>展示预测、误差、损失、梯度和参数更新</td></tr>
+    </table>
+  </div>
+
+  <div class="note">
+    MSE 是模型训练时的“目标函数”。训练的本质就是不断调整 w 和 b，让 MSE 尽可能下降。
+  </div>
+</div>

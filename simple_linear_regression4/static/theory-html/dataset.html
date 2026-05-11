@@ -1,0 +1,80 @@
+<style>
+  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
+  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
+  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
+  .theory-hero p{margin:0;color:#4b5563;}
+  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
+  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
+  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
+  .theory-card p{margin:8px 0;}
+  .theory-list{padding-left:22px;margin:8px 0;}
+  .theory-list li{margin:6px 0;}
+  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
+  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
+  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
+  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
+  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
+  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
+  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
+  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
+  th{background:#f3f4f6;color:#111827;}
+  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
+  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
+  .step-body{flex:1;}
+  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
+  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
+</style>
+
+<div class="theory-page">
+  <div class="theory-hero">
+    <h1>数据集</h1>
+    <p>本实验使用 Boston Housing 房价数据集。数据集中包含多个区域特征和一个房价标签 MEDV，实验每次选择一个特征与 MEDV 进行简单线性关系分析。</p>
+  </div>
+
+  <div class="theory-card">
+    <h2>1. 数据集结构</h2>
+    <p>每一行数据表示一个区域样本，每一列表示该区域的一个统计特征。</p>
+    <span class="formula">特征列：CRIM、ZN、INDUS、CHAS、NOX、RM、AGE、DIS、RAD、TAX、PTRATIO、B、LSTAT<br>标签列：MEDV</span>
+  </div>
+
+  <div class="theory-card">
+    <h2>2. 常用特征说明</h2>
+    <table>
+      <tr><th>字段</th><th>含义</th><th>与房价关系的直观理解</th></tr>
+      <tr><td>RM</td><td>住宅平均房间数</td><td>房间数越多，房价通常越高</td></tr>
+      <tr><td>LSTAT</td><td>低收入人口比例</td><td>比例越高，房价通常越低</td></tr>
+      <tr><td>PTRATIO</td><td>师生比例</td><td>可能反映教育资源压力</td></tr>
+      <tr><td>CRIM</td><td>人均犯罪率</td><td>犯罪率越高，房价可能越低</td></tr>
+      <tr><td>NOX</td><td>一氧化氮浓度</td><td>反映环境污染水平</td></tr>
+      <tr><td>TAX</td><td>财产税率</td><td>反映区域税负</td></tr>
+      <tr><td>DIS</td><td>到就业中心的加权距离</td><td>反映通勤位置因素</td></tr>
+      <tr><td>MEDV</td><td>房价中位数</td><td>本实验预测标签</td></tr>
+    </table>
+  </div>
+
+  <div class="theory-card">
+    <h2>3. 数据探索任务</h2>
+    <p>数据探索的目标是先观察，再建模。实验界面中通常包含单特征相关系数、全特征相关系数排行、原始散点图和预处理散点图。</p>
+    <ul class="theory-list">
+      <li>选择一个特征，例如 RM。</li>
+      <li>计算该特征与 MEDV 的 Pearson 相关系数。</li>
+      <li>绘制该特征与 MEDV 的散点图。</li>
+      <li>观察散点是否大致沿一条直线上升或下降。</li>
+      <li>切换其他特征，比较不同特征与房价的线性关系强弱。</li>
+    </ul>
+  </div>
+
+  <div class="theory-card">
+    <h2>4. 原始数据与标准化数据</h2>
+    <p>原始散点图使用特征原始数值作为横轴；标准化散点图使用标准化后的特征值作为横轴。</p>
+    <table>
+      <tr><th>数据版本</th><th>横轴含义</th><th>适合观察什么</th></tr>
+      <tr><td>原始特征</td><td>真实特征值，例如 RM = 6.5</td><td>方便理解实际业务含义</td></tr>
+      <tr><td>标准化特征</td><td>转换后的 z-score</td><td>方便梯度下降和参数变化观察</td></tr>
+    </table>
+  </div>
+
+  <div class="note">
+    数据探索阶段不急着训练模型。先看散点图和相关系数，可以帮助判断某个特征是否适合做简单线性回归。
+  </div>
+</div>
