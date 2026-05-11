@@ -7,7 +7,7 @@
 ## 项目结构
 
 ```text
-simple_linear_regression1/
+simple_linear_regression/
 ├── app.py
 ├── 01_preprocess_features_only_standardize.py
 ├── boston_housing.csv
@@ -36,16 +36,26 @@ simple_linear_regression1/
 
 推荐使用 Python 3.10 或更高版本。
 
-安装依赖：
+从仓库根目录启动：
 
 ```bash
-python -m pip install -r requirements.txt
+cd simple_linear_regression
+python3 -m pip install -r requirements.txt
+python3 app.py
 ```
 
-启动项目：
+也可以在仓库根目录直接运行脚本，数据文件会按 `app.py` 所在目录读取：
 
 ```bash
-python app.py
+python3 -m pip install -r simple_linear_regression/requirements.txt
+python3 simple_linear_regression/app.py
+```
+
+如果当前已经在 `simple_linear_regression` 目录中，直接安装依赖并启动：
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 app.py
 ```
 
 浏览器访问：
@@ -405,7 +415,7 @@ requirements.txt
 README.md
 templates/index.html
 static/theory-html/README.md
-static/theory-html/basic.html
+static/theory-html/*.html
 ```
 
 不建议上传：
@@ -414,4 +424,8 @@ static/theory-html/basic.html
 __pycache__/
 .vscode/
 flask.server.log
+.pytest_cache/
+playwright-report/
+test-results/
+*.tmp
 ```

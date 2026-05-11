@@ -764,6 +764,10 @@
       height: 16px;
       accent-color: var(--purple);
     }
+    .check-row:has(input:disabled) {
+      opacity: .58;
+      cursor: not-allowed;
+    }
     .check-row:has(input:checked) {
       border-color: #c9c1ff;
       background: var(--purple-soft);
@@ -999,7 +1003,7 @@
         <div class="step-list">
           <button class="nav-btn" data-page="preprocess" type="button"><span class="dot"></span><span><strong>数据预处理</strong><span>观察数据与相关性</span></span></button>
           <button class="nav-btn" data-page="train_eval" type="button"><span class="dot"></span><span><strong>模型训练与评估</strong><span>训练、优化和指标</span></span></button>
-          <button class="nav-btn" data-page="predict" type="button"><span class="dot"></span><span><strong>模型预测</strong><span>后续接入预测流程</span></span></button>
+          <button class="nav-btn" data-page="predict" type="button"><span class="dot"></span><span><strong>模型预测</strong><span>输入样本并查看结果</span></span></button>
           <button class="nav-btn" data-page="student" type="button"><span class="dot"></span><span><strong>自主实验</strong><span>上传数据并完成训练</span></span></button>
         </div>
       </details>
@@ -1018,6 +1022,22 @@ const FEATURE_NAMES = {{ feature_names | tojson }};
 const DEFAULT_FEATURE = {{ default_feature | tojson }};
 
 const $ = (id) => document.getElementById(id);
+const HTML_ESCAPE_MAP = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;"
+};
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, char => HTML_ESCAPE_MAP[char]);
+}
+function optionHtml(value, selected, label = value, disabled = false) {
+  return `<option value="${escapeHtml(value)}"${value === selected ? " selected" : ""}${disabled ? " disabled" : ""}>${escapeHtml(label)}</option>`;
+}
+function checkboxRowHtml(name, value, label, checked = false, disabled = false) {
+  return `<label class="check-row"><input type="checkbox" name="${escapeHtml(name)}" value="${escapeHtml(value)}"${checked ? " checked" : ""}${disabled ? " disabled" : ""}> ${escapeHtml(label)}</label>`;
+}
 const charts = new Map();
 const chartResizeObservers = new Map();
 let dataGrid = null;
@@ -1102,20 +1122,20 @@ const theoryPages = {
   },
   predict: {
     title: "模型预测",
-    sub: "该模块暂时保留入口，后续接入预测流程。",
-    body: ["后续可以在这里加入输入样本、标准化转换、预测结果和解释说明。"],
-    helper: ["预测模块可以复用当前训练得到的 w 和 b。"]
+    sub: "输入特征值，查看线性模型给出的预测结果。",
+    body: ["预测页会按当前选择的数据版本完成输入转换，并展示预测值、计算过程和相近样本。"],
+    helper: ["如果已完成训练，预测应使用同一组 w 和 b。"]
   },
   student: {
     title: "学生训练",
-    sub: "该模块暂时保留入口，后续接入学生练习。",
-    body: ["后续可以加入任务卡、学生提交、自动判分和过程记录。"],
-    helper: ["学生训练区适合放分层任务：基础观察、参数调节、结果解释。"]
+    sub: "上传 CSV 后完成数据预处理、训练评估和预测。",
+    body: ["自主实验区支持选择目标列、特征列、数据版本和训练参数，适合完整走一次线性回归流程。"],
+    helper: ["上传原始 CSV 时先使用原始特征；完成预处理后再选择标准化特征。"]
   }
 };
 
 function featureOptions(selected = DEFAULT_FEATURE) {
-  return FEATURE_NAMES.map(f => `<option value="${f}" ${f === selected ? "selected" : ""}>${f}</option>`).join("");
+  return FEATURE_NAMES.map(f => optionHtml(f, selected)).join("");
 }
 
 function setActive(page) {
@@ -1185,7 +1205,7 @@ function renderTheory(page) {
       <div class="hero-line">
         <div>
           <div class="eyebrow">理论部分</div>
-          <h2>${item.title}</h2>
+          <h2>${escapeHtml(item.title)}</h2>
         </div>
       </div>
       ${renderTheoryHtmlSlot(page)}
@@ -1449,6 +1469,58 @@ function dataGridItemHtml(view, layout) {
   return `<div class="grid-stack-item" data-view="${view}" gs-x="${layout.x}" gs-y="${layout.y}" gs-w="${layout.w}" gs-h="${layout.h}" gs-min-w="${minW}" gs-min-h="1"><div class="grid-stack-item-content">${chartCardHtml(view, chartTitle(view), chartSub(view, dataCache), dataCardSize(view))}</div></div>`;
 }
 
+function studentStandardizedReady() {
+  return Boolean(studentMeta?.standardized_ready || studentMeta?.source_type === "standardized");
+}
+
+function studentTargetValue(columns = studentMeta?.numeric_columns || []) {
+  const live = $("studentTarget")?.value;
+  const saved = studentMeta?.target;
+  if (live && columns.includes(live)) return live;
+  if (saved && columns.includes(saved)) return saved;
+  return columns[columns.length - 1] || "";
+}
+
+function studentFeatureSet(features = [], target = "") {
+  const live = studentSelectedFeatures().filter(col => features.includes(col) && col !== target);
+  const saved = Array.isArray(studentMeta?.features)
+    ? studentMeta.features.filter(col => features.includes(col) && col !== target)
+    : [];
+  const selected = live.length ? live : (saved.length ? saved : features.slice(0, Math.min(4, features.length)));
+  return new Set(selected);
+}
+
+function studentStdSelectValue() {
+  if (!studentStandardizedReady()) return "0";
+  const live = $("studentStd")?.value;
+  if (live === "0" || live === "1") return live;
+  return studentMeta?.source_type === "standardized" ? "1" : "0";
+}
+
+function studentUseStandardized() {
+  return studentStandardizedReady() && studentStdSelectValue() === "1";
+}
+
+function studentFeatureVersionLabel() {
+  return studentUseStandardized() ? "标准化特征" : "原始特征";
+}
+
+function studentAllowedDataViews(views) {
+  const allowed = new Set(["raw", "corr"]);
+  if (studentStandardizedReady()) {
+    allowed.add("standardized");
+    allowed.add("table");
+  }
+  return views.filter(view => allowed.has(view));
+}
+
+function currentStudentTrainFrame(payload) {
+  if (!trainData || studentTrainDirty || !payload) return null;
+  if (trainData.feature !== payload.feature) return null;
+  if (trainData.use_standardized !== payload.use_standardized) return null;
+  return trainData.history[currentFrame] || trainData.history[trainData.history.length - 1] || null;
+}
+
 function renderStudentShell() {
   document.querySelector(".shell").classList.remove("theory");
   $("main").innerHTML = `
@@ -1468,11 +1540,15 @@ function renderStudentShell() {
 
 function renderStudentPanel() {
   const columns = studentMeta?.numeric_columns || [];
-  const target = $("studentTarget")?.value || columns[columns.length - 1] || "";
+  const target = studentTargetValue(columns);
   const features = columns.filter(col => col !== target);
-  const selectedFeatureCount = studentSelectedFeatures().length || Math.min(4, features.length);
+  const selectedFeatureSet = studentFeatureSet(features, target);
+  const selectedFeatureCount = selectedFeatureSet.size;
+  const standardizedReady = studentStandardizedReady();
+  const stdValue = studentStdSelectValue();
+  const stdOptionLabel = standardizedReady ? "标准化特征" : "标准化特征（先完成预处理）";
   const datasetStatus = studentMeta ? "已加载" : "未加载";
-  const preprocessStatus = studentData ? "已查看" : (studentMeta ? "待执行" : "未就绪");
+  const preprocessStatus = standardizedReady ? (studentData ? "已预处理" : "标准化可用") : (studentData ? "已查看原始" : (studentMeta ? "待执行" : "未就绪"));
   const trainStatus = trainData ? (studentTrainDirty ? "需重新准备" : `epoch ${currentFrame}`) : "未训练";
   const predictStatus = predictData ? "已预测" : "待预测";
   $("rightPanel").innerHTML = `
@@ -1491,7 +1567,7 @@ function renderStudentPanel() {
       </div>
       <div class="runtime">
         <div><span>数据状态</span><strong id="studentStatus">${studentMeta ? "已加载" : "未加载"}</strong></div>
-        <div><span>样本数量</span><strong>${studentMeta?.row_count ?? "--"}</strong></div>
+        <div><span>样本数量</span><strong>${escapeHtml(studentMeta?.row_count ?? "--")}</strong></div>
       </div>
       <div class="status-line hidden" id="studentUploadMessage"></div>
     </details>
@@ -1499,10 +1575,10 @@ function renderStudentPanel() {
     <details class="control-card">
       <summary><h3>02 字段设置</h3><span class="section-status ready">${selectedFeatureCount} 个特征</span></summary>
       <label class="control-label" for="studentTarget">目标列 y</label>
-      <select id="studentTarget">${columns.map(col => `<option value="${col}" ${col === target ? "selected" : ""}>${col}</option>`).join("")}</select>
+      <select id="studentTarget">${columns.map(col => optionHtml(col, target)).join("")}</select>
       <label class="control-label">特征列 x</label>
       <div class="check-list" id="studentFeatureChecks" style="max-height:230px;overflow:auto">
-        ${features.map((col, index) => `<label class="check-row"><input type="checkbox" name="studentFeatures" value="${col}" ${index < Math.min(4, features.length) ? "checked" : ""}> ${col}</label>`).join("")}
+        ${features.map(col => checkboxRowHtml("studentFeatures", col, col, selectedFeatureSet.has(col))).join("")}
       </div>
       <label class="control-label" for="studentFeature">当前观察/训练特征</label>
       <select id="studentFeature"></select>
@@ -1516,19 +1592,22 @@ function renderStudentPanel() {
       </div>
       <label class="control-label">显示图表</label>
       <details class="mode-menu">
-        <summary id="studentDataModeSummary">已选择 3 项</summary>
+        <summary id="studentDataModeSummary">${standardizedReady ? "已选择 3 项" : "已选择 2 项"}</summary>
         <div class="check-list">
           <label class="check-row"><input type="checkbox" name="studentDataViews" value="raw" checked> 原始数据</label>
-          <label class="check-row"><input type="checkbox" name="studentDataViews" value="standardized" checked> 预处理数据</label>
+          ${checkboxRowHtml("studentDataViews", "standardized", standardizedReady ? "预处理数据" : "预处理数据（先完成预处理）", standardizedReady, !standardizedReady)}
           <label class="check-row"><input type="checkbox" name="studentDataViews" value="corr" checked> 相关系数</label>
-          <label class="check-row"><input type="checkbox" name="studentDataViews" value="table"> 标准化表</label>
+          ${checkboxRowHtml("studentDataViews", "table", standardizedReady ? "标准化表" : "标准化表（先完成预处理）", false, !standardizedReady)}
         </div>
       </details>
     </details>
     <details class="control-card" open>
       <summary><h3>04 模型训练与评估</h3><span class="section-status ${trainData && !studentTrainDirty ? "ready" : studentTrainDirty ? "warn" : ""}">${trainStatus}</span></summary>
       <label class="control-label" for="studentStd">训练数据版本</label>
-      <select id="studentStd"><option value="1">标准化特征</option><option value="0">原始特征</option></select>
+      <select id="studentStd">
+        ${optionHtml("0", stdValue, "原始特征")}
+        ${optionHtml("1", stdValue, stdOptionLabel, !standardizedReady)}
+      </select>
       <div class="field-grid">
         <label class="control-label">初始 w<input id="studentW0" type="number" value="0" step="0.1"></label>
         <label class="control-label">初始 b<input id="studentB0" type="number" value="0" step="0.1"></label>
@@ -1587,6 +1666,8 @@ function renderStudentPanel() {
   $("studentUploadBtn").addEventListener("click", uploadStudentDataset);
   if (!studentMeta) return;
   $("studentTarget").addEventListener("change", () => {
+    studentMeta.target = $("studentTarget").value;
+    studentMeta.features = [];
     studentData = null;
     trainData = null;
     predictData = null;
@@ -1596,6 +1677,8 @@ function renderStudentPanel() {
   });
   document.querySelectorAll('input[name="studentFeatures"]').forEach(el => el.addEventListener("change", () => {
     updateStudentFeatureSelect();
+    studentMeta.features = studentSelectedFeatures();
+    refreshStudentStageStrip();
     studentData = null;
     trainData = null;
     predictData = null;
@@ -1667,12 +1750,12 @@ function renderStudentWorkspace(message = "") {
           ${studentPreviewTable(stdRows)}
         </div>
       </div>
-      ${message ? `<p><strong>${message}</strong></p>` : ""}
+      ${message ? `<p><strong>${escapeHtml(message)}</strong></p>` : ""}
     </section>
     ${studentMeta ? `
     <section class="content-card">
       <h3>数据预览</h3>
-      <p>检测到 ${studentMeta.row_count} 行，数值列 ${studentMeta.numeric_columns.length} 个。</p>
+      <p>检测到 ${escapeHtml(studentMeta.row_count)} 行，数值列 ${escapeHtml(studentMeta.numeric_columns.length)} 个。</p>
       ${studentPreviewTable(preview)}
     </section>
     <div class="chart-grid" id="studentChartGrid"></div>` : `
@@ -1681,13 +1764,14 @@ function renderStudentWorkspace(message = "") {
 
 function studentStageStrip() {
   const cols = studentMeta?.numeric_columns || [];
-  const target = $("studentTarget")?.value || cols[cols.length - 1] || "--";
+  const target = studentTargetValue(cols) || "--";
   const feature = $("studentFeature")?.value || studentSelectedFeatures()[0] || "--";
+  const featureText = feature === "--" ? feature : `${feature}（${studentFeatureVersionLabel()}）`;
   return `<div class="stage-strip" id="studentStageStrip">
-    <div class="stage-chip active"><span>当前阶段</span><strong>${studentStage}</strong></div>
-    <div class="stage-chip"><span>样本数量</span><strong>${studentMeta?.row_count ?? "--"}</strong></div>
-    <div class="stage-chip"><span>目标列</span><strong>${target}</strong></div>
-    <div class="stage-chip"><span>当前特征</span><strong>${feature}</strong></div>
+    <div class="stage-chip active"><span>当前阶段</span><strong>${escapeHtml(studentStage)}</strong></div>
+    <div class="stage-chip"><span>样本数量</span><strong>${escapeHtml(studentMeta?.row_count ?? "--")}</strong></div>
+    <div class="stage-chip"><span>目标列</span><strong>${escapeHtml(target)}</strong></div>
+    <div class="stage-chip"><span>当前特征</span><strong>${escapeHtml(featureText)}</strong></div>
   </div>`;
 }
 
@@ -1700,11 +1784,12 @@ function showStudentMessage(message, isError = false) {
   const grid = $("studentChartGrid");
   if (grid) {
     grid.classList.remove("dashboard-grid", "grid-stack");
-    grid.innerHTML = `<div class="status-line ${isError ? "error" : ""}">${message}</div>`;
+    grid.innerHTML = `<div class="status-line ${isError ? "error" : ""}">${escapeHtml(message)}</div>`;
   }
 }
 
 function markStudentTrainingDirty() {
+  refreshStudentStageStrip();
   if (!trainData) return;
   studentTrainDirty = true;
   stopAuto();
@@ -1714,12 +1799,12 @@ function markStudentTrainingDirty() {
 function studentPreviewTable(rows) {
   if (!rows.length) return `<div class="empty-state">暂无预览数据。</div>`;
   const columns = Object.keys(rows[0]);
-  return `<div class="table-wrap"><table><thead><tr>${columns.map(col => `<th>${col}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(col => `<td>${row[col] ?? ""}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr>${columns.map(col => `<th>${escapeHtml(col)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(col => `<td>${escapeHtml(row[col] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
 function standardizeTableHtml(rows = []) {
   if (!rows.length) return `<div class="empty-state">还没有标准化结果。</div>`;
-  return `<div class="table-wrap"><table><thead><tr><th>特征</th><th>标准化列</th><th>均值</th><th>标准差</th><th>原始最小</th><th>原始最大</th><th>标准化最小</th><th>标准化最大</th></tr></thead><tbody>${rows.map(row => `<tr><td>${row.feature}</td><td>${row.standardized_feature}</td><td>${num(row.mean, 4)}</td><td>${num(row.std, 4)}</td><td>${num(row.min_before, 4)}</td><td>${num(row.max_before, 4)}</td><td>${row.min_after == null ? "--" : num(row.min_after, 4)}</td><td>${row.max_after == null ? "--" : num(row.max_after, 4)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>特征</th><th>标准化列</th><th>均值</th><th>标准差</th><th>原始最小</th><th>原始最大</th><th>标准化最小</th><th>标准化最大</th></tr></thead><tbody>${rows.map(row => `<tr><td>${escapeHtml(row.feature)}</td><td>${escapeHtml(row.standardized_feature)}</td><td>${num(row.mean, 4)}</td><td>${num(row.std, 4)}</td><td>${num(row.min_before, 4)}</td><td>${num(row.max_before, 4)}</td><td>${row.min_after == null ? "--" : num(row.min_after, 4)}</td><td>${row.max_after == null ? "--" : num(row.max_after, 4)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function studentSelectedFeatures() {
@@ -1730,17 +1815,20 @@ function updateStudentFeatureSelect() {
   const select = $("studentFeature");
   if (!select) return;
   const selected = studentSelectedFeatures();
-  select.innerHTML = selected.map(col => `<option value="${col}">${col}</option>`).join("");
+  const current = select.value;
+  const selectedValue = selected.includes(current) ? current : selected[0];
+  select.innerHTML = selected.map(col => optionHtml(col, selectedValue)).join("");
 }
 
 function studentPayload(extra = {}) {
   const features = studentSelectedFeatures();
+  const useStandardized = studentUseStandardized();
   return {
     dataset_id: studentMeta?.dataset_id,
     target: $("studentTarget")?.value,
     features,
     feature: $("studentFeature")?.value || features[0],
-    use_standardized: $("studentStd")?.value !== "0",
+    use_standardized: useStandardized,
     ...extra
   };
 }
@@ -1777,6 +1865,9 @@ async function uploadStudentDataset() {
     }
     if (!resp.ok) throw new Error(data.error || `上传失败，状态码 ${resp.status}`);
     studentMeta = data;
+    studentMeta.standardized_ready = data.source_type === "standardized";
+    studentMeta.target = "";
+    studentMeta.features = [];
     studentData = null;
     studentPredictData = null;
     trainData = null;
@@ -1803,9 +1894,9 @@ async function uploadStudentDataset() {
 
 function prepareStudentDataView() {
   studentStage = "数据预处理";
-  renderStudentWorkspace("已准备数据预处理区域。可以先查看默认图表，也可以点击“预处理”生成标准化表。");
-  const views = selectedValues("studentDataViews");
-  renderStudentGrid(views.length ? views : ["raw", "standardized", "corr"], view => {
+  renderStudentWorkspace(studentStandardizedReady() ? "已准备数据预处理区域。可以查看原始数据、预处理数据和标准化表。" : "已准备数据预处理区域。当前先使用原始特征，点击“预处理”后可以查看标准化结果。");
+  const views = studentAllowedDataViews(selectedValues("studentDataViews"));
+  renderStudentGrid(views.length ? views : studentAllowedDataViews(["raw", "standardized", "corr"]), view => {
     if (view === "raw") return chartCardHtml("student_raw", "原始散点图", "点击“看数据”后显示当前特征与目标列的原始关系");
     if (view === "standardized") return chartCardHtml("student_standardized", "预处理散点图", "点击“预处理”或“看数据”后显示标准化特征关系");
     if (view === "corr") return chartCardHtml("student_corr", "相关系数", "点击“看数据”后显示已选特征与目标列的相关性");
@@ -1819,7 +1910,14 @@ async function preprocessStudentDataset() {
     const data = await postJson("/api/student/preprocess", studentPayload());
     studentMeta.preview = data.preview;
     studentMeta.row_count = data.row_count;
+    studentMeta.target = data.target;
+    studentMeta.features = data.features;
+    studentMeta.standardized_ready = true;
     studentData = { standardize_table: data.standardize_table };
+    trainData = null;
+    predictData = null;
+    studentTrainDirty = false;
+    renderStudentPanel();
     renderStudentWorkspace("预处理完成，已生成标准化特征列。");
     renderStudentStandardizeTable(data.standardize_table);
   } catch (err) {
@@ -1836,7 +1934,10 @@ function renderStudentStandardizeTable(rows) {
 async function loadStudentDataView() {
   try {
     studentStage = "数据预处理";
-    studentData = await postJson("/api/student/data_view", studentPayload());
+    const payload = studentPayload();
+    studentData = await postJson("/api/student/data_view", payload);
+    studentMeta.target = payload.target;
+    studentMeta.features = payload.features;
     refreshStudentStageStrip();
     renderStudentDataDashboard();
   } catch (err) {
@@ -1845,7 +1946,7 @@ async function loadStudentDataView() {
 }
 
 function renderStudentDataDashboard() {
-  const views = selectedValues("studentDataViews");
+  const views = studentAllowedDataViews(selectedValues("studentDataViews"));
   if ($("studentDataModeSummary")) $("studentDataModeSummary").textContent = views.length ? `已选择 ${views.length} 项` : "请选择显示图表";
   renderStudentGrid(views, view => studentDataViewHtml(view, studentData));
   views.forEach(view => {
@@ -1867,12 +1968,15 @@ function studentDataViewHtml(view, data) {
 async function prepareStudentTraining() {
   try {
     studentStage = "模型训练与评估";
-    trainData = await postJson("/api/student/train_prepare", studentPayload({
+    const payload = studentPayload({
       learning_rate: Number($("studentLr").value),
       epochs: Number($("studentEpochs").value),
       w0: Number($("studentW0").value),
       b0: Number($("studentB0").value)
-    }));
+    });
+    trainData = await postJson("/api/student/train_prepare", payload);
+    studentMeta.target = payload.target;
+    studentMeta.features = payload.features;
     currentFrame = 0;
     studentTrainDirty = false;
     predictData = null;
@@ -1997,16 +2101,17 @@ function prepareStudentPredictionView() {
 async function loadStudentPrediction() {
   try {
     studentStage = "模型预测";
-    predictData = await postJson("/api/student/predict", studentPayload({
+    const payload = studentPayload({
       value: Number($("studentPredictInput").value || 0)
-    }));
-    if (trainData && !studentTrainDirty && trainData.feature === predictData.feature && trainData.use_standardized === predictData.use_standardized) {
-      const frame = trainData.history[currentFrame] || trainData.history[trainData.history.length - 1];
-      predictData.w = frame.w;
-      predictData.b = frame.b;
-      predictData.prediction = frame.w * predictData.model_x + frame.b;
-      predictData.line.y = predictData.line.x.map(x => frame.w * x + frame.b);
+    });
+    const frame = currentStudentTrainFrame(payload);
+    if (frame) {
+      payload.w = frame.w;
+      payload.b = frame.b;
     }
+    predictData = await postJson("/api/student/predict", payload);
+    studentMeta.target = payload.target;
+    studentMeta.features = payload.features;
     refreshStudentStageStrip();
     renderStudentPredictDashboard();
   } catch (err) {
@@ -2267,7 +2372,7 @@ function predictViewHtml(view) {
 }
 
 function predictInfoCard(key, title, html) {
-  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${title}</div><div class="chart-sub">使用最优线性拟合参数预测</div></div></div><div style="padding:18px">${html}</div></section>`;
+  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">使用最优线性拟合参数预测</div></div></div><div style="padding:18px">${html}</div></section>`;
 }
 
 function num(value, digits = 4) {
@@ -2277,13 +2382,13 @@ function num(value, digits = 4) {
 function predictResultHtml() {
   const d = predictData;
   return `<div class="best-param-grid">
-    <div class="best-param"><span>输入特征</span><strong>${d.feature}</strong></div>
+    <div class="best-param"><span>输入特征</span><strong>${escapeHtml(d.feature)}</strong></div>
     <div class="best-param"><span>原始输入</span><strong>${num(d.raw_value, 4)}</strong></div>
     <div class="best-param"><span>模型输入 x</span><strong>${num(d.model_x, 4)}</strong></div>
-    <div class="best-param"><span>预测 ${d.target}</span><strong>${num(d.prediction, 2)}</strong></div>
+    <div class="best-param"><span>预测 ${escapeHtml(d.target)}</span><strong>${num(d.prediction, 2)}</strong></div>
   </div>
   <div class="formula-box">当前使用参数：w = ${num(d.w, 6)}, b = ${num(d.b, 6)}
-目标列 ${d.target} 的预测值由当前单特征线性模型给出。</div>`;
+目标列 ${escapeHtml(d.target)} 的预测值由当前单特征线性模型给出。</div>`;
 }
 
 function predictCalcHtml() {
@@ -2305,16 +2410,18 @@ y_hat = w * x + b
       = ${num(d.prediction, 6)}
 
 3. 预测结果
-预测 ${d.target} = ${num(d.prediction, 2)}</div>`;
+预测 ${escapeHtml(d.target)} = ${num(d.prediction, 2)}</div>`;
 }
 
 function predictNearbyHtml() {
   const rows = predictData.nearby || [];
-  return `<div class="table-wrap"><table><thead><tr><th>#</th><th>${predictData.feature}</th><th>${predictData.target}</th><th>距离</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${num(r.raw_x, 3)}</td><td>${num(r.y, 2)}</td><td>${num(r.distance, 3)}</td></tr>`).join("")}</tbody></table></div>`;
+  return `<div class="table-wrap"><table><thead><tr><th>#</th><th>${escapeHtml(predictData.feature)}</th><th>${escapeHtml(predictData.target)}</th><th>距离</th></tr></thead><tbody>${rows.map((r, i) => `<tr><td>${i + 1}</td><td>${num(r.raw_x, 3)}</td><td>${num(r.y, 2)}</td><td>${num(r.distance, 3)}</td></tr>`).join("")}</tbody></table></div>`;
 }
 
 function predictChartOption() {
   const d = predictData;
+  const xColumn = escapeHtml(d.x_column);
+  const target = escapeHtml(d.target || "MEDV");
   const points = d.scatter.x.map((x, i) => [x, d.scatter.y[i]]);
   const lineData = d.line.x.map((x, i) => [x, d.line.y[i]]);
   const inputPoint = [d.model_x, d.prediction];
@@ -2323,14 +2430,14 @@ function predictChartOption() {
     tooltip: {
       trigger: "item",
       formatter: p => {
-        if (p.seriesName === "预测点") return `预测点<br>${d.x_column}=${num(d.model_x, 4)}<br>${d.target}=${num(d.prediction, 2)}`;
-        return `${p.seriesName}<br>x=${num(p.value[0], 4)}<br>${d.target}=${num(p.value[1], 2)}`;
+        if (p.seriesName === "预测点") return `预测点<br>${xColumn}=${num(d.model_x, 4)}<br>${target}=${num(d.prediction, 2)}`;
+        return `${escapeHtml(p.seriesName)}<br>x=${num(p.value[0], 4)}<br>${target}=${num(p.value[1], 2)}`;
       }
     },
     legend: { top: 12 },
     grid: { left: 58, right: 28, top: 56, bottom: 50 },
-    xAxis: { type: "value", name: d.x_column, nameLocation: "middle", nameGap: 30 },
-    yAxis: { type: "value", name: d.target || "MEDV", nameLocation: "middle", nameGap: 40 },
+    xAxis: { type: "value", name: xColumn, nameLocation: "middle", nameGap: 30 },
+    yAxis: { type: "value", name: target, nameLocation: "middle", nameGap: 40 },
     dataZoom: [
       { type: "inside", xAxisIndex: 0, filterMode: "none" },
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
@@ -2591,11 +2698,11 @@ function renderTrainFrame(index) {
 }
 
 function chartCardHtml(key, title, sub, size = "") {
-  return `<section class="chart-card ${size}"><div class="chart-head"><div><div class="chart-title">${title}</div><div class="chart-sub">${sub}</div></div></div><div class="chart" id="chart_${key}"></div></section>`;
+  return `<section class="chart-card ${size}"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">${escapeHtml(sub)}</div></div></div><div class="chart" id="chart_${key}"></div></section>`;
 }
 
 function infoCardHtml(key, title, html) {
-  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${title}</div><div class="chart-sub">随当前 epoch 更新</div></div></div><div style="padding:18px">${html}</div></section>`;
+  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">随当前 epoch 更新</div></div></div><div style="padding:18px">${html}</div></section>`;
 }
 
 function dataCardSize(view) {
@@ -2658,14 +2765,16 @@ async function postJson(url, payload) {
 }
 
 function scatterOption(scatter, line, xName, title, yName = "MEDV") {
+  const safeXName = escapeHtml(xName);
+  const safeYName = escapeHtml(yName);
   const points = scatter.x.map((x, i) => [x, scatter.y[i]]);
   const lineData = line.x.map((x, i) => [x, line.y[i]]);
   return {
     tooltip: { trigger: "item" },
     legend: { top: 12 },
     grid: { left: 58, right: 24, top: 56, bottom: 48 },
-    xAxis: { type: "value", name: xName, nameLocation: "middle", nameGap: 28 },
-    yAxis: { type: "value", name: yName, nameLocation: "middle", nameGap: 38 },
+    xAxis: { type: "value", name: safeXName, nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: safeYName, nameLocation: "middle", nameGap: 38 },
     dataZoom: [
       { type: "inside", xAxisIndex: 0, filterMode: "none" },
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
@@ -2710,7 +2819,7 @@ function singleCorrOption(data) {
   return {
     tooltip: { trigger: "axis" },
     grid: { left: 58, right: 28, top: 42, bottom: 46 },
-    xAxis: { type: "category", data: [data.feature] },
+    xAxis: { type: "category", data: [escapeHtml(data.feature)] },
     yAxis: { type: "value", min: -1, max: 1, name: "Pearson r" },
     media: [
       {
@@ -2742,7 +2851,7 @@ function allCorrOption(rows, currentFeature) {
     tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
     grid: { left: 84, right: 28, top: 42, bottom: 42 },
     xAxis: { type: "value", min: -1, max: 1, name: "Pearson r" },
-    yAxis: { type: "category", data: ordered.map(r => r.feature) },
+    yAxis: { type: "category", data: ordered.map(r => escapeHtml(r.feature)) },
     media: [
       {
         query: { maxWidth: 360 },
@@ -2774,12 +2883,14 @@ function lineForParams(w, b) {
 function trainScatterOption(frameIndex) {
   const frame = trainData.history[frameIndex];
   const points = trainData.scatter.x.map((x, i) => [x, trainData.scatter.y[i]]);
+  const xColumn = escapeHtml(trainData.x_column);
+  const target = escapeHtml(trainData.target || "MEDV");
   return {
     tooltip: { trigger: "item" },
     legend: { top: 12 },
     grid: { left: 58, right: 24, top: 56, bottom: 48 },
-    xAxis: { type: "value", name: trainData.x_column, nameLocation: "middle", nameGap: 28 },
-    yAxis: { type: "value", name: trainData.target || "MEDV", nameLocation: "middle", nameGap: 38 },
+    xAxis: { type: "value", name: xColumn, nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: target, nameLocation: "middle", nameGap: 38 },
     dataZoom: [
       { type: "inside", xAxisIndex: 0, filterMode: "none" },
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
@@ -3428,7 +3539,7 @@ function stopAuto() {
 }
 
 function renderError(message) {
-  $("main").innerHTML = `<section class="content-card"><h2>加载失败</h2><p>${message}</p></section>`;
+  $("main").innerHTML = `<section class="content-card"><h2>加载失败</h2><p>${escapeHtml(message)}</p></section>`;
 }
 
 function renderTheoryHtmlSlot(page) {

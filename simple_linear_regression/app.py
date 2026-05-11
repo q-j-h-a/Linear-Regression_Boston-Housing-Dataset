@@ -4,14 +4,22 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 from flask import Flask, render_template, request, jsonify
+from werkzeug.exceptions import RequestEntityTooLarge
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 
-RAW_DATA_PATH = Path("boston_housing.csv")
-STD_DATA_PATH = Path("boston_housing_features_standardized.csv")
+BASE_DIR = Path(__file__).resolve().parent
+RAW_DATA_PATH = BASE_DIR / "boston_housing.csv"
+STD_DATA_PATH = BASE_DIR / "boston_housing_features_standardized.csv"
 TARGET_COLUMN = "MEDV"
 STUDENT_DATASETS = {}
+MAX_UPLOAD_BYTES = 2 * 1024 * 1024
+MAX_UPLOAD_ROWS = 5000
+MAX_UPLOAD_COLUMNS = 80
+MAX_STUDENT_DATASETS = 20
+MAX_MULTIPART_BYTES = MAX_UPLOAD_BYTES + 256 * 1024
+app.config["MAX_CONTENT_LENGTH"] = MAX_MULTIPART_BYTES
 
 FEATURE_COLUMNS = [
     "CRIM", "ZN", "INDUS", "CHAS", "NOX", "RM", "AGE", "DIS",
@@ -33,6 +41,30 @@ FEATURE_DESCRIPTIONS = {
     "B": "历史种族统计相关变量，教学中建议谨慎使用",
     "LSTAT": "低收入人口比例",
 }
+
+
+class ApiError(Exception):
+    def __init__(self, message: str, status_code: int = 400):
+        super().__init__(message)
+        self.status_code = status_code
+
+
+def error_response(message: str, status_code: int = 400):
+    return jsonify({"error": message}), status_code
+
+
+@app.errorhandler(RequestEntityTooLarge)
+def handle_request_entity_too_large(exc):
+    return error_response(f"上传文件不能超过 {MAX_UPLOAD_BYTES // (1024 * 1024)} MB。", 413)
+
+
+def request_json_payload() -> dict:
+    payload = request.get_json(silent=True)
+    if payload is None:
+        return {}
+    if not isinstance(payload, dict):
+        raise ApiError("请求体必须是 JSON 对象。")
+    return payload
 
 
 def load_raw_df() -> pd.DataFrame:
@@ -133,14 +165,142 @@ def clean_numeric_df(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
 
 
 def student_dataset(dataset_id: str) -> dict:
+    if not dataset_id:
+        raise ApiError("缺少 dataset_id，请先上传 CSV。")
     data = STUDENT_DATASETS.get(dataset_id)
     if not data:
-        raise ValueError("学生数据集不存在，请重新上传 CSV。")
+        raise ApiError("学生数据集不存在，请重新上传 CSV。")
     return data
 
 
 def student_std_col(feature: str) -> str:
     return f"{feature}_standardized"
+
+
+def uploaded_file_size(file) -> int | None:
+    stream = getattr(file, "stream", None)
+    if stream is None or not hasattr(stream, "seek") or not hasattr(stream, "tell"):
+        return None
+    try:
+        current = stream.tell()
+        stream.seek(0, 2)
+        size = stream.tell()
+        stream.seek(current)
+        return int(size)
+    except Exception:
+        return None
+
+
+def unique_columns(columns: list[str]) -> list[str]:
+    seen = set()
+    out = []
+    for col in columns:
+        if col not in seen:
+            seen.add(col)
+            out.append(col)
+    return out
+
+
+def require_column_name(value, label: str) -> str:
+    if not isinstance(value, str) or not value.strip():
+        raise ApiError(f"请选择{label}。")
+    return value.strip()
+
+
+def normalize_features(value) -> list[str]:
+    if value is None:
+        raise ApiError("请选择至少一个特征列。")
+    if not isinstance(value, list):
+        raise ApiError("features 必须是数组。")
+    features = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            raise ApiError("features 中存在空字段。")
+        name = item.strip()
+        if name not in features:
+            features.append(name)
+    if not features:
+        raise ApiError("请选择至少一个特征列。")
+    return features
+
+
+def require_columns(df: pd.DataFrame, columns: list[str]) -> None:
+    missing = [col for col in unique_columns(columns) if col not in df.columns]
+    if missing:
+        raise ApiError(f"数据集中不存在字段：{missing}")
+
+
+def ensure_enough_numeric_rows(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
+    cleaned = clean_numeric_df(df, unique_columns(columns))
+    if len(cleaned) < 2:
+        raise ApiError("有效样本不足，至少需要 2 行数值数据。")
+    return cleaned
+
+
+def ensure_nonzero_std(df: pd.DataFrame, columns: list[str]) -> None:
+    for col in unique_columns(columns):
+        sigma = float(df[col].std(ddof=0))
+        if not np.isfinite(sigma) or sigma == 0:
+            raise ApiError(f"字段 {col} 的标准差为 0，无法继续。")
+
+
+def parse_required_float(payload: dict, key: str, label: str) -> float:
+    if key not in payload or payload.get(key) in (None, ""):
+        raise ApiError(f"请输入{label}。")
+    try:
+        value = float(payload.get(key))
+    except (TypeError, ValueError):
+        raise ApiError(f"{label}必须是数字。")
+    if not np.isfinite(value):
+        raise ApiError(f"{label}必须是有限数字。")
+    return value
+
+
+def parse_optional_float(payload: dict, key: str, default: float, label: str) -> float:
+    if key not in payload or payload.get(key) in (None, ""):
+        return default
+    return parse_required_float(payload, key, label)
+
+
+def parse_optional_int(payload: dict, key: str, default: int, label: str, lo: int, hi: int) -> int:
+    if key not in payload or payload.get(key) in (None, ""):
+        return default
+    try:
+        value = int(payload.get(key))
+    except (TypeError, ValueError):
+        raise ApiError(f"{label}必须是整数。")
+    if value < lo or value > hi:
+        raise ApiError(f"{label}范围必须是 {lo} 到 {hi}。")
+    return value
+
+
+def parse_student_context(payload: dict) -> tuple[dict, pd.DataFrame, list[str], str, str]:
+    data = student_dataset(payload.get("dataset_id"))
+    target = require_column_name(payload.get("target"), "目标列")
+    features = normalize_features(payload.get("features"))
+    feature = require_column_name(payload.get("feature"), "当前特征")
+    if target in features:
+        raise ApiError("目标列不能同时作为特征列。")
+    raw = data["raw"]
+    require_columns(raw, features + [target, feature])
+    if feature not in features:
+        raise ApiError("当前特征必须来自 features。")
+    cleaned = ensure_enough_numeric_rows(raw, features + [target])
+    ensure_nonzero_std(cleaned, features + [target])
+    return data, cleaned, features, target, feature
+
+
+def parse_student_preprocess_context(payload: dict) -> tuple[dict, pd.DataFrame, list[str], str]:
+    data = student_dataset(payload.get("dataset_id"))
+    target = require_column_name(payload.get("target"), "目标列")
+    features = normalize_features(payload.get("features"))
+    if target in features:
+        raise ApiError("目标列不能同时作为特征列。")
+    raw = data["raw"]
+    require_columns(raw, features + [target])
+    cleaned = ensure_enough_numeric_rows(raw, features + [target])
+    ensure_nonzero_std(cleaned, features)
+    return data, cleaned, features, target
 
 
 def student_data_response(
@@ -402,10 +562,10 @@ def api_train_prepare():
 @app.route("/api/predict", methods=["POST"])
 def api_predict():
     try:
-        payload = request.get_json() or {}
+        payload = request_json_payload()
         feature = payload.get("feature", "RM")
         if feature not in FEATURE_COLUMNS:
-            return jsonify({"error": f"æœªçŸ¥ç‰¹å¾ï¼š{feature}"}), 400
+            return jsonify({"error": f"未知特征：{feature}"}), 400
         value = safe_float(payload.get("value"), 6.5)
         use_standardized = bool(payload.get("use_standardized", True))
         df_raw = load_raw_df()
@@ -415,6 +575,8 @@ def api_predict():
         if use_standardized:
             mean = float(df_raw[feature].mean())
             std = float(df_raw[feature].std(ddof=0))
+            if std == 0:
+                return jsonify({"error": f"特征 {feature} 的标准差为 0，无法预测。"}), 400
             model_x = (value - mean) / std
         else:
             mean = None
@@ -441,7 +603,7 @@ def api_predict():
             })
         return jsonify({
             "feature": feature,
-            "description": FEATURE_DESCRIPTIONS.get(feature, "æš‚æ— è¯´æ˜Ž"),
+            "description": FEATURE_DESCRIPTIONS.get(feature, "暂无说明"),
             "target": TARGET_COLUMN,
             "x_column": x_col,
             "raw_value": value,
@@ -458,6 +620,8 @@ def api_predict():
             "nearby": nearby,
             "summary": series_summary(pd.Series(x), pd.Series(y)),
         })
+    except ApiError as exc:
+        return error_response(str(exc), exc.status_code)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -470,11 +634,35 @@ def api_student_upload():
             return jsonify({"error": "请上传 CSV 文件。"}), 400
         if not file.filename.lower().endswith(".csv"):
             return jsonify({"error": "当前只支持 CSV 文件。"}), 400
+        if len(STUDENT_DATASETS) >= MAX_STUDENT_DATASETS:
+            return jsonify({"error": f"内存中的学生数据集已达到上限：{MAX_STUDENT_DATASETS} 个。"}), 413
+
+        size = uploaded_file_size(file)
+        if size is not None and size > MAX_UPLOAD_BYTES:
+            return jsonify({"error": f"CSV 文件不能超过 {MAX_UPLOAD_BYTES // (1024 * 1024)} MB。"}), 413
 
         source_type = request.form.get("source_type", "raw")
-        df = pd.read_csv(file)
+        if source_type not in {"raw", "standardized"}:
+            return jsonify({"error": "source_type 只能是 raw 或 standardized。"}), 400
+
+        try:
+            file.stream.seek(0)
+        except Exception:
+            pass
+        try:
+            df = pd.read_csv(file, nrows=MAX_UPLOAD_ROWS + 1)
+        except pd.errors.EmptyDataError:
+            return jsonify({"error": "CSV 文件没有可用数据。"}), 400
+        except pd.errors.ParserError as exc:
+            return jsonify({"error": f"CSV 解析失败：{exc}"}), 400
+        except UnicodeDecodeError:
+            return jsonify({"error": "CSV 文件编码无法识别，请保存为 UTF-8 后重新上传。"}), 400
         if df.empty:
             return jsonify({"error": "CSV 文件没有可用数据。"}), 400
+        if len(df) > MAX_UPLOAD_ROWS:
+            return jsonify({"error": f"CSV 最多支持 {MAX_UPLOAD_ROWS} 行数据。"}), 400
+        if len(df.columns) > MAX_UPLOAD_COLUMNS:
+            return jsonify({"error": f"CSV 最多支持 {MAX_UPLOAD_COLUMNS} 列数据。"}), 400
         df.columns = [str(col).strip() for col in df.columns]
         nums = numeric_columns(df)
         if len(nums) < 2:
@@ -501,31 +689,14 @@ def api_student_upload():
 @app.route("/api/student/preprocess", methods=["POST"])
 def api_student_preprocess():
     try:
-        payload = request.get_json() or {}
-        data = student_dataset(payload.get("dataset_id"))
-        target = payload.get("target")
-        features = payload.get("features") or []
-        if not target or not features:
-            return jsonify({"error": "请选择目标列和至少一个特征列。"}), 400
-
-        raw = data["raw"]
-        missing = [col for col in features + [target] if col not in raw.columns]
-        if missing:
-            return jsonify({"error": f"数据集中不存在字段：{missing}"}), 400
-        if target in features:
-            return jsonify({"error": "目标列不能同时作为特征列。"}), 400
-
-        cleaned = clean_numeric_df(raw, features + [target])
-        if len(cleaned) < 2:
-            return jsonify({"error": "清洗缺失值后样本不足，至少需要 2 行有效数据。"}), 400
+        payload = request_json_payload()
+        data, cleaned, features, target = parse_student_preprocess_context(payload)
 
         std = cleaned.copy()
         table = []
         for feature in features:
             mean = float(cleaned[feature].mean())
             sigma = float(cleaned[feature].std(ddof=0))
-            if sigma == 0:
-                return jsonify({"error": f"特征 {feature} 的标准差为 0，无法标准化。"}), 400
             std_col = student_std_col(feature)
             std[std_col] = (cleaned[feature] - mean) / sigma
             table.append({
@@ -551,6 +722,8 @@ def api_student_preprocess():
             "standardize_table": table,
             "preview": std.head(8).replace({np.nan: None}).to_dict(orient="records"),
         })
+    except ApiError as exc:
+        return error_response(str(exc), exc.status_code)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -558,49 +731,44 @@ def api_student_preprocess():
 @app.route("/api/student/data_view", methods=["POST"])
 def api_student_data_view():
     try:
-        payload = request.get_json() or {}
-        data = student_dataset(payload.get("dataset_id"))
-        target = payload.get("target")
-        features = payload.get("features") or []
-        feature = payload.get("feature")
-        if not target or not features or not feature:
-            return jsonify({"error": "请选择目标列、特征列和当前观察特征。"}), 400
-        raw = clean_numeric_df(data["raw"], features + [target])
+        payload = request_json_payload()
+        data, raw, features, target, feature = parse_student_context(payload)
         std = data.get("std")
         if std is not None:
-            std = clean_numeric_df(std, [col for col in std.columns if col in features + [target] or col.endswith("_standardized")])
+            std_columns = unique_columns(features + [target] + [student_std_col(col) for col in features])
+            std = clean_numeric_df(std, [col for col in std_columns if col in std.columns])
         return jsonify(student_data_response(raw, std, features, target, feature))
+    except ApiError as exc:
+        return error_response(str(exc), exc.status_code)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/api/student/train", methods=["POST"])
 @app.route("/api/student/train_prepare", methods=["POST"])
 def api_student_train_prepare():
     try:
-        payload = request.get_json() or {}
-        data = student_dataset(payload.get("dataset_id"))
-        target = payload.get("target")
-        feature = payload.get("feature")
-        features = payload.get("features") or [feature]
+        payload = request_json_payload()
+        data, raw, features, target, feature = parse_student_context(payload)
         use_standardized = bool(payload.get("use_standardized", True))
-        lr = safe_float(payload.get("learning_rate"), 0.03)
-        epochs = safe_int(payload.get("epochs"), 120, lo=1, hi=2000)
-        w0 = safe_float(payload.get("w0"), 0.0)
-        b0 = safe_float(payload.get("b0"), 0.0)
+        lr = parse_optional_float(payload, "learning_rate", 0.03, "学习率")
+        if lr <= 0:
+            raise ApiError("学习率必须大于 0。")
+        epochs = parse_optional_int(payload, "epochs", 120, "训练轮数", 1, 2000)
+        w0 = parse_optional_float(payload, "w0", 0.0, "初始 w")
+        b0 = parse_optional_float(payload, "b0", 0.0, "初始 b")
 
-        raw = clean_numeric_df(data["raw"], features + [target])
         std = data.get("std")
         x_col = student_std_col(feature) if use_standardized else feature
         if use_standardized:
             if std is None or x_col not in std.columns:
                 return jsonify({"error": "请先执行预处理，或上传包含标准化列的预处理数据集。"}), 400
-            df_train = clean_numeric_df(std, [x_col, target])
+            df_train = ensure_enough_numeric_rows(std, [x_col, target])
         else:
             df_train = raw
         x = df_train[x_col].astype(float).to_numpy()
         y = df_train[target].astype(float).to_numpy()
-        if len(x) < 2:
-            return jsonify({"error": "有效样本不足，至少需要 2 行数据。"}), 400
+        ensure_nonzero_std(df_train, [x_col, target])
 
         w_ref, b_ref = np.polyfit(x, y, 1)
         line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
@@ -620,6 +788,8 @@ def api_student_train_prepare():
             "best": {"w": float(w_ref), "b": float(b_ref)},
             "contour": contour,
         })
+    except ApiError as exc:
+        return error_response(str(exc), exc.status_code)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
@@ -627,14 +797,10 @@ def api_student_train_prepare():
 @app.route("/api/student/predict", methods=["POST"])
 def api_student_predict():
     try:
-        payload = request.get_json() or {}
-        data = student_dataset(payload.get("dataset_id"))
-        target = payload.get("target")
-        feature = payload.get("feature")
-        features = payload.get("features") or [feature]
-        value = safe_float(payload.get("value"), 0.0)
+        payload = request_json_payload()
+        data, raw, features, target, feature = parse_student_context(payload)
+        value = parse_required_float(payload, "value", "预测值")
         use_standardized = bool(payload.get("use_standardized", True))
-        raw = clean_numeric_df(data["raw"], features + [target])
         std = data.get("std")
         x_col = student_std_col(feature) if use_standardized else feature
 
@@ -646,7 +812,7 @@ def api_student_predict():
             if sigma == 0:
                 return jsonify({"error": f"特征 {feature} 的标准差为 0，无法预测。"}), 400
             model_x = (value - mean) / sigma
-            df_train = clean_numeric_df(std, [x_col, target])
+            df_train = ensure_enough_numeric_rows(std, [x_col, target])
         else:
             mean = None
             sigma = None
@@ -655,18 +821,31 @@ def api_student_predict():
 
         x = df_train[x_col].astype(float).to_numpy()
         y = df_train[target].astype(float).to_numpy()
-        w, b = np.polyfit(x, y, 1)
+        ensure_nonzero_std(df_train, [x_col, target])
+
+        has_w = "w" in payload and payload.get("w") not in (None, "")
+        has_b = "b" in payload and payload.get("b") not in (None, "")
+        if has_w != has_b:
+            raise ApiError("w 和 b 需要同时提供。")
+        if has_w:
+            w = parse_required_float(payload, "w", "w")
+            b = parse_required_float(payload, "b", "b")
+            model_source = "request_parameters"
+        else:
+            w, b = np.polyfit(x, y, 1)
+            model_source = "fitted_data"
         pred = float(w * model_x + b)
         line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
         line_y = w * line_x + b
         raw_x = raw[feature].astype(float).to_numpy()
+        raw_y = raw[target].astype(float).to_numpy()
         distances = np.abs(raw_x - value)
         nearest_idx = np.argsort(distances)[:5]
         nearby = [{
             "index": int(idx),
             "raw_x": float(raw_x[idx]),
-            "model_x": float(x[idx]),
-            "y": float(y[idx]),
+            "model_x": float((raw_x[idx] - mean) / sigma) if use_standardized else float(raw_x[idx]),
+            "y": float(raw_y[idx]),
             "distance": float(distances[idx]),
         } for idx in nearest_idx]
         return jsonify({
@@ -681,6 +860,7 @@ def api_student_predict():
             "std": sigma,
             "w": float(w),
             "b": float(b),
+            "model_source": model_source,
             "prediction": pred,
             "scatter": {"x": np.round(x, 6).tolist(), "y": np.round(y, 6).tolist()},
             "line": {"x": np.round(line_x, 6).tolist(), "y": np.round(line_y, 6).tolist()},
@@ -688,6 +868,8 @@ def api_student_predict():
             "nearby": nearby,
             "summary": series_summary(pd.Series(x), pd.Series(y)),
         })
+    except ApiError as exc:
+        return error_response(str(exc), exc.status_code)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
 
