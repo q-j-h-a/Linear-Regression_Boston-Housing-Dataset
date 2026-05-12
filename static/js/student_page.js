@@ -126,6 +126,9 @@ function renderStudentPanel() {
   $("studentAutoBtn").addEventListener("click", startStudentAuto);
   $("studentPauseBtn").addEventListener("click", stopAuto);
   $("studentSpeed").addEventListener("input", () => $("studentSpeedText").textContent = `${$("studentSpeed").value}ms`);
+  $("studentLr").addEventListener("input", () => $("studentLrText").textContent = Number($("studentLr").value).toFixed(3));
+  $("studentEpochs").addEventListener("input", () => $("studentEpochsText").textContent = $("studentEpochs").value);
+  bindRangeStepperButtons();
   ["studentStd", "studentW0", "studentB0", "studentLr", "studentEpochs"].forEach(id => {
     const el = $(id);
     if (el) el.addEventListener("change", markStudentTrainingDirty);
@@ -147,8 +150,7 @@ function renderStudentPanel() {
   }));
 }
 
-function renderStudentWorkspace(message = "") {
-  const preview = studentMeta?.preview || [];
+function studentFormatCardHtml(message = "") {
   const rawRows = [
     { area: 80, rooms: 2, price: 120 },
     { area: 100, rooms: 3, price: 160 },
@@ -159,10 +161,14 @@ function renderStudentWorkspace(message = "") {
     { area: 100, rooms: 3, price: 160, area_standardized: -0.1622, rooms_standardized: 0 },
     { area: 120, rooms: 3, price: 180, area_standardized: 0.8111, rooms_standardized: 0 }
   ];
-  $("studentWorkspace").innerHTML = `
-    ${studentMeta ? studentStageStrip() : ""}
-    <section class="content-card">
-      <h3>数据格式</h3>
+  return `<section class="chart-card wide">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">数据格式</div>
+        <div class="chart-sub">CSV 列名、原始数据和预处理数据示例</div>
+      </div>
+    </div>
+    <div class="info-card-body" style="padding:18px">
       <div class="format-grid">
         <div>
           <p>CSV 第一行必须是列名，至少包含 1 个数值特征列和 1 个数值目标列。原始数据集可以点击预处理生成 <code>特征名_standardized</code> 列；已预处理数据集建议保留原始特征列、目标列和对应标准化列。</p>
@@ -178,16 +184,47 @@ function renderStudentWorkspace(message = "") {
           ${studentPreviewTable(stdRows)}
         </div>
       </div>
-      ${message ? `<p><strong>${escapeHtml(message)}</strong></p>` : ""}
-    </section>
-    ${studentMeta ? `
-    <section class="content-card">
-      <h3>数据预览</h3>
-      <p>检测到 ${escapeHtml(studentMeta.row_count)} 行，数值列 ${escapeHtml(studentMeta.numeric_columns.length)} 个。</p>
+      ${message ? `<p class="status-line">${escapeHtml(message)}</p>` : ""}
+    </div>
+  </section>`;
+}
+
+function studentUploadPlaceholderHtml() {
+  return `<section class="chart-card wide">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">数据集上传</div>
+        <div class="chart-sub">在右侧选择 CSV 文件并点击“加载数据集”</div>
+      </div>
+    </div>
+    <div class="empty-state">请先在右侧上传 CSV 数据集。</div>
+  </section>`;
+}
+
+function studentPreviewCardHtml() {
+  const preview = studentMeta?.preview || [];
+  return `<section class="chart-card wide">
+    <div class="chart-head">
+      <div>
+        <div class="chart-title">数据预览</div>
+        <div class="chart-sub">检测到 ${escapeHtml(studentMeta?.row_count ?? "--")} 行，数值列 ${escapeHtml(studentMeta?.numeric_columns?.length ?? "--")} 个</div>
+      </div>
+    </div>
+    <div class="info-card-body" style="padding:18px">
       ${studentPreviewTable(preview)}
-    </section>
-    <div class="chart-grid" id="studentChartGrid"></div>` : `
-    <div class="empty-state">请先在右侧上传 CSV 数据集。</div>`}`;
+    </div>
+  </section>`;
+}
+
+function renderStudentWorkspace(message = "") {
+  $("studentWorkspace").innerHTML = `
+    ${studentMeta ? studentStageStrip() : ""}
+    <div class="chart-grid" id="studentChartGrid"></div>`;
+  renderStudentGrid(studentMeta ? ["format", "preview"] : ["format", "upload"], view => {
+    if (view === "format") return studentFormatCardHtml(message);
+    if (view === "preview") return studentPreviewCardHtml();
+    return studentUploadPlaceholderHtml();
+  });
 }
 
 function restoreStudentWorkspaceState() {
@@ -579,7 +616,7 @@ function renderStudentGrid(views, htmlForView) {
     float: true,
     animate: true,
     draggable: { handle: ".chart-head" },
-    resizable: { handles: "se" }
+    resizable: { handles: "e, s, se" }
   }, grid);
   grid.setAttribute("gs-column", "4");
   updateDataGridCellHeight();
@@ -595,6 +632,9 @@ function renderStudentGrid(views, htmlForView) {
 
 function defaultStudentGridLayout(view) {
   return ({
+    format: { x: 0, y: 0, w: 4, h: 2 },
+    upload: { x: 0, y: 2, w: 4, h: 1 },
+    preview: { x: 0, y: 2, w: 4, h: 2 },
     raw: { x: 0, y: 0, w: 2, h: 2 },
     standardized: { x: 2, y: 0, w: 2, h: 2 },
     corr: { x: 0, y: 2, w: 2, h: 2 },

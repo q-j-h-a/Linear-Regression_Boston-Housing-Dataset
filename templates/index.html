@@ -131,25 +131,56 @@
       color: var(--text);
     }
     .shell {
+      --sidebar-width: 16%;
+      --main-width: 64%;
+      --assistant-width: 20%;
       min-height: 0;
       height: calc(100vh - 44px);
       display: grid;
-      grid-template-columns: 250px minmax(0, 1fr) 320px;
+      grid-template-columns: var(--sidebar-width) 8px minmax(0, var(--main-width)) 8px var(--assistant-width);
       overflow: hidden;
     }
     .shell.theory {
-      grid-template-columns: 250px minmax(0, 1fr);
+      grid-template-columns: var(--sidebar-width) 8px minmax(0, 1fr);
     }
-    .shell.theory .assistant {
+    .shell.theory .assistant,
+    .shell.theory .splitter-right {
       display: none;
     }
     .sidebar {
-      border-right: 1px solid var(--line);
       background: #fff;
       padding: 22px 16px;
       min-height: 0;
       height: 100%;
       overflow: auto;
+    }
+    .splitter {
+      position: relative;
+      z-index: 5;
+      min-width: 8px;
+      height: 100%;
+      background: #fff;
+      cursor: col-resize;
+      touch-action: none;
+    }
+    .splitter::before {
+      content: "";
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 3px;
+      width: 1px;
+      background: var(--line);
+      transition: background .16s ease, box-shadow .16s ease;
+    }
+    .splitter:hover::before,
+    .splitter.dragging::before {
+      background: rgba(91, 53, 245, .72);
+      box-shadow: 0 0 0 2px rgba(91, 53, 245, .12);
+    }
+    body.resizing-shell {
+      cursor: col-resize;
+      user-select: none;
     }
     .main {
       min-width: 0;
@@ -160,7 +191,6 @@
       padding: 32px;
     }
     .assistant {
-      border-left: 1px solid var(--line);
       background: #fff;
       padding: 28px 24px;
       min-height: 0;
@@ -506,7 +536,14 @@
       min-height: 455px;
       height: clamp(455px, 54vh, 620px);
       max-height: 820px;
-      resize: vertical;
+      resize: none;
+    }
+    .chart-card.chart-interaction-prototype {
+      transition: border-color .16s ease, box-shadow .16s ease;
+    }
+    .chart-card.chart-interaction-prototype.chart-active {
+      border-color: rgba(91, 53, 245, .72);
+      box-shadow: 0 0 0 3px rgba(91, 53, 245, .12), var(--shadow);
     }
     .chart-card::after {
       content: "";
@@ -594,10 +631,28 @@
       cursor: grabbing;
     }
     .dashboard-grid .ui-resizable-se {
-      width: 22px;
-      height: 22px;
-      right: 8px;
-      bottom: 8px;
+      width: 34px;
+      height: 34px;
+      right: 4px;
+      bottom: 4px;
+      z-index: 8;
+      background: transparent;
+    }
+    .dashboard-grid .ui-resizable-s {
+      height: 16px;
+      left: 20px;
+      right: 20px;
+      bottom: 0;
+      cursor: ns-resize;
+      z-index: 7;
+    }
+    .dashboard-grid .ui-resizable-e {
+      width: 16px;
+      top: 20px;
+      right: 0;
+      bottom: 20px;
+      cursor: ew-resize;
+      z-index: 7;
     }
     .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-x="0"] { left: 0%; }
     .dashboard-grid[gs-column="4"] > .grid-stack-item[gs-x="1"] { left: 25%; }
@@ -673,6 +728,26 @@
       margin: 0 0 10px;
       font-size: 14px;
     }
+    .control-group {
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #fbfcff;
+      padding: 12px;
+      margin-top: 14px;
+    }
+    .control-card.student-stage-card {
+      background: #f8fbff;
+      border-color: #dfe7f3;
+    }
+    .control-card.student-stage-card > summary {
+      margin-bottom: 2px;
+    }
+    .control-group > label.control-label:first-of-type {
+      margin-top: 0;
+    }
+    .control-group .field-grid label.control-label {
+      margin-top: 0;
+    }
     .mini-stats {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -714,6 +789,34 @@
     input[type="range"] {
       width: 100%;
       accent-color: var(--purple);
+    }
+    .range-control {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 24px;
+      align-items: center;
+      gap: 8px;
+    }
+    .range-stepper {
+      display: grid;
+      gap: 3px;
+    }
+    .range-step-btn {
+      width: 22px;
+      height: 18px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      display: grid;
+      place-items: center;
+      padding: 0;
+      font-size: 10px;
+      line-height: 1;
+    }
+    .range-step-btn:hover {
+      border-color: #c9c1ff;
+      background: var(--purple-soft);
+      color: var(--purple);
     }
     .check-list {
       display: grid;
@@ -795,6 +898,9 @@
       grid-template-columns: 1fr 1fr;
       gap: 10px;
       margin-top: 14px;
+    }
+    .btn-row {
+      margin-top: 12px;
     }
     .btn {
       border: 0;
@@ -950,15 +1056,21 @@
     }
     .hidden { display: none !important; }
     @media (max-width: 1260px) {
-      .shell { grid-template-columns: 240px minmax(0, 1fr); }
-      .shell.theory { grid-template-columns: 240px minmax(0, 1fr); }
-      .assistant { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--line); }
+      .shell {
+        --sidebar-width: 240px;
+        --assistant-width: 300px;
+        grid-template-columns: var(--sidebar-width) 8px minmax(420px, 1fr) 8px var(--assistant-width);
+      }
+      .shell.theory {
+        grid-template-columns: var(--sidebar-width) 8px minmax(0, 1fr);
+      }
     }
     @media (max-width: 860px) {
       .app { grid-template-rows: auto minmax(0, 1fr); }
       .topbar { align-items: flex-start; flex-direction: column; padding: 18px; }
       .shell, .shell.theory, .chart-grid, .chart-grid.single, .stat-cards, .format-grid, .stage-strip { grid-template-columns: 1fr; }
       .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+      .splitter { display: none; }
       .chart-card.wide { grid-column: auto; }
     }
   </style>
@@ -1013,7 +1125,11 @@
       </details>
     </aside>
 
+    <div class="splitter splitter-left" data-resize-edge="left" role="separator" aria-orientation="vertical" aria-label="调整左侧导航宽度"></div>
+
     <main class="main" id="main"></main>
+
+    <div class="splitter splitter-right" data-resize-edge="right" role="separator" aria-orientation="vertical" aria-label="调整右侧控制面板宽度"></div>
 
     <aside class="assistant">
       <div id="rightPanel"></div>
@@ -1035,11 +1151,3 @@ const DEFAULT_FEATURE = {{ default_feature | tojson }};
 <script src="/static/js/app_shell.js"></script>
 </body>
 </html>
-
-
-
-
-
-
-
-

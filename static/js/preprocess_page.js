@@ -105,7 +105,7 @@ function renderDataDashboard(grid, views) {
     float: true,
     animate: true,
     draggable: { handle: ".chart-head" },
-    resizable: { handles: "se" }
+    resizable: { handles: "e, s, se" }
   }, grid);
   grid.setAttribute("gs-column", "4");
   updateDataGridCellHeight();

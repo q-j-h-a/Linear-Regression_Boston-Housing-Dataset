@@ -5,7 +5,7 @@
     "subtitle": "J(w,b) 曲面、下降轨迹与偏导切线",
     "renderer": "loss_surface_3d",
     "size": "wide",
-    "default": True,
+    "default": False,
     "order": 40,
 }
 

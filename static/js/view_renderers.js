@@ -135,7 +135,7 @@ function trainViewHtml(view, frame, chartData = null) {
 }
 
 function chartCardHtml(key, title, sub, size = "") {
-  return `<section class="chart-card ${size}"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">${escapeHtml(sub)}</div></div></div><div class="chart" id="chart_${key}"></div></section>`;
+  return `<section class="chart-card ${size} chart-interaction-prototype" data-chart-card="${escapeHtml(key)}"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">${escapeHtml(sub)}</div></div></div><div class="chart" id="chart_${key}"></div></section>`;
 }
 
 function infoCardHtml(key, title, html) {
