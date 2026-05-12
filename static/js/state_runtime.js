@@ -76,6 +76,8 @@ let predictPageSchema = null;
 
 let studentPageSchema = null;
 
+let activePrototypeChartId = null;
+
 function setActive(page) {
   document.querySelectorAll(".nav-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.page === page));
   const modelPages = ["dataset", "model", "criterion", "optimization", "evaluation"];
@@ -89,6 +91,7 @@ function disposeCharts() {
   chartResizeObservers.clear();
   charts.forEach(ch => ch.dispose());
   charts.clear();
+  activePrototypeChartId = null;
 }
 
 function saveDataGridLayout() {
@@ -104,7 +107,7 @@ function saveDataGridLayout() {
 }
 
 function gridLayoutStorageKey(mode) {
-  if (mode === "train") return "trainGridLayoutV1";
+  if (mode === "train") return "trainGridLayoutV2";
   if (mode === "predict") return "predictGridLayoutV1";
   if (mode === "student") return "studentGridLayoutV1";
   return "preprocessGridLayoutV4";
@@ -132,8 +135,82 @@ function initChart(id) {
     chartResizeObservers.set(id, observer);
   }
   requestAnimationFrame(resize);
+  bindPrototypeChartInteraction(id, el);
   return ch;
 }
+
+function bindPrototypeChartInteraction(id, el) {
+  if (!el) return;
+  const card = el.closest(".chart-card");
+  if (!card || !card.classList.contains("chart-interaction-prototype") || card.dataset.prototypeBound === "1") return;
+  card.dataset.prototypeBound = "1";
+  let pointerDownPoint = null;
+  let suppressNextClick = false;
+
+  const setActivePrototype = (active) => {
+    document.querySelectorAll(".chart-card.chart-interaction-prototype.chart-active").forEach(activeCard => {
+      if (activeCard !== card) activeCard.classList.remove("chart-active");
+    });
+    if (!active) {
+      charts.get(id)?.dispatchAction?.({ type: "hideTip" });
+    }
+    activePrototypeChartId = active ? id : null;
+    card.classList.toggle("chart-active", active);
+  };
+
+  card.addEventListener("pointerdown", event => {
+    pointerDownPoint = { x: event.clientX, y: event.clientY };
+    suppressNextClick = false;
+  }, true);
+
+  card.addEventListener("pointermove", event => {
+    if (!pointerDownPoint) return;
+    const dx = event.clientX - pointerDownPoint.x;
+    const dy = event.clientY - pointerDownPoint.y;
+    if (Math.hypot(dx, dy) > 6) suppressNextClick = true;
+  }, true);
+
+  card.addEventListener("pointerup", () => {
+    pointerDownPoint = null;
+  }, true);
+
+  card.addEventListener("click", event => {
+    if (event.target.closest(".ui-resizable-handle")) return;
+    event.stopPropagation();
+    if (suppressNextClick) {
+      suppressNextClick = false;
+      return;
+    }
+    setActivePrototype(activePrototypeChartId !== id);
+  });
+
+  card.addEventListener("wheel", event => {
+    if (activePrototypeChartId === id) return;
+    charts.get(id)?.dispatchAction?.({ type: "hideTip" });
+    event.stopImmediatePropagation();
+  }, true);
+
+  [
+    "mousemove", "mouseover", "mouseout",
+    "pointermove", "pointerover", "pointerout",
+    "mousedown", "pointerdown", "dblclick",
+  ].forEach(eventName => {
+    el.addEventListener(eventName, event => {
+      if (activePrototypeChartId === id) return;
+      charts.get(id)?.dispatchAction?.({ type: "hideTip" });
+      event.stopImmediatePropagation();
+    }, true);
+  });
+}
+
+document.addEventListener("click", () => {
+  if (!activePrototypeChartId) return;
+  charts.get(activePrototypeChartId)?.dispatchAction?.({ type: "hideTip" });
+  document.querySelectorAll(".chart-card.chart-interaction-prototype.chart-active").forEach(card => {
+    card.classList.remove("chart-active");
+  });
+  activePrototypeChartId = null;
+});
 
 function setChartOptionWhenReady(ch, option, replace = true) {
   if (!option) return;
@@ -266,7 +343,7 @@ function loadDataGridLayout() {
 
 function loadTrainGridLayout() {
   try {
-    return viewStateStore.trainGridLayoutV1 || {};
+    return viewStateStore.trainGridLayoutV2 || {};
   } catch (err) {
     return {};
   }

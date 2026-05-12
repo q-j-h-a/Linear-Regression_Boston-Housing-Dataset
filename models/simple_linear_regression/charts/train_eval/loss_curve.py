@@ -5,7 +5,7 @@
     "subtitle": "MSE Loss 随 epoch 的变化",
     "renderer": "loss_curve",
     "size": "",
-    "default": False,
+    "default": True,
     "order": 20,
 }
 

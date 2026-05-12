@@ -10,15 +10,6 @@ PANEL = {
                 {"type": "stat", "name": "feature_count", "label": "特征数量", "value_id": "featureCount", "default": 13},
                 {
                     "type": "select",
-                    "name": "feature",
-                    "label": "特征选择",
-                    "element_id": "trainFeature",
-                    "source": "feature_columns",
-                    "default": "RM",
-                    "auto_prepare": True,
-                },
-                {
-                    "type": "select",
                     "name": "use_standardized",
                     "label": "数据版本",
                     "element_id": "trainStd",
@@ -28,6 +19,15 @@ PANEL = {
                         {"label": "标准化特征", "value": True},
                         {"label": "原始特征", "value": False},
                     ],
+                },
+                {
+                    "type": "select",
+                    "name": "feature",
+                    "label": "特征选择",
+                    "element_id": "trainFeature",
+                    "source": "feature_columns",
+                    "default": "RM",
+                    "auto_prepare": True,
                 },
             ],
         },
@@ -48,8 +48,8 @@ PANEL = {
             "id": "params",
             "title": "训练参数",
             "controls": [
-                {"type": "number", "name": "w0", "label": "初始 w", "element_id": "w0", "step": 0.1, "default": 0, "auto_prepare": True},
-                {"type": "number", "name": "b0", "label": "初始 b", "element_id": "b0", "step": 0.1, "default": 0, "auto_prepare": True},
+                {"type": "number", "name": "w0", "label": "初始 w", "element_id": "w0", "step": 0.1, "default": 0, "auto_prepare": True, "group": "init_params"},
+                {"type": "number", "name": "b0", "label": "初始 b", "element_id": "b0", "step": 0.1, "default": 0, "auto_prepare": True, "group": "init_params"},
                 {
                     "type": "range",
                     "name": "learning_rate",

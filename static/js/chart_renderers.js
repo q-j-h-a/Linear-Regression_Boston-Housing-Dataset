@@ -377,16 +377,16 @@ function gradientDescentOption(frameIndex, chartData = null) {
   return {
     tooltip: { trigger: "axis" },
     grid: [
-      { left: 52, right: 18, top: 34, height: "34%" },
-      { left: 52, right: 18, top: "58%", height: "30%" }
+      { left: 48, right: 18, top: 42, height: "31%" },
+      { left: 48, right: 18, top: "61%", height: "28%" }
     ],
     xAxis: [
       { type: "value", gridIndex: 0, axisLabel: { fontSize: 10 }, name: "epoch", nameGap: 18 },
       { type: "value", gridIndex: 1, axisLabel: { fontSize: 10 }, name: "epoch", nameGap: 18 }
     ],
     yAxis: [
-      { type: "value", gridIndex: 0, name: "dw", nameGap: 28, axisLabel: { fontSize: 10 } },
-      { type: "value", gridIndex: 1, name: "db", nameGap: 28, axisLabel: { fontSize: 10 } }
+      { type: "value", gridIndex: 0, name: "dw", nameGap: 8, nameTextStyle: { fontSize: 11, color: "#6b7280", align: "right", padding: [0, 4, 0, 0] }, axisLabel: { fontSize: 10, margin: 6 } },
+      { type: "value", gridIndex: 1, name: "db", nameGap: 8, nameTextStyle: { fontSize: 11, color: "#6b7280", align: "right", padding: [0, 4, 0, 0] }, axisLabel: { fontSize: 10, margin: 6 } }
     ],
     dataZoom: [
       { type: "inside", xAxisIndex: [0, 1], filterMode: "none" }

@@ -16,7 +16,7 @@ function renderTrainDashboard(grid, views, frame) {
     float: true,
     animate: true,
     draggable: { handle: ".chart-head" },
-    resizable: { handles: "se" }
+    resizable: { handles: "e, s, se" }
   }, grid);
   grid.setAttribute("gs-column", "4");
   updateDataGridCellHeight();
@@ -42,8 +42,8 @@ function defaultTrainGridLayout(view) {
     mae: { x: 2, y: 4, w: 1, h: 2 },
     r2: { x: 3, y: 4, w: 1, h: 2 },
     gradient_descent: { x: 0, y: 6, w: 1, h: 2 },
-    calc: { x: 0, y: 8, w: 4, h: 6 },
-    table: { x: 0, y: 14, w: 4, h: 1 }
+    calc: { x: 0, y: 8, w: 4, h: 4 },
+    table: { x: 0, y: 12, w: 4, h: 1 }
   })[view] || { x: 0, y: 0, w: 1, h: 1 };
 }
 

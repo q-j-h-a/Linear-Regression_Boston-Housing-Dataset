@@ -1,107 +1,78 @@
 # Web 界面结构图
 
-本文说明当前 Web 界面的层级结构：左侧导航、中间主工作区、右侧控制面板，以及图表 Grid、下拉框、按钮、统计卡片等 UI 元素分别由哪些文件生成。
+本文说明当前 Web 界面的层级结构、三栏布局、右侧控制面板、图表 Grid 和主要数据流。
 
-## 1. 总体三栏布局
+## 1. 总体布局
 
-当前页面根结构定义在 `templates/index.html`。
+页面骨架定义在 `templates/index.html`。
 
 ```text
 body
 └─ .app
-   ├─ header.topbar                         顶部栏
+   ├─ header.topbar
    │  ├─ .brand
-   │  │  ├─ .logo                           ML 标识
+   │  │  ├─ .logo
    │  │  └─ 标题 + 副标题
    │  └─ .top-actions.hidden-top
-   │     ├─ #topFeature                     当前特征提示
-   │     └─ #jumpExperiment                 跳转实验按钮
+   │     ├─ #topFeature
+   │     └─ #jumpExperiment
    │
-   └─ .shell                                主体三栏 Grid
-      ├─ aside.sidebar                      左侧导航栏
-      ├─ main.main#main                     中间主内容区
-      └─ aside.assistant                    右侧控制面板区
+   └─ .shell
+      ├─ aside.sidebar
+      ├─ .splitter.splitter-left
+      ├─ main.main#main
+      ├─ .splitter.splitter-right
+      └─ aside.assistant
          └─ #rightPanel
 ```
 
-CSS Grid 主体：
+三栏默认使用 CSS 变量：
 
 ```text
-.shell {
-  grid-template-columns: 250px minmax(0, 1fr) 320px;
-}
+--sidebar-width: 16%;
+--main-width: 64%;
+--assistant-width: 20%;
 ```
 
-也就是：
+`.splitter-left` 和 `.splitter-right` 由 `static/js/app_shell.js` 绑定拖拽，用于调整左右栏和中间栏宽度。宽度比例保存在 `localStorage`。
 
-```text
-左侧导航 250px | 中间内容自适应 | 右侧控制面板 320px
-```
+理论页会给 `.shell` 加 `.theory`，隐藏右栏和右侧 splitter。
 
-理论页会切换成：
+## 2. 左侧导航
 
-```text
-.shell.theory {
-  grid-template-columns: 250px minmax(0, 1fr);
-}
-```
-
-也就是理论页隐藏/清空右侧控制面板，只保留左侧 + 中间内容。
-
-## 2. 左侧导航结构
-
-左侧导航由 `templates/index.html` 静态写入。
+左侧导航由 `templates/index.html` 静态写入：
 
 ```text
 aside.sidebar
-├─ details.nav-section open                 理论部分
-│  ├─ summary                               分组标题
-│  └─ .step-list
-│     ├─ button.nav-btn[data-page=basic]
-│     ├─ button.nav-btn[data-page=purpose]
-│     ├─ button.nav-btn[data-page=knowledge]
-│     ├─ details.nested-section             模型介绍子分组
-│     │  ├─ button.nav-btn[data-page=dataset]
-│     │  ├─ button.nav-btn[data-page=model]
-│     │  ├─ button.nav-btn[data-page=criterion]
-│     │  ├─ button.nav-btn[data-page=optimization]
-│     │  └─ button.nav-btn[data-page=evaluation]
-│     ├─ button.nav-btn[data-page=result]
-│     └─ button.nav-btn[data-page=thinking]
+├─ details.nav-section 理论部分
+│  ├─ 实验基本信息
+│  ├─ 实验目的
+│  ├─ 前置知识
+│  ├─ details.nested-section 模型介绍
+│  │  ├─ 数据集
+│  │  ├─ 训练模型
+│  │  ├─ 学习准则
+│  │  ├─ 参数优化
+│  │  └─ 评价指标
+│  ├─ 预期成果
+│  └─ 思考拓展
 │
-└─ details.nav-section open                 实验部分
-   └─ .step-list
-      ├─ button.nav-btn[data-page=preprocess]
-      ├─ button.nav-btn[data-page=train_eval]
-      ├─ button.nav-btn[data-page=predict]
-      └─ button.nav-btn[data-page=student]
+└─ details.nav-section 实验部分
+   ├─ 数据预处理
+   ├─ 模型训练与评估
+   ├─ 模型预测
+   └─ 自主实验
 ```
 
-导航绑定在 `static/js/app_shell.js`：
+导航点击绑定在 `static/js/app_shell.js`：
 
 ```text
 button.nav-btn click -> setPage(btn.dataset.page)
 ```
 
-页面切换核心函数在 `static/js/app_shell.js`：
+`setPage(page)` 是异步流程，会先等待页面 shell 和右侧面板渲染完成，再应用三栏宽度和图表 resize，避免首次进入实验页时右侧面板宽度为 0。
 
-```text
-setPage(page)
-├─ persistActiveViewSelection()
-├─ stopAuto()
-├─ setActive(page)
-├─ destroyDataGrid()
-├─ disposeCharts()
-├─ 更新 #topFeature
-└─ 按 page 分发：
-   ├─ preprocess  -> renderDataShell().then(loadDataView)
-   ├─ train_eval  -> renderTrainShell()
-   ├─ predict     -> renderPredictShell().then(loadPrediction)
-   ├─ student     -> renderStudentShell()
-   └─ theory page -> renderTheory(page)
-```
-
-## 3. 中间主内容区
+## 3. 中间内容区
 
 中间区域是：
 
@@ -109,171 +80,84 @@ setPage(page)
 main.main#main
 ```
 
-它本身在 HTML 里是空容器，实际内容由 JS 动态写入。
+它本身为空，具体内容由页面 JS 动态写入。
 
 ### 3.1 理论页
 
-文件：
-
-```text
-static/js/theory_page.js
-```
-
-结构：
+文件：`static/js/theory_page.js`
 
 ```text
 #main
 └─ section.hero-card
    ├─ .hero-line
-   │  ├─ .eyebrow
-   │  └─ h2
    └─ .html-lesson[data-theory-html]
       └─ iframe
 ```
 
-说明：
-
-- `renderTheory(page)` 写入理论页外壳。
-- `loadTheoryHtml(page)` 从 `static/theory-html/<page>.html` 加载可选课程 HTML。
-- 理论页通常不显示右侧控制面板。
+理论 HTML 片段从 `static/theory-html/<page>.html` 加载。
 
 ### 3.2 数据预处理页
 
-文件：
-
-```text
-static/js/preprocess_page.js
-```
-
-结构：
+文件：`static/js/preprocess_page.js`
 
 ```text
 #main
 └─ section.hero-card
    ├─ .hero-line
-   │  ├─ .eyebrow
-   │  └─ h2
-   └─ .chart-grid#dataChartGrid
-      └─ GridStack items / 普通 chart-card
+   └─ .chart-grid#chartGrid
+      └─ GridStack items / chart-card
 ```
 
-Grid 生成流程：
+主要流程：
 
 ```text
-renderDataCharts()
-├─ selectedValues("dataViews")
-├─ loadDataChartData(views)
-├─ renderDataDashboard(grid, views)
-└─ 为每个 view 初始化 ECharts
-```
-
-GridStack item 结构：
-
-```text
-.grid-stack-item[data-view=<view>]
-└─ .grid-stack-item-content
-   └─ section.chart-card
-      ├─ .chart-head
-      │  ├─ .chart-title
-      │  └─ .chart-sub
-      └─ .chart#chart_<view>
-```
-
-普通非 GridStack fallback：
-
-```text
-.chart-grid
-└─ section.chart-card
-   └─ .chart#chart_<view>
+renderDataShell()
+└─ loadDataView()
+   ├─ runAction("data_view")
+   ├─ loadDataChartData(views)
+   └─ renderDataDashboard(grid, views)
 ```
 
 ### 3.3 模型训练与评估页
 
-文件：
-
-```text
-static/js/train_page.js
-```
-
-结构：
+文件：`static/js/train_page.js`
 
 ```text
 #main
 └─ section.hero-card
    ├─ .hero-line
-   └─ .chart-grid#trainChartGrid
-      ├─ 图表卡片
-      ├─ 参数路径卡片
-      ├─ 指标仪表盘卡片
-      ├─ 计算过程信息卡片
-      └─ 训练表格信息卡片
+   └─ .chart-grid#chartGrid
+      ├─ 模型训练
+      ├─ 学习准则
+      ├─ Loss 等高线图
+      ├─ Loss 三维曲面图
+      ├─ 梯度下降图
+      ├─ 参数轨迹
+      ├─ 指标图
+      ├─ 本轮计算过程
+      └─ 每轮参数表
 ```
 
-主要流程：
-
-```text
-renderTrainShell()
-├─ loadTrainPageSchema()
-├─ renderTrainControlPanel(schema)           右侧面板
-├─ bindTrainControlPanel(prepareTraining)
-└─ prepareTraining()
-
-prepareTraining()
-├─ runAction("prepare_train")
-├─ 保存 trainData
-└─ renderTrainFrame(0)
-
-renderTrainFrame(index)
-├─ selectedValues("trainViews")
-├─ loadTrainChartData(views, currentFrame)
-├─ renderTrainDashboard(...)
-└─ 初始化/更新每个图表
-```
+默认显示前两个图：`模型训练`、`学习准则`。
 
 ### 3.4 模型预测页
 
-文件：
-
-```text
-static/js/predict_page.js
-```
-
-结构：
+文件：`static/js/predict_page.js`
 
 ```text
 #main
 └─ section.hero-card
    ├─ .hero-line
-   └─ .chart-grid#predictChartGrid
-      ├─ 预测结果卡片
-      ├─ 预测计算过程卡片
-      ├─ 预测可视化图表卡片
-      └─ 相近样本表格卡片
-```
-
-主要流程：
-
-```text
-renderPredictShell()
-├─ loadPanelSchema("predict")
-├─ renderPredictPanel(schema)
-└─ 绑定 #predictRun
-
-loadPrediction()
-├─ runAction("predict")
-├─ 保存 predictData
-└─ renderPredictCharts()
+   └─ .chart-grid#chartGrid
+      ├─ 预测输入与结果
+      ├─ 本轮计算过程
+      ├─ 预测可视化
+      └─ 相近样本对比
 ```
 
 ### 3.5 自主实验页
 
-文件：
-
-```text
-static/js/student_page.js
-```
-
-结构：
+文件：`static/js/student_page.js`
 
 ```text
 #main
@@ -281,26 +165,20 @@ static/js/student_page.js
    ├─ .hero-line
    └─ #studentWorkspace
       ├─ .stage-strip#studentStageStrip
-      ├─ 上传前 empty-state
       └─ .chart-grid#studentChartGrid
-         ├─ 数据预处理图表/表格
-         ├─ 训练图表/指标/计算过程
-         └─ 预测图表/结果/相近样本
 ```
 
-学生实验是一个分阶段工作流：
+自主实验右侧面板按 5 个阶段组织：
 
 ```text
-01 数据集上传
+01 数据集
 02 字段设置
 03 数据预处理
 04 模型训练与评估
 05 模型预测
 ```
 
-右侧面板由 `studentPanelHtml()` 生成，中间内容由 `renderStudentWorkspace()` 和各阶段 dashboard 函数生成。
-
-## 4. 右侧控制面板结构
+## 4. 右侧控制面板
 
 右侧容器：
 
@@ -309,191 +187,94 @@ aside.assistant
 └─ #rightPanel
 ```
 
-不同页面会把不同控制面板写入 `#rightPanel`。
+控制面板渲染器在 `static/js/control_renderers.js`。
 
-### 4.1 控制面板来源
-
-后端 schema 定义：
-
-```text
-models/simple_linear_regression/controls/preprocess.py
-models/simple_linear_regression/controls/train_eval.py
-models/simple_linear_regression/controls/predict.py
-models/simple_linear_regression/controls/student.py
-```
-
-前端渲染器：
-
-```text
-static/js/control_renderers.js
-```
-
-页面调用：
-
-```text
-preprocess_page.js -> renderPreprocessPanel(schema)
-train_page.js      -> renderTrainControlPanel(schema)
-predict_page.js    -> renderPredictPanel(schema)
-student_page.js    -> renderStudentPanel() -> studentPanelHtml()
-```
-
-### 4.2 通用控制类型
-
-控制项 schema 的 `type` 决定生成什么 UI。
-
-```text
-stat
-└─ .mini-stat
-   ├─ span label
-   └─ strong#value_id
-
-runtime_stat
-└─ .mini-stat
-   ├─ span label
-   └─ strong#value_id
-
-select
-└─ label.control-label
-   └─ select#element_id
-      └─ option...
-
-number
-└─ label.control-label
-   └─ input#element_id[type=number]
-
-range
-└─ label.control-label
-   ├─ input#element_id[type=range]
-   └─ .range-line
-      ├─ min label
-      ├─ strong#value_id
-      └─ max label
-
-button
-└─ button.btn#element_id
-
-chart_selector
-└─ details.check-group
-   ├─ summary#summary_id
-   └─ .check-list
-      └─ label.check-row
-         ├─ input[type=checkbox]
-         └─ span label
-```
-
-### 4.3 数据预处理右侧面板
+### 4.1 数据预处理
 
 ```text
 #rightPanel
-└─ .panel-card
-   ├─ h3 控制面板
+└─ .control-card
    ├─ .mini-stats
-   │  ├─ #sampleCount
-   │  └─ #featureCount
-   ├─ select#dataFeature
-   └─ details.check-group
-      ├─ summary#dataModeSummary
-      └─ input[name=dataViews]...
+   ├─ .control-group 特征选择
+   │  └─ select#dataFeature
+   └─ .control-group 显示模式
+      └─ details.mode-menu
 ```
 
-### 4.4 训练评估右侧面板
+### 4.2 模型训练与评估
 
 ```text
 #rightPanel
-└─ .panel-card
+└─ .control-card
    ├─ .mini-stats
-   │  ├─ #sampleCount
-   │  └─ #featureCount
-   ├─ select#trainFeature
-   ├─ select#trainStd
-   ├─ details.check-group
-   │  └─ input[name=trainViews]...
-   ├─ input#w0[type=number]
-   ├─ input#b0[type=number]
-   ├─ input#lr[type=range]
-   ├─ input#epochs[type=range]
-   ├─ input#speed[type=range]
+   ├─ .control-group 数据设置
+   │  ├─ select#trainStd
+   │  └─ select#trainFeature
+   ├─ .control-group 显示内容
+   │  └─ details.mode-menu input[name=trainViews]
+   ├─ .control-group 初始参数
+   │  ├─ input#w0
+   │  └─ input#b0
+   ├─ .control-group 训练控制
+   │  ├─ input#lr[type=range] + 微调按钮
+   │  ├─ input#epochs[type=range] + 微调按钮
+   │  └─ input#speed[type=range] + 微调按钮
    ├─ .button-grid
-   │  ├─ #stepBtn
-   │  ├─ #autoBtn
-   │  ├─ #pauseBtn
-   │  └─ #resetBtn
-   └─ .runtime stats
-      ├─ #epochNow
-      └─ #lossNow
+   └─ .runtime
 ```
 
-### 4.5 预测右侧面板
+### 4.3 模型预测
 
 ```text
 #rightPanel
-└─ .panel-card
+└─ .control-card
    ├─ .mini-stats
-   │  ├─ #predictValue
-   │  └─ #predictModelX
-   ├─ select#predictFeature
-   ├─ select#predictStd
-   ├─ input#predictInput[type=number]
-   ├─ details.check-group
-   │  └─ input[name=predictViews]...
-   └─ button#predictRun
+   ├─ .control-group 数据设置
+   │  ├─ select#predictStd
+   │  └─ select#predictFeature
+   ├─ .control-group 输入特征值
+   │  └─ input#predictInput
+   ├─ .control-group 显示模式
+   │  └─ details.mode-menu input[name=predictViews]
+   └─ #predictRun
 ```
 
-### 4.6 自主实验右侧面板
+### 4.4 自主实验
 
-自主实验右侧面板不是完全通用 schema 渲染，而是由 `studentPanelHtml()` 定制生成，因为它是多阶段流程。
+自主实验使用定制面板 `studentPanelHtml()`，阶段外层使用 `.control-card.student-stage-card`，阶段内使用 `.control-group` 分区。
 
 ```text
-#rightPanel
-└─ .student-panel
-   ├─ details.student-section 01 数据集
-   │  ├─ select#studentSourceType
-   │  ├─ input#studentFile[type=file]
-   │  ├─ button#studentUploadBtn
-   │  └─ #studentUploadMessage
-   │
-   ├─ details.student-section 02 字段设置
-   │  ├─ select#studentTarget
-   │  ├─ input[name=studentFeatures][type=checkbox]...
-   │  └─ select#studentFeature
-   │
-   ├─ details.student-section 03 数据预处理
-   │  ├─ button#studentPrepareDataBtn
-   │  ├─ button#studentPreprocessBtn
-   │  ├─ button#studentDataBtn
-   │  └─ input[name=studentDataViews][type=checkbox]...
-   │
-   ├─ details.student-section 04 模型训练与评估
-   │  ├─ select#studentStd
-   │  ├─ input#studentW0[type=number]
-   │  ├─ input#studentB0[type=number]
-   │  ├─ input#studentLr[type=number]
-   │  ├─ input#studentEpochs[type=number]
-   │  ├─ input#studentSpeed[type=range]
-   │  ├─ button#studentTrainBtn
-   │  ├─ button#studentResetBtn
-   │  ├─ button#studentStepBtn
-   │  ├─ button#studentAutoBtn
-   │  ├─ button#studentPauseBtn
-   │  └─ input[name=studentTrainViews][type=checkbox]...
-   │
-   └─ details.student-section 05 模型预测
-      ├─ input#studentPredictInput[type=number]
-      ├─ input[name=studentPredictViews][type=checkbox]...
-      ├─ button#studentPreparePredictBtn
-      └─ button#studentPredictBtn
+01 数据集
+├─ 上传 CSV 数据集
+└─ 数据类型 + 加载数据集
+
+02 字段设置
+├─ 目标列 y
+└─ 特征列 x + 当前观察/训练特征
+
+03 数据预处理
+└─ 显示图表
+
+04 模型训练与评估
+├─ 训练数据版本
+├─ 训练图表
+├─ 初始参数
+└─ 训练控制
+
+05 模型预测
+├─ 预测输入值
+└─ 显示图表
 ```
 
-## 5. 图表卡片与 GridStack 结构
+## 5. 图表卡片与交互
 
-图表卡片统一由 `static/js/view_renderers.js` 中的 `chartCardHtml()` 生成。
+图表卡片统一由 `static/js/view_renderers.js` 的 `chartCardHtml()` 生成：
 
 ```text
-section.chart-card[.wide|.small]
+section.chart-card.chart-interaction-prototype
 ├─ .chart-head
-│  └─ div
-│     ├─ .chart-title
-│     └─ .chart-sub
+│  ├─ .chart-title
+│  └─ .chart-sub
 └─ .chart#chart_<key>
 ```
 
@@ -506,7 +287,7 @@ GridStack 包装层：
       └─ section.chart-card
 ```
 
-拖拽缩放相关：
+GridStack 使用：
 
 ```text
 GridStack.init({
@@ -516,27 +297,29 @@ GridStack.init({
   float: true,
   animate: true,
   draggable: { handle: ".chart-head" },
-  resizable: { handles: "se" }
+  resizable: { handles: "e, s, se" }
 })
 ```
 
-布局保存：
+图表交互规则在 `static/js/state_runtime.js`：
 
-```text
-saveDataGridLayout()
-└─ viewStateStore[gridLayoutStorageKey(dataGridMode)] = layout
-```
+- 默认未激活：滚轮、悬停 tooltip、图内拖动不影响图表。
+- 点击图表卡片：激活并高亮。
+- 激活后：允许滚轮缩放、hover tooltip、图内拖动。
+- 点击同一图表：取消激活。
+- 点击页面其它位置：取消激活。
+- 图表卡片右下角保留自定义视觉角标，原生 `resize` 已关闭。
 
-不同页面的布局 key：
+布局保存 key：
 
 ```text
 preprocess -> preprocessGridLayoutV4
-train      -> trainGridLayoutV1
+train      -> trainGridLayoutV2
 predict    -> predictGridLayoutV1
 student    -> studentGridLayoutV1
 ```
 
-## 6. 数据流结构
+## 6. 数据流
 
 ```text
 用户操作右侧面板
@@ -549,9 +332,9 @@ POST /api/run_action
         ↓
 models/simple_linear_regression/model.py
         ↓
-返回 context_id / history / prediction / preview 等
+返回 context_id / history / prediction / preview
         ↓
-页面 JS 根据选择的 views 请求图表数据
+页面 JS 根据 views 请求图表数据
         ↓
 POST /api/chart_data
         ↓
@@ -566,13 +349,13 @@ ECharts 渲染到 .chart#chart_xxx
 
 ```text
 templates/index.html
-  页面骨架、CSS、左侧导航、三栏容器、脚本引用
+  页面骨架、CSS、左侧导航、三栏容器、右侧面板基础样式、脚本引用
 
 static/js/app_shell.js
-  页面切换、导航点击、启动 setPage("basic")
+  页面切换、导航点击、三栏拖拽宽度、窗口 resize
 
 static/js/state_runtime.js
-  全局状态、图表实例、GridStack 状态、选择项保存恢复
+  全局状态、图表实例、GridStack 状态、选择项保存恢复、图表点击激活
 
 static/js/control_renderers.js
   右侧控制面板控件生成
@@ -599,6 +382,5 @@ models/simple_linear_regression/controls/*.py
   右侧控制面板 schema
 
 models/simple_linear_regression/charts/*
-  图表数据 schema / chart data
+  图表 metadata 和 chart data
 ```
-
