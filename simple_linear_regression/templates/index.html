@@ -16,7 +16,7 @@
       --text: #172033;
       --muted: #6b7280;
       --line: #e6e8ef;
-      --purple: #5b35f5;
+      --purple: #2563eb;
       --purple-soft: #f1efff;
       --green: #0f9f78;
       --green-soft: #eafaf4;
@@ -30,7 +30,7 @@
     * { box-sizing: border-box; }
     * {
       scrollbar-width: thin;
-      scrollbar-color: rgba(91, 53, 245, .38) transparent;
+      scrollbar-color: rgba(37, 99, 235, .38) transparent;
     }
     *::-webkit-scrollbar {
       width: 8px;
@@ -40,13 +40,13 @@
       background: transparent;
     }
     *::-webkit-scrollbar-thumb {
-      background: linear-gradient(180deg, rgba(91, 53, 245, .42), rgba(15, 159, 120, .38));
+      background: linear-gradient(180deg, rgba(37, 99, 235, .42), rgba(15, 159, 120, .38));
       border-radius: 999px;
       border: 2px solid transparent;
       background-clip: padding-box;
     }
     *::-webkit-scrollbar-thumb:hover {
-      background: linear-gradient(180deg, rgba(91, 53, 245, .72), rgba(15, 159, 120, .62));
+      background: linear-gradient(180deg, rgba(37, 99, 235, .72), rgba(15, 159, 120, .62));
       background-clip: padding-box;
     }
     html, body {
@@ -383,7 +383,7 @@
       background: linear-gradient(135deg, var(--purple), #3919d8);
       font-weight: 900;
       white-space: nowrap;
-      box-shadow: 0 12px 22px rgba(91, 53, 245, .22);
+      box-shadow: 0 12px 22px rgba(37, 99, 235, .22);
     }
     .stat-cards {
       display: grid;
@@ -397,7 +397,7 @@
       background: #fff;
       min-height: 112px;
     }
-    .stat-card.purple { background: #f7f5ff; }
+    .stat-card.purple { background: #eff6ff; }
     .stat-card.green { background: #effcf6; }
     .stat-card.amber { background: #fffaf0; }
     .stat-card span {
@@ -769,9 +769,9 @@
       cursor: not-allowed;
     }
     .check-row:has(input:checked) {
-      border-color: #c9c1ff;
+      border-color: #bfdbfe;
       background: var(--purple-soft);
-      color: #321aa2;
+      color: #1e40af;
       font-weight: 800;
     }
     .field-grid {
@@ -920,9 +920,9 @@
       font-size: 13px;
     }
     .stage-chip.active {
-      border-color: #c9c1ff;
+      border-color: #bfdbfe;
       background: var(--purple-soft);
-      color: #321aa2;
+      color: #1e40af;
     }
     .section-status {
       border-radius: 999px;
@@ -2004,7 +2004,7 @@ function renderStudentTrainFrame(index) {
     if (view === "model_train") ch.setOption(trainScatterOption(currentFrame), true);
     if (view === "learning") ch.setOption(lossOption(currentFrame), true);
     if (view === "param_path") ch.setOption(studentParamPathOption(currentFrame), true);
-    if (view === "rmse_gauge") ch.setOption(studentSingleGaugeOption("RMSE", frame.rmse, Math.max(...trainData.history.map(r => r.rmse), 1), "#5b35f5"), true);
+    if (view === "rmse_gauge") ch.setOption(studentSingleGaugeOption("RMSE", frame.rmse, Math.max(...trainData.history.map(r => r.rmse), 1), "#2563eb"), true);
     if (view === "mae_gauge") ch.setOption(studentSingleGaugeOption("MAE", frame.mae, Math.max(...trainData.history.map(r => r.mae), 1), "#c47a11"), true);
     if (view === "r2_gauge") ch.setOption(studentSingleGaugeOption("R²", Math.max(0, Math.min(1, frame.r2)), 1, "#0f9f78"), true);
   });
@@ -2443,7 +2443,7 @@ function predictChartOption() {
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
     ],
     series: [
-      { name: "样本点", type: "scatter", data: points, symbolSize: 7, itemStyle: { color: "rgba(91, 53, 245, .42)" } },
+      { name: "样本点", type: "scatter", data: points, symbolSize: 7, itemStyle: { color: "rgba(37, 99, 235, .42)" } },
       { name: "回归线", type: "line", data: lineData, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } },
       { name: "预测辅助线", type: "line", data: guideLine, showSymbol: false, lineStyle: { color: "#f59e0b", width: 2, type: "dashed" } },
       { name: "预测点", type: "scatter", data: [inputPoint], symbolSize: 16, itemStyle: { color: "#e23b5a", borderColor: "#fff", borderWidth: 3 } }
@@ -2808,7 +2808,7 @@ function scatterOption(scatter, line, xName, title, yName = "MEDV") {
       }
     ],
     series: [
-      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(91,53,245,.72)" } },
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(37,99,235,.72)" } },
       { name: "线性趋势", type: "line", data: lineData, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } }
     ]
   };
@@ -2841,7 +2841,7 @@ function singleCorrOption(data) {
         }
       }
     ],
-    series: [{ type: "bar", barWidth: 56, data: [{ value: corr, itemStyle: { color: corr >= 0 ? "#5b35f5" : "#d9354f" } }], label: { show: true, position: corr >= 0 ? "top" : "bottom", formatter: corr.toFixed(4), fontWeight: 900 } }]
+    series: [{ type: "bar", barWidth: 56, data: [{ value: corr, itemStyle: { color: corr >= 0 ? "#2563eb" : "#d9354f" } }], label: { show: true, position: corr >= 0 ? "top" : "bottom", formatter: corr.toFixed(4), fontWeight: 900 } }]
   };
 }
 
@@ -2872,7 +2872,7 @@ function allCorrOption(rows, currentFeature) {
         }
       }
     ],
-    series: [{ type: "bar", barWidth: 14, data: ordered.map(r => ({ value: r.corr, itemStyle: { color: r.feature === currentFeature ? "#c47a11" : (r.corr >= 0 ? "#5b35f5" : "#d9354f") } })) }]
+    series: [{ type: "bar", barWidth: 14, data: ordered.map(r => ({ value: r.corr, itemStyle: { color: r.feature === currentFeature ? "#c47a11" : (r.corr >= 0 ? "#2563eb" : "#d9354f") } })) }]
   };
 }
 
@@ -2896,7 +2896,7 @@ function trainScatterOption(frameIndex) {
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
     ],
     series: [
-      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(91,53,245,.7)" } },
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(37,99,235,.7)" } },
       { name: "当前回归线", type: "line", data: lineForParams(frame.w, frame.b), showSymbol: false, lineStyle: { color: "#d9354f", width: 3 } },
       { name: "最优参考线", type: "line", data: lineForParams(trainData.best.w, trainData.best.b), showSymbol: false, lineStyle: { color: "#0f9f78", width: 2.6, type: "dashed" } }
     ]
@@ -2905,7 +2905,7 @@ function trainScatterOption(frameIndex) {
 
 function lossOption(frameIndex) {
   const rows = trainData.history.slice(0, frameIndex + 1);
-  return lineOption("学习准则：MSE Loss", "MSE", rows.map(r => [r.epoch, r.loss]), "#5b35f5");
+  return lineOption("学习准则：MSE Loss", "MSE", rows.map(r => [r.epoch, r.loss]), "#2563eb");
 }
 
 function paramPathOption(key, frameIndex) {
@@ -3005,7 +3005,7 @@ function metricGaugeConfig(key, rows) {
   const upper = Math.max(10, Math.ceil(maxValue / 10) * 10);
   return {
     label: key.toUpperCase(),
-    color: key === "rmse" ? "#5b35f5" : "#0f9f78",
+    color: key === "rmse" ? "#2563eb" : "#0f9f78",
     min: 0,
     max: upper,
     yMin: 0,
@@ -3044,9 +3044,9 @@ function gradientDescentOption(frameIndex) {
         smooth: true,
         symbolSize: 4,
         data: dwData,
-        lineStyle: { color: "#5b35f5", width: 2.6 },
-        itemStyle: { color: "#5b35f5" },
-        areaStyle: { color: "#5b35f518" }
+        lineStyle: { color: "#2563eb", width: 2.6 },
+        itemStyle: { color: "#2563eb" },
+        areaStyle: { color: "#2563eb18" }
       },
       {
         name: "db",
@@ -3093,7 +3093,7 @@ function lossSurface3DOption(frameIndex) {
       boxDepth: 90,
       boxHeight: 72,
       axisLine: { lineStyle: { color: "#9aa3b2" } },
-      axisPointer: { lineStyle: { color: "#5b35f5" } },
+      axisPointer: { lineStyle: { color: "#2563eb" } },
       light: {
         main: { intensity: 1.25, shadow: true },
         ambient: { intensity: 0.35 }
@@ -3105,7 +3105,7 @@ function lossSurface3DOption(frameIndex) {
         type: "surface",
         data: surfaceData,
         silent: true,
-        wireframe: { show: true, lineStyle: { color: "rgba(91,53,245,.10)", width: 1 } },
+        wireframe: { show: true, lineStyle: { color: "rgba(37,99,235,.10)", width: 1 } },
         itemStyle: { color: "rgba(219,234,254,.58)", opacity: 0.58 },
         shading: "lambert"
       },
@@ -3121,7 +3121,7 @@ function lossSurface3DOption(frameIndex) {
         type: "scatter3D",
         data: [currentPoint],
         symbolSize: 15,
-        itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 2 }
+        itemStyle: { color: "#2563eb", borderColor: "#fff", borderWidth: 2 }
       },
       {
         name: "best params",
@@ -3266,7 +3266,7 @@ function contourOption(frameIndex) {
         type: "scatter",
         data: [[frame.w, frame.b]],
         symbolSize: 18,
-        itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 3 },
+        itemStyle: { color: "#2563eb", borderColor: "#fff", borderWidth: 3 },
         z: 5
       },
       {
@@ -3319,7 +3319,7 @@ function contourOption(frameIndex) {
         type: "scatter",
         data: [[frame.w, frame.b]],
         symbolSize: 18,
-        itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 3 },
+        itemStyle: { color: "#2563eb", borderColor: "#fff", borderWidth: 3 },
         z: 10
       },
       {

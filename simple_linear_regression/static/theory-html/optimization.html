@@ -1,82 +1,189 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：优化算法与参数更新</title>
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.staticfile.net/Chart.js/3.9.1/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdn.staticfile.net/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdn.staticfile.net/highlight.js/11.8.0/highlight.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>参数优化</h1>
-    <p>参数优化的目标是找到合适的 w 和 b，使简单线性回归模型在当前特征上的 MSE 尽可能小。</p>
-  </div>
+    <style>
+        :root {
+            --text-main: #0f172a;
+            --text-body: #334155;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        /* 现代系统字体栈 */
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            text-align: left;
+        }
+        
+        .content-container { max-width: 960px; margin-left: 0; }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        h3 { font-size: 16px; font-weight: 600; color: var(--text-main); margin: 24px 0 12px; }
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
+        
+        .chart-wrapper { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; margin: 24px 0; max-width: 850px; }
+        
+        .math-display { padding: 16px 20px; font-size: 1.1em; color: var(--text-main); background-color: #f8fafc; border-radius: 6px; margin: 16px 0; overflow-x: auto; text-align: center; border: 1px solid #e2e8f0; }
+        
+        .academic-note { background-color: #f8fafc; border-left: 4px solid #94a3b8; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #475569; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .academic-warning { background-color: #fffbeb; border-left: 4px solid #f59e0b; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #92400e; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>1. 优化对象</h2>
-    <p>对于模型 ŷ = wx + b，需要优化的参数只有两个：</p>
-    <table>
-      <tr><th>参数</th><th>含义</th><th>影响</th></tr>
-      <tr><td>w</td><td>斜率</td><td>控制回归线倾斜方向和倾斜程度</td></tr>
-      <tr><td>b</td><td>截距</td><td>控制回归线整体上下移动</td></tr>
-    </table>
-  </div>
+        pre { margin: 24px 0; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background-color: #f6f8fa; }
+        pre code { padding: 20px !important; line-height: 1.6; }
+        
+        ul { margin-left: 24px; margin-bottom: 16px; }
+        li { font-size: 15px; line-height: 1.8; margin-bottom: 8px; }
+        strong { color: var(--text-main); }
+    </style>
+</head>
+<body>
 
-  <div class="theory-card">
-    <h2>2. 最小二乘法</h2>
-    <p>最小二乘法希望找到一条直线，使所有样本点到直线的误差平方和最小。</p>
-    <span class="formula">目标：min Σ(ŷᵢ - yᵢ)²</span>
-    <p>它可以作为“最优参考线”的来源，帮助学生比较梯度下降当前训练结果与理论较优结果之间的差距。</p>
-  </div>
+    <div class="content-container">
+        
+        <h1>优化算法：梯度下降与参数迭代</h1>
+        
+        <p>在定义了均方误差（MSE）这把量测“预测误差”的尺子后，我们的核心目标变得非常明确：寻找一组最优的特征权重矩阵 $\mathbf{w}$，使得这把尺子量出的误差降到最低。这个不断寻找最优参数的过程，在机器学习中被称为<strong>优化（Optimization）</strong>。</p>
 
-  <div class="theory-card">
-    <h2>3. 梯度下降法</h2>
-    <p>梯度下降不是一次性得到答案，而是从初始 w、b 出发，按照损失下降方向逐步更新。</p>
-    <span class="formula">w := w - learning_rate × dw<br>b := b - learning_rate × db</span>
-    <p>其中 learning_rate 是学习率，决定每次参数更新走多远。</p>
-  </div>
+        <h2>1. 梯度下降 (Gradient Descent)：蒙眼下山的艺术</h2>
+        <p>正如我们在前置知识中提到的，你可以把寻找最优参数的过程，想象成你被蒙上双眼放在了一座高低不平的山坡上（这座山就是损失函数构成的误差曲面）。你要怎么走到谷底？</p>
+        
+        <p>最稳妥的策略是：用脚探一探四周，找出最陡峭的下坡方向，然后往那个方向迈出一步。不断重复这个过程，直到不管往哪边迈都是上坡，你就知道自己到达谷底了。在微积分中，<strong>梯度（Gradient）</strong>指向的是函数值上升最快的方向。因此，我们的参数必须沿着梯度的<strong>反方向</strong>进行更新。</p>
 
-  <div class="theory-card">
-    <h2>4. 参数调优</h2>
-    <p>实验界面中可以调节学习率和训练轮数，观察模型收敛效果。</p>
-    <table>
-      <tr><th>参数</th><th>过小</th><th>过大</th><th>合适时表现</th></tr>
-      <tr><td>学习率</td><td>收敛很慢</td><td>震荡或发散</td><td>Loss 稳定下降</td></tr>
-      <tr><td>训练轮数</td><td>模型还未充分学习</td><td>可能浪费计算时间</td><td>指标逐渐稳定</td></tr>
-    </table>
-  </div>
+        <p>通过对均方误差 MSE 函数求偏导，我们可以得到参数矩阵的梯度向量 $\nabla_{\mathbf{w}} J$：</p>
 
-  <div class="theory-card">
-    <h2>5. 可视化理解优化过程</h2>
-    <ul class="theory-list">
-      <li><strong>Loss 等高线图：</strong>把 w 和 b 看作坐标，观察当前参数点如何移动到低损失区域。</li>
-      <li><strong>Loss 三维曲面图：</strong>把损失函数看成一个地形，梯度下降就是沿着坡面往低处走。</li>
-      <li><strong>w 参数轨迹：</strong>观察斜率如何随训练轮数变化。</li>
-      <li><strong>b 参数轨迹：</strong>观察截距如何随训练轮数变化。</li>
-      <li><strong>每轮参数表：</strong>记录 epoch、w、b、MSE、RMSE、MAE、R²、dw、db。</li>
-    </ul>
-  </div>
+        <div class="math-display">
+            $$ \nabla_{\mathbf{w}} J = \frac{1}{m} \mathbf{X}^T (\mathbf{\hat{y}} - \mathbf{y}) $$
+        </div>
 
-  <div class="warn">
-    学习率不是越大越好。过大的学习率可能让参数越过最低点，导致 Loss 不降反升。
-  </div>
-</div>
+        <div class="academic-note">
+            <strong>💡 维度核对：为什么 $\mathbf{X}$ 必须要转置？</strong><br>
+            这并不是随意的数学推导，而是为了满足严谨的矩阵运算规则。回忆一下：误差向量 $(\mathbf{\hat{y}} - \mathbf{y})$ 的维度是 $(m, 1)$。而我们希望求得的梯度向量 $\nabla_{\mathbf{w}} J$，其维度必须和权重 $\mathbf{w}$ 完全一致，即 $(d+1, 1)$。<br>
+            由于原始特征矩阵 $\mathbf{X}$ 的维度是 $(m, d+1)$，只有将其转置为 $\mathbf{X}^T$ $(d+1, m)$，再与误差向量相乘：$(d+1, m) \times (m, 1)$，最终才能完美得到维度为 $(d+1, 1)$ 的梯度向量。
+        </div>
+
+        <h2>2. 参数更新与学习率 (Learning Rate)</h2>
+        <p>算出了梯度（下山的方向）后，我们还要决定每次迈出的“步子”有多大。这个步长由一个核心的超参数——<strong>学习率（通常记作 $\alpha$）</strong>来控制。参数的数值迭代更新公式如下：</p>
+
+        <div class="math-display">
+            $$ \mathbf{w} := \mathbf{w} - \alpha \nabla_{\mathbf{w}} J $$
+        </div>
+
+        <div class="academic-warning">
+            <strong>⚠️ 工程避坑指南：学习率的抉择</strong><br>
+            • <strong>步子迈得太大 ($\alpha$ 过大)：</strong> 你可能会直接跨过谷底，跑到对面的半山腰上，甚至越走越高。在代码中的表现是：Loss 值不降反升，最后变成 <code>NaN</code>（数值溢出爆炸）。<br>
+            • <strong>步子迈得太碎 ($\alpha$ 过小)：</strong> 虽然很稳，但下山速度极其缓慢，你的模型可能需要训练几万次（Epoch）才能走到谷底。<br>
+            在后续的实验中，通常建议从 <code>0.01</code> 或 <code>0.001</code> 开始尝试调整你的学习率。
+        </div>
+
+        <h2>3. 迭代训练：Epoch 的概念与可视化</h2>
+        <p>上述“计算预测值 -> 计算梯度 -> 更新参数”的完整流程，我们称之为一次<strong>迭代（Iteration）</strong>或一个<strong>轮次（Epoch）</strong>。随着 Epoch 的增加，我们可以监控损失函数的值，正常的模型训练应该呈现出一条平滑下降的 Loss 曲线：</p>
+
+        <div class="chart-wrapper">
+            <canvas id="lossCurveChart" height="100"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：理想的梯度下降 Loss 曲线（横轴：迭代轮次，纵轴：均方误差）</p>
+        </div>
+
+        <h2>4. 核心代码实现：反向传播</h2>
+        <p>借助 NumPy，我们将上面复杂的公式浓缩成了短短几行极其优雅的代码：</p>
+
+<pre><code class="language-python">import numpy as np
+
+def gradient_descent_step(X, y, w, learning_rate):
+    """
+    执行一步梯度下降，更新参数矩阵
+    """
+    m = len(y)
+    
+    # 1. 前向传播：计算当前的预测值和误差
+    y_pred = np.dot(X, w)
+    error = y_pred - y
+    
+    # 2. 反向传播：计算梯度 (注意 X 的转置)
+    # 公式: (1/m) * X^T * (y_pred - y)
+    gradient = (1 / m) * np.dot(X.T, error)
+    
+    # 3. 参数更新：向着梯度的反方向迈步
+    w_new = w - learning_rate * gradient
+    
+    return w_new
+</code></pre>
+
+    </div>
+
+    <script>
+        (function initDynamicContent() {
+            const canvas = document.getElementById('lossCurveChart');
+            
+            if (!canvas || typeof Chart === 'undefined' || typeof hljs === 'undefined') {
+                setTimeout(initDynamicContent, 100);
+                return;
+            }
+
+            hljs.highlightAll();
+
+            if (window.myLossChart) { window.myLossChart.destroy(); }
+
+            const ctx = canvas.getContext('2d');
+            
+            // 模拟指数级下降的 Loss 曲线数据
+            const epochs = Array.from({length: 50}, (_, i) => i * 10); // 0, 10, 20... 500
+            const lossData = epochs.map(epoch => 500 * Math.exp(-epoch / 100) + 15 + (Math.random() * 5));
+
+            window.myLossChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: epochs,
+                    datasets: [{
+                        label: '训练集均方误差 (MSE Loss)',
+                        data: lossData,
+                        borderColor: 'rgba(37, 99, 235, 0.9)', // 科技蓝实线
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)', // 下方填充微光
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.4, // 平滑曲线
+                        pointRadius: 0, // 隐藏数据点，更显专业
+                        pointHoverRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { legend: { position: 'top', labels: { font: { size: 13 } } } },
+                    scales: {
+                        x: { title: { display: true, text: '迭代轮次 (Epochs)' }, grid: { display: false } },
+                        y: { title: { display: true, text: 'Loss' }, grid: { color: '#f1f5f9' } }
+                    }
+                }
+            });
+        })();
+    </script>
+</body>
+</html>
