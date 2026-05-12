@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>实验：结果分析与模型解释</title>
+    <title>实验：模型解释与学习小结</title>
     
     <script>
         window.MathJax = {
@@ -55,6 +55,15 @@
         
         .academic-highlight { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #1e3a8a; line-height: 1.6; border-radius: 0 4px 4px 0; }
         .academic-warning { background-color: #f8fafc; border-left: 4px solid #64748b; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .result-overview { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0 24px; }
+        .result-overview-card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+        .result-overview-card .tag { display: inline-block; font-size: 12px; font-weight: 800; letter-spacing: .04em; color: #475569; margin-bottom: 8px; }
+        .result-overview-card h3 { font-size: 15px; margin: 0 0 8px; }
+        .result-overview-card p { margin-bottom: 0; font-size: 14px; line-height: 1.7; color: #475569; text-align: left; }
+        .result-overview-card strong { color: #111827; }
+        @media (max-width: 760px) {
+            .result-overview { grid-template-columns: 1fr; }
+        }
 
         pre { margin: 24px 0; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background-color: #f6f8fa; }
         pre code { padding: 20px !important; line-height: 1.6; }
@@ -68,8 +77,29 @@
 
     <div class="content-container">
         
-        <h1>实验结果：白盒模型之美与完整闭环</h1>
-        
+        <h1>实验结果：模型解释与学习小结</h1>
+
+        <p>讨论三个问题：<strong>模型怎么解释、哪些特征最重要、统计结论该如何边界化表达</strong>。线性回归之所以适合做教学实验，核心就在于它的参数能直接映射到业务含义。</p>
+
+        <div class="result-overview">
+            <div class="result-overview-card">
+                <div class="tag">01 / White-box</div>
+                <h3>模型可解释</h3>
+                <p>参数 <strong>$\mathbf{w}$</strong> 不是黑箱输出，而是每个特征对房价影响方向与强度的直接刻画。</p>
+            </div>
+            <div class="result-overview-card">
+                <div class="tag">02 / Feature Importance</div>
+                <h3>关键因素明确</h3>
+                <p>标准化之后，<strong>绝对值越大</strong>说明影响越强，正负号则表示推高或压低房价。</p>
+            </div>
+            <div class="result-overview-card">
+                <div class="tag">03 / Interpretation Boundary</div>
+                <h3>结论需要克制</h3>
+                <p>线性回归能说明<strong>相关性</strong>，但不能直接推出<strong>因果性</strong>，这是结果解读时最重要的边界。</p>
+            </div>
+        </div>
+
+ 
 
         <h2>1. 揭开黑盒：如何向业务方解释模型？</h2>
         <p>相比于深度神经网络那种无法解释的“黑盒”，线性回归被誉为最优雅的<strong>白盒模型（White-box Model）</strong>。这是因为我们求出的最优参数矩阵 $\mathbf{w}$ 具有极其明确的业务和经济学含义。</p>
@@ -81,7 +111,7 @@
             <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：模型最终学到的特征权重（蓝色代表促使房价升值，红色代表导致房价贬值）</p>
         </div>
 
-        <h3>数据科学家的洞察报告：</h3>
+        <h3>本节结论：</h3>
         <ul>
             <li><strong>最核心的升值因素：</strong> <code>RM (房间数)</code> 的权重最高。这符合常识：在波士顿，房子越大、房间越多，价格必然越贵。</li>
             <li><strong>最核心的贬值因素：</strong> <code>LSTAT (弱势群体比例)</code> 具有最大的负权重。这从社会学角度反映了社区贫困率对该区域房产价值的严重负面打击。</li>
@@ -91,51 +121,6 @@
         <div class="academic-warning">
             <strong>⚠️ 统计学陷阱：相关性 $\neq$ 因果性 (Correlation does NOT imply Causation)</strong><br>
             需要极度警惕的是，线性回归的权重只能说明两个变量之间存在高度的“统计学相关”，而不能证明“因果关系”。例如，我们不能简单地得出“故意在小区里建几个大房子（人为提高 RM）就能带动整个小区房价上涨”的荒谬结论。因果推断需要借助更复杂的实验设计（如 A/B 测试）才能严谨证明。
-        </div>
-
-        <h2>2. 实验大结局：完整的训练闭环代码</h2>
-        <p>现在，我们将前几个页面的零散代码片段，组装成一个可以端到端运行的完整训练函数。这段代码就是你本次实验的核心产出：</p>
-
-<pre><code class="language-python">import numpy as np
-
-def train_linear_regression(X_train, y_train, epochs=1000, learning_rate=0.01):
-    """
-    完整的线性回归模型训练闭环
-    """
-    m, n_features = X_train.shape
-    
-    # 1. 吸收偏置项：在 X 最左侧拼接一列全为 1 的常数
-    X_train_bias = np.c_[np.ones((m, 1)), X_train]
-    
-    # 2. 参数初始化：随机生成形状为 (n_features + 1, 1) 的权重矩阵
-    w = np.random.randn(n_features + 1, 1) * 0.01
-    
-    # 用于记录损失下降历史
-    loss_history = []
-    
-    # 3. 梯度下降迭代
-    for epoch in range(epochs):
-        # 前向传播：计算预测值
-        y_pred = np.dot(X_train_bias, w)
-        
-        # 计算当前的 MSE 损失
-        loss = (1 / (2 * m)) * np.sum((y_pred - y_train) ** 2)
-        loss_history.append(loss)
-        
-        # 反向传播：计算梯度并更新参数
-        gradient = (1 / m) * np.dot(X_train_bias.T, (y_pred - y_train))
-        w = w - learning_rate * gradient
-        
-        # 打印训练进度
-        if epoch % 100 == 0:
-            print(f"Epoch {epoch} | MSE Loss: {loss:.4f}")
-            
-    return w, loss_history
-</code></pre>
-
-        <div class="academic-highlight">
-            <strong>🚀 实验结语</strong><br>
-            通过对波士顿房价的预测，你已经推开了人工智能世界的大门。从最简单的 $y = wx + b$ 出发，未来你可以将线性映射替换为非线性的激活函数，将单层叠加为多层，这套思想就是支撑起 ChatGPT、AlphaGo 等一切现代深度学习大模型的基础架构。继续前进吧！
         </div>
 
     </div>

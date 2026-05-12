@@ -52,7 +52,9 @@
         .chart-wrapper { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; margin: 24px 0; max-width: 850px; }
         
         .academic-note { background-color: #f8fafc; border-left: 4px solid #94a3b8; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #475569; line-height: 1.6; border-radius: 0 4px 4px 0; }
-        .academic-highlight { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #1e3a8a; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .academic-highlight { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .academic-highlight ul { margin: 10px 0 0 20px; }
+        .academic-highlight li { margin-bottom: 8px; }
 
         pre { margin: 24px 0; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background-color: #f6f8fa; }
         pre code { padding: 20px !important; line-height: 1.6; }
@@ -68,7 +70,6 @@
         
         <h1>前置知识储备：数学、机器学习与工具栈</h1>
         
-        <p>在动手编写波士顿房价预测的代码之前，我们需要储备一些关键的理论和工程知识。</p>
 
         <h2>1. 数学原理：寻优与数据标准化</h2>
         
@@ -92,9 +93,14 @@
         </ul>
 
         <div class="academic-highlight">
-            <strong>核心区分：回归 (Regression) vs 分类 (Classification)</strong><br>
-            • 如果我们要让机器判断一张图片是猫还是狗，结果是离散的类别，这叫<strong>分类</strong>。<br>
-            • 但本实验中，房价是一个连续变化的数值（比如 23.5 万、24.1 万）。预测这种连续变化的数值，在机器学习中就被称为<strong>回归</strong>。我们这节课学习的“线性回归”，就是解决这类问题的经典算法。
+            <strong>核心区分：回归 (Regression) vs 分类 (Classification)</strong>
+            <p style="margin: 10px 0 0; color: inherit; font-size: inherit; line-height: inherit;">
+                这两个任务的关键区别，不在于“预测”本身，而在于输出结果的类型：
+            </p>
+            <ul>
+                <li><strong>分类：</strong>输出是离散类别。比如判断一张图片是猫还是狗，结果只能落在有限几个选项里。</li>
+                <li><strong>回归：</strong>输出是连续数值。本实验中的房价就是连续变化的数值，例如 23.5 万、24.1 万。线性回归正是解决这类问题的经典算法。</li>
+            </ul>
         </div>
 
         <h2>3. Python 编程基础与可视化库</h2>
