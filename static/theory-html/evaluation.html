@@ -1,78 +1,173 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：模型评估与泛化测试</title>
+    
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>评价指标</h1>
-    <p>模型训练完成后，需要使用评价指标判断当前单特征模型对 MEDV 的解释能力和预测误差。</p>
-  </div>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { 
+            --text-main: #0f172a; 
+            --text-body: #334155; 
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            max-width: 960px; 
+            text-align: left;
+        }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 24px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
+        
+        /* 纯净的公式块：无边框、无底色 */
+        .math-display { padding: 12px 0; font-size: 1.2em; color: var(--text-main); margin: 16px 0; overflow-x: auto; text-align: center; }
+        
+        /* 教科书级引用块 */
+        .textbook-quote { margin: 24px 0; padding-left: 20px; border-left: 4px solid var(--accent-blue); color: var(--text-body); }
+        .textbook-quote strong { color: var(--text-main); display: block; margin-bottom: 8px;}
+        
+        /* 补充说明提示块 */
+        .academic-note { background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #475569; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>1. MSE：均方误差</h2>
-    <span class="formula">MSE = (1/n) × Σ(ŷᵢ - yᵢ)²</span>
-    <p>MSE 越小，说明预测误差整体越小。由于误差被平方，大误差会被明显放大。</p>
-  </div>
+        .chart-wrapper { margin: 40px 0; max-width: 750px; }
+    </style>
+</head>
+<body>
 
-  <div class="theory-card">
-    <h2>2. RMSE：均方根误差</h2>
-    <span class="formula">RMSE = √MSE</span>
-    <p>RMSE 把 MSE 开根号，单位回到房价单位，更便于解释模型平均预测偏差的大致量级。</p>
-  </div>
+    <div>
+        <h1>模型评估：度量误差与泛化能力</h1>
+        
+        <p>在机器学习中，当我们利用训练数据找到了模型的最优参数 $w$ 和 $b$ 之后，接下来的核心环节是对模型进行“体检”。我们需要一套客观的指标来量化模型的预测能力。对于一元线性回归这类回归任务，我们主要依赖均方误差（MSE）、均方根误差（RMSE）和决定系数（R²）。</p>
 
-  <div class="theory-card">
-    <h2>3. MAE：平均绝对误差</h2>
-    <span class="formula">MAE = (1/n) × Σ|ŷᵢ - yᵢ|</span>
-    <p>MAE 表示预测值与真实值之间的平均绝对差距。它比 MSE 更不容易被极端误差影响，解释也更直观。</p>
-  </div>
+        <h2>1. 均方误差 (MSE)</h2>
+        <p>均方误差（Mean Squared Error）计算的是所有样本“预测值与真实值之差的平方”的平均值。这是反映模型预测精度的基础指标。</p>
+        
+        <div class="math-display">
+            $$ MSE = \frac{1}{m} \sum_{i=1}^{m} \left( \hat{y}^{(i)} - y^{(i)} \right)^2 $$
+        </div>
 
-  <div class="theory-card">
-    <h2>4. R²：决定系数</h2>
-    <span class="formula">R² = 1 - SS_res / SS_tot</span>
-    <p>R² 表示模型对房价变化的解释能力。R² 越接近 1，说明当前特征对 MEDV 的线性解释能力越强。</p>
-    <ul class="theory-list">
-      <li>R² 接近 1：拟合效果较好。</li>
-      <li>R² 接近 0：模型效果接近直接预测平均房价。</li>
-      <li>R² 小于 0：模型可能比平均值预测还差。</li>
-    </ul>
-  </div>
+        <div class="academic-note">
+            <strong>业务痛点：</strong>虽然 MSE 在数学上非常完美，便于求导优化，但它的单位是原始变量单位的平方（例如：千美元的平方），这使得它在业务层面缺乏直观的经济学含义。
+        </div>
 
-  <div class="theory-card">
-    <h2>5. 指标仪表盘</h2>
-    <p>在可视化界面中，RMSE、MAE、R² 可以通过仪表盘或曲线实时展示。随着训练进行，RMSE 和 MAE 通常应下降，R² 通常应上升。</p>
-    <table>
-      <tr><th>指标</th><th>方向</th><th>适合回答的问题</th></tr>
-      <tr><td>MSE</td><td>越小越好</td><td>整体平方误差是否下降？</td></tr>
-      <tr><td>RMSE</td><td>越小越好</td><td>预测误差大约有多大？</td></tr>
-      <tr><td>MAE</td><td>越小越好</td><td>平均绝对偏差是多少？</td></tr>
-      <tr><td>R²</td><td>越接近 1 越好</td><td>当前特征能解释多少房价变化？</td></tr>
-    </table>
-  </div>
+        <h2>2. 均方根误差 (RMSE)</h2>
+        <p>为了解决 MSE 单位扭曲的问题，我们通常引入均方根误差（Root Mean Squared Error）。它通过对 MSE 进行开方，将误差的量纲恢复到与原始标签（房价）一致的水平。</p>
+        
+        <div class="math-display">
+            $$ RMSE = \sqrt{MSE} = \sqrt{\frac{1}{m} \sum_{i=1}^{m} \left( \hat{y}^{(i)} - y^{(i)} \right)^2} $$
+        </div>
+        <p>RMSE 可以极其直观地解读为：“我们的模型在预测房价时，平均误差大约是多少千美元。”</p>
 
-  <div class="note">
-    不同特征训练出的模型指标不同。比较 RM、LSTAT、PTRATIO 等特征的 R² 和 RMSE，可以判断哪个单特征更适合做简单线性回归。
-  </div>
-</div>
+        <h2>3. 决定系数 ($R^2$ Score)</h2>
+        <p>相比于 RMSE 这种绝对误差指标，决定系数 $R^2$ 提供了一个相对的打分系统。它衡量的是模型对目标变量（MEDV）波动的解释程度，取值范围通常在 $[0, 1]$ 之间（学得极差时可能为负）：</p>
+
+        <div class="math-display">
+            $$ R^2 = 1 - \frac{\sum_{i=1}^{m} \left( \hat{y}^{(i)} - y^{(i)} \right)^2}{\sum_{i=1}^{m} \left( y^{(i)} - \bar{y} \right)^2} $$
+        </div>
+
+        <div class="textbook-quote">
+            <strong>学术解释：</strong>$R^2 = 0.8$ 意味着房屋价格 $80\%$ 的变动可以被你的线性模型所解释，剩下的 $20\%$ 属于模型未能捕捉到的噪声或特征。
+        </div>
+
+        <h2>4. 可视化评估：真实值 vs 预测值散点图</h2>
+        <p>除了计算数值指标，数据科学家最常用“True vs Predicted”散点图来直观评估回归模型。如下图所示，横轴为真实的房屋价格，纵轴为模型给出的预测价格。如果模型完美，所有的点都会精准地落在这条 $y=x$ 的对角基准线上。**</p>
+
+        <div class="chart-wrapper">
+            <canvas id="evaluateChart" height="120"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：测试集上的真实房价 (X轴) 与模型预测房价 (Y轴) 对比分布</p>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('evaluateChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            
+            // 模拟一些接近真实值的预测数据 (加入一定的高斯噪声)
+            const scatterData = [];
+            for (let i = 0; i < 60; i++) {
+                let trueVal = 10 + Math.random() * 35; // 真实房价 10~45 万
+                let noise = (Math.random() - 0.5) * (5 + trueVal * 0.15); // 噪声与真实值成正比
+                let predVal = trueVal + noise;
+                scatterData.push({x: trueVal, y: predVal});
+            }
+
+            // 完美的预测参考线 y = x
+            const lineData = [{x: 5, y: 5}, {x: 50, y: 50}];
+
+            new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: '测试集样本观测点',
+                            data: scatterData,
+                            backgroundColor: 'rgba(37, 99, 235, 0.7)', // 学术蓝散点
+                            borderColor: '#1d4ed8', 
+                            pointRadius: 4,
+                            pointHoverRadius: 6
+                        },
+                        {
+                            type: 'line',
+                            label: '完美预测基准线 (y = x)',
+                            data: lineData,
+                            // CHANGED: 将基准线的颜色改为了醒目的红色
+                            borderColor: '#ef4444', 
+                            borderWidth: 2,
+                            fill: false,
+                            pointRadius: 0,
+                            borderDash: [5, 5] // 虚线
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    animation: false, // 禁用动画，保持严肃教科书感
+                    plugins: { 
+                        legend: { position: 'top', labels: { font: { family: 'Inter', size: 13 } } } 
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: '真实房价 (千美元)' }, 
+                            grid: { display: false },
+                            min: 0, max: 55
+                        },
+                        y: { 
+                            title: { display: true, text: '模型预测房价 (千美元)' }, 
+                            grid: { color: '#f1f5f9' }, // 使用极淡的灰蓝色网格线
+                            min: 0, max: 55
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

@@ -1,82 +1,195 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：优化算法与参数更新</title>
+    
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>参数优化</h1>
-    <p>参数优化的目标是找到合适的 w 和 b，使简单线性回归模型在当前特征上的 MSE 尽可能小。</p>
-  </div>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { 
+            --text-main: #0f172a; 
+            --text-body: #334155; 
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            max-width: 960px; 
+            text-align: left;
+        }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 24px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
+        
+        /* 紧凑公式块：解决公式间距过大的问题 */
+        .math-display { padding: 12px 0; font-size: 1.2em; color: var(--text-main); margin: 8px 0; overflow-x: auto; text-align: center; }
+        .math-display.group { padding-bottom: 24px; }
+        .math-display p { margin-bottom: 4px; }
+        
+        /* 经典教科书引用块 */
+        .textbook-quote { margin: 24px 0; padding-left: 20px; border-left: 4px solid var(--accent-blue); color: var(--text-body); }
+        .textbook-quote strong { color: var(--text-main); display: block; margin-bottom: 8px;}
+        
+        /* 补充说明提示块 */
+        .academic-note { background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #475569; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>1. 优化对象</h2>
-    <p>对于模型 ŷ = wx + b，需要优化的参数只有两个：</p>
-    <table>
-      <tr><th>参数</th><th>含义</th><th>影响</th></tr>
-      <tr><td>w</td><td>斜率</td><td>控制回归线倾斜方向和倾斜程度</td></tr>
-      <tr><td>b</td><td>截距</td><td>控制回归线整体上下移动</td></tr>
-    </table>
-  </div>
+        .chart-wrapper { margin: 40px 0; max-width: 750px; }
+        pre { margin: 24px 0; padding: 20px; background-color: #f8fafc; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; overflow-x: auto; border: 1px solid var(--border-color);}
+    </style>
+</head>
+<body>
 
-  <div class="theory-card">
-    <h2>2. 最小二乘法</h2>
-    <p>最小二乘法希望找到一条直线，使所有样本点到直线的误差平方和最小。</p>
-    <span class="formula">目标：min Σ(ŷᵢ - yᵢ)²</span>
-    <p>它可以作为“最优参考线”的来源，帮助学生比较梯度下降当前训练结果与理论较优结果之间的差距。</p>
-  </div>
+    <div>
+        <h1>优化算法：解析法与数值迭代法的博弈</h1>
+        
+        <p>在机器学习中，当我们定义好了模型 $f(x) = wx + b$ 和衡量误差的“尺子”——均方误差（MSE）后，接下来的核心挑战就是：如何找到那组最完美的斜率 $w$ 和截距 $b$，使得误差函数的取值达到全球最低？这在数学上被称为<strong>最优参数求解</strong>。针对波士顿房价预测这类线性任务，数学界提供了两条截然不同的思维路径。</p>
 
-  <div class="theory-card">
-    <h2>3. 梯度下降法</h2>
-    <p>梯度下降不是一次性得到答案，而是从初始 w、b 出发，按照损失下降方向逐步更新。</p>
-    <span class="formula">w := w - learning_rate × dw<br>b := b - learning_rate × db</span>
-    <p>其中 learning_rate 是学习率，决定每次参数更新走多远。</p>
-  </div>
+        <h2>1. 核心算法一：最小二乘法 (Ordinary Least Squares)</h2>
+        <p>最小二乘法是一种“上帝视角”的<strong>解析解</strong>方法。它的名字来源于它的数学本质：寻找一组参数，使得预测值与真实值之差的<strong>平方</strong>（二乘）之和达到<strong>最小</strong>。</p>
+        <p>从微积分的角度来看，损失函数 $J(w, b)$ 是一个关于 $w$ 和 $b$ 的二元二次函数，其在坐标空间中呈现出一个开口向上的“碗状”表面。既然要找碗底，最直接的方法就是对 $w$ 和 $b$ 分别求偏导数，并令其导数等于 0。通过严密的代数推导，我们可以跳过所有中间尝试步骤，一步到位地算出标准答案。</p>
+        
+        <p>对于本实验研究的一元线性回归，最优参数的解析公式如下（注意到 $w$ 与 $b$ 现在被紧密关联）：</p>
+        
+        <div class="math-display group">
+            $$ w = \frac{\sum_{i=1}^{m} (x^{(i)} - \bar{x})(y^{(i)} - \bar{y})}{\sum_{i=1}^{m} (x^{(i)} - \bar{x})^2} $$
+            $$ b = \bar{y} - w\bar{x} $$
+        </div>
 
-  <div class="theory-card">
-    <h2>4. 参数调优</h2>
-    <p>实验界面中可以调节学习率和训练轮数，观察模型收敛效果。</p>
-    <table>
-      <tr><th>参数</th><th>过小</th><th>过大</th><th>合适时表现</th></tr>
-      <tr><td>学习率</td><td>收敛很慢</td><td>震荡或发散</td><td>Loss 稳定下降</td></tr>
-      <tr><td>训练轮数</td><td>模型还未充分学习</td><td>可能浪费计算时间</td><td>指标逐渐稳定</td></tr>
-    </table>
-  </div>
+        <p>利用 Python 的向量化运算，我们可以将上述求和符号转化为极其高效的代码实现：</p>
 
-  <div class="theory-card">
-    <h2>5. 可视化理解优化过程</h2>
-    <ul class="theory-list">
-      <li><strong>Loss 等高线图：</strong>把 w 和 b 看作坐标，观察当前参数点如何移动到低损失区域。</li>
-      <li><strong>Loss 三维曲面图：</strong>把损失函数看成一个地形，梯度下降就是沿着坡面往低处走。</li>
-      <li><strong>w 参数轨迹：</strong>观察斜率如何随训练轮数变化。</li>
-      <li><strong>b 参数轨迹：</strong>观察截距如何随训练轮数变化。</li>
-      <li><strong>每轮参数表：</strong>记录 epoch、w、b、MSE、RMSE、MAE、R²、dw、db。</li>
-    </ul>
-  </div>
+<pre><code class="language-python">import numpy as np
 
-  <div class="warn">
-    学习率不是越大越好。过大的学习率可能让参数越过最低点，导致 Loss 不降反升。
-  </div>
-</div>
+def ordinary_least_squares(x, y):
+    """
+    核心算法一：利用最小二乘法解析公式直接求解最优 w 和 b
+    """
+    x_mean = np.mean(x)
+    y_mean = np.mean(y)
+    
+    # 分子：特征与标签的离差乘积之和
+    numerator = np.sum((x - x_mean) * (y - y_mean))
+    # 分母：特征离差的平方和
+    denominator = np.sum((x - x_mean) ** 2)
+    
+    w = numerator / denominator
+    b = y_mean - w * x_mean
+    
+    return w, b
+</code></pre>
+
+        <div class="academic-note">
+            <strong>学术延伸：解析解的代价</strong><br>
+            最小二乘法虽然精准且快速，但它在处理超大规模数据时会面临严重的算力瓶颈。当特征维度 $d$ 变得极高时，公式中涉及的矩阵求逆运算，其计算复杂度会呈立方级（$O(d^3)$）爆炸增长。这正是为什么我们需要引入更具普适性的数值解法。
+        </div>
+
+        <h2>2. 核心算法二：梯度下降 (Gradient Descent)</h2>
+        <p>梯度下降是现代人工智能的动力引擎。不同于解析法的“一步到位”，它采用的是一种<strong>数值迭代</strong>的策略。我们可以把它想象成一个<strong>“蒙眼下坡”</strong>的过程：你被困在浓雾笼罩的山坡上，目标是走到谷底（误差最小点）。由于看不见全局，你只能用脚感受周围地面的坡度（计算梯度），然后朝着最陡峭的下坡方向迈出一小步，重复此过程直到抵达平坦的终点。</p>
+
+        <p>在数学上，梯度的方向指向函数值增长最快的方向。因此，为了减小误差，我们需要沿着<strong>负梯度</strong>的方向更新参数。更新步长由一个关键参数 $\alpha$（学习率）控制：</p>
+        
+        <div class="math-display">
+            $$ w \leftarrow w - \alpha \frac{\partial J}{\partial w}, \quad b \leftarrow b - \alpha \frac{\partial J}{\partial b} $$
+        </div>
+
+        <p>在代码实现中，我们需要在一个循环内不断重复这一过程。每一次循环（Epoch）模型都会变得更聪明一点：</p>
+
+<pre><code class="language-python">def gradient_descent(x, y, w, b, learning_rate):
+    """
+    核心算法二：执行单步梯度下降更新
+    """
+    m = len(x)
+    
+    # 1. 前向预测：基于当前参数计算结果
+    y_pred = w * x + b
+    # 2. 计算预测残差
+    error = y_pred - y
+    
+    # 3. 计算偏导数：即指示“下山方向”的梯度
+    dw = (1 / m) * np.sum(error * x)
+    db = (1 / m) * np.sum(error)
+    
+    # 4. 更新参数：朝着减小误差的方向迈出一小步
+    w = w - learning_rate * dw
+    b = b - learning_rate * db
+    
+    return w, b
+</code></pre>
+
+        <div class="textbook-quote">
+            <strong>工程避坑：学习率过大导致 NaN 报错</strong>
+            学习率 $\alpha$ 决定了下山的胆量。如果步子太小，收敛极其缓慢；如果步子太大，可能会“一步跨过碗底”并直接飞出误差曲面，导致误差值呈指数级增长，最终在 Python 中抛出数值溢出（NaN）错误。
+        </div>
+
+        <h2>3. 损失下降曲线 (Loss Curve)</h2>
+        <p>在采用梯度下降时，实时观察<strong>损失曲线</strong>是判断模型是否训练正常的唯一标准。一个健康的训练过程，其均方误差（MSE）应该在初始阶段快速下降，随后逐渐平缓，标志着模型已经捕捉到了房价波动的本质规律。</p>
+
+        <div class="chart-wrapper">
+            <canvas id="lossChart" height="120"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 10px;">图 1：随着迭代轮次增加，模型预测偏差逐渐收敛至最小值</p>
+        </div>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            if (typeof hljs !== 'undefined') { hljs.highlightAll(); }
+            const canvas = document.getElementById('lossChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const epochs = Array.from({length: 50}, (_, i) => i);
+            const lossData = epochs.map(epoch => 50 * Math.exp(-0.15 * epoch) + 5);
+
+            new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: epochs,
+                    datasets: [{
+                        label: 'MSE Loss',
+                        data: lossData,
+                        borderColor: '#2563eb', 
+                        backgroundColor: 'rgba(37, 99, 235, 0.1)',
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: { title: { display: true, text: '迭代轮次 (Epoch)' }, grid: { display: false } },
+                        y: { title: { display: true, text: '均方误差 (MSE)' }, grid: { color: '#f1f5f9' } }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

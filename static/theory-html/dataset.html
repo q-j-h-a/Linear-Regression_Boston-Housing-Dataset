@@ -1,80 +1,213 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：数据探索与特征工程</title>
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>数据集</h1>
-    <p>本实验使用 Boston Housing 房价数据集。数据集中包含多个区域特征和一个房价标签 MEDV，实验每次选择一个特征与 MEDV 进行简单线性关系分析。</p>
-  </div>
+    <style>
+        :root {
+            --text-main: #0f172a;
+            --text-body: #334155;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            text-align: left;
+        }
+        
+        .content-container { max-width: 960px; margin-left: 0; }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        h3 { font-size: 16.5px; font-weight: 600; color: var(--text-main); margin: 24px 0 12px; }
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
 
-  <div class="theory-card">
-    <h2>1. 数据集结构</h2>
-    <p>每一行数据表示一个区域样本，每一列表示该区域的一个统计特征。</p>
-    <span class="formula">特征列：CRIM、ZN、INDUS、CHAS、NOX、RM、AGE、DIS、RAD、TAX、PTRATIO、B、LSTAT<br>标签列：MEDV</span>
-  </div>
+        .chart-wrapper { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; margin: 24px 0; max-width: 850px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        
+        .math-display { padding: 16px 20px; font-size: 1.1em; color: var(--text-main); background-color: #f8fafc; border-radius: 6px; margin: 16px 0; overflow-x: auto; text-align: center; border: 1px solid #e2e8f0; }
+        
+        .academic-warning { background-color: #f8fafc; border-left: 4px solid #64748b; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .academic-note { background-color: #f8fafc; border-left: 4px solid #64748b; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>2. 常用特征说明</h2>
-    <table>
-      <tr><th>字段</th><th>含义</th><th>与房价关系的直观理解</th></tr>
-      <tr><td>RM</td><td>住宅平均房间数</td><td>房间数越多，房价通常越高</td></tr>
-      <tr><td>LSTAT</td><td>低收入人口比例</td><td>比例越高，房价通常越低</td></tr>
-      <tr><td>PTRATIO</td><td>师生比例</td><td>可能反映教育资源压力</td></tr>
-      <tr><td>CRIM</td><td>人均犯罪率</td><td>犯罪率越高，房价可能越低</td></tr>
-      <tr><td>NOX</td><td>一氧化氮浓度</td><td>反映环境污染水平</td></tr>
-      <tr><td>TAX</td><td>财产税率</td><td>反映区域税负</td></tr>
-      <tr><td>DIS</td><td>到就业中心的加权距离</td><td>反映通勤位置因素</td></tr>
-      <tr><td>MEDV</td><td>房价中位数</td><td>本实验预测标签</td></tr>
-    </table>
-  </div>
+        pre { margin: 24px 0; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background-color: #f6f8fa; }
+        pre code { padding: 20px !important; line-height: 1.6; }
+    </style>
+</head>
+<body>
 
-  <div class="theory-card">
-    <h2>3. 数据探索任务</h2>
-    <p>数据探索的目标是先观察，再建模。实验界面中通常包含单特征相关系数、全特征相关系数排行、原始散点图和预处理散点图。</p>
-    <ul class="theory-list">
-      <li>选择一个特征，例如 RM。</li>
-      <li>计算该特征与 MEDV 的 Pearson 相关系数。</li>
-      <li>绘制该特征与 MEDV 的散点图。</li>
-      <li>观察散点是否大致沿一条直线上升或下降。</li>
-      <li>切换其他特征，比较不同特征与房价的线性关系强弱。</li>
-    </ul>
-  </div>
+    <div class="content-container">
+        
+        <h1>数据探索与特征工程 (EDA & Preprocessing)</h1>
+        
+        <p>在建立任何机器学习模型之前，对数据进行探索性数据分析（Exploratory Data Analysis, EDA）和深度清洗是不可或缺的步骤。由于线性模型对数据的分布极为敏感，我们需要深入理解哪些数据对房价起决定性作用，并剔除其中的“杂质”。</p>
 
-  <div class="theory-card">
-    <h2>4. 原始数据与标准化数据</h2>
-    <p>原始散点图使用特征原始数值作为横轴；标准化散点图使用标准化后的特征值作为横轴。</p>
-    <table>
-      <tr><th>数据版本</th><th>横轴含义</th><th>适合观察什么</th></tr>
-      <tr><td>原始特征</td><td>真实特征值，例如 RM = 6.5</td><td>方便理解实际业务含义</td></tr>
-      <tr><td>标准化特征</td><td>转换后的 z-score</td><td>方便梯度下降和参数变化观察</td></tr>
-    </table>
-  </div>
+        <h2>1. 全局特征相关性分析 (Correlation Ranking)</h2>
+        <p>面对波士顿房价数据集中的 13 个多维特征。我们不必深陷于晦涩的变量定义。借助统计学中的<strong>皮尔逊相关系数（Pearson Correlation）</strong>我们可以快速理清数据间的脉络，透视隐藏在数值背后的驱动逻辑。</p>
+        
+        <p>皮尔逊系数可以量化各特征与目标房价（MEDV）之间的线性依赖程度。系数越接近 1 或 -1，说明该特征对预测房价的影响越显著：</p>
 
-  <div class="note">
-    数据探索阶段不急着训练模型。先看散点图和相关系数，可以帮助判断某个特征是否适合做简单线性回归。
-  </div>
-</div>
+        <div class="chart-wrapper">
+            <canvas id="barChart" height="110"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：各特征与目标房价(MEDV)的皮尔逊相关系数排名（蓝色代表推高房价，红色代表拉低房价）</p>
+        </div>
+        
+        <p>通过上图我们可以极其直观地得出业务结论：<strong>房间数（RM）</strong>是促使房价升值的绝对主力；而<strong>底层弱势群体比例（LSTAT）</strong>、<strong>师生比（PTRATIO，即老师稀缺度）</strong>以及<strong>空气污染指数（NOX）</strong>则是导致房价暴跌的最强负面因素。</p>
+
+        <h2>2. 数据清洗三步曲：从原始数据到纯净矩阵</h2>
+        <p>找出了核心特征后，我们不能直接把原始数据生搬硬套进算法。真实世界的数据往往是肮脏的，我们必须执行以下三个核心清洗步骤：</p>
+
+        <h3>步骤一：缺失值处理 (Missing Values)</h3>
+        <p>数据集中可能会因为采集遗漏导致出现空值（NaN）。由于矩阵乘法无法对空值进行运算，我们必须对其进行处理。常见的策略包括：删除含有空值的行，或者用该列的<strong>均值/中位数进行填充（Imputation）</strong>。</p>
+
+        <h3>步骤二：异常值裁剪 (Outliers Handling)</h3>
+        <p>异常值就像是数据里的“钉子”，会强行把线性回归的拟合直线拉偏。例如，波士顿数据集中部分异常昂贵的豪宅被人工硬性截断封顶在了 50 万美元。如果不对这些极端的离群点进行过滤或盖帽处理（Clipping），模型的整体准确度将被严重拖累。</p>
+
+        <h3>步骤三：特征标准化缩放 (Z-score Scaling)</h3>
+        <p>不同特征的量纲（Scale）差异巨大。例如 <code>NOX</code>（污染浓度）通常在 0.4 左右，而 <code>TAX</code>（财产税率）高达 700。这会导致损失函数的误差曲面呈现极度拉伸的形态，使得后续的优化算法极其难以收敛。</p>
+
+        <p>我们必须将所有特征映射到均值为 0，标准差为 1 的同一尺度空间中：</p>
+        <div class="math-display">
+            $$ x_{ij}^{(norm)} = \frac{x_{ij} - \mu_j}{\sigma_j} $$
+        </div>
+
+        <div class="academic-warning">
+            <strong>⚠️ 实验避坑指南：数据泄露 (Data Leakage)</strong><br>
+            在计算均值 $\mu_j$ 和标准差 $\sigma_j$ 时，<strong>必须仅使用训练集（Training Set）的数据</strong>。测试集的缩放也必须使用训练集的均值。如果违规使用了全量数据计算均值，会导致未来数据的信息提前“泄露”给模型，造成预测能力的虚高。
+        </div>
+
+        <h2>3. 核心代码实现：基于 Pandas 的数据清洗流水线</h2>
+        <p>依托 Python 的 Pandas 和 NumPy 库，我们可以极其优雅地完成上述复杂的清洗工作：</p>
+
+<pre><code class="language-python">import numpy as np
+import pandas as pd
+
+def clean_and_preprocess_data(df):
+    """
+    数据清洗与预处理流水线
+    """
+    # ---------------- 步骤一：缺失值处理 ----------------
+    # 检查每列的缺失值数量
+    # print(df.isnull().sum())
+    
+    # 策略：用该列的均值填充缺失值 (In-place 替换)
+    df.fillna(df.mean(), inplace=True)
+    
+    # ---------------- 步骤二：异常值处理 ----------------
+    # 策略：剔除目标房价(MEDV)刚好等于上限 50.0 的人工截断数据
+    # 这能显著提升线性模型在正常区间的拟合度
+    df = df[df['MEDV'] < 50.0]
+    
+    # 分离特征矩阵 X 和 标签向量 y
+    X = df.drop('MEDV', axis=1).values
+    y = df['MEDV'].values
+    
+    return X, y
+
+def scale_features(X_train, X_test):
+    """
+    ---------------- 步骤三：特征标准化 ----------------
+    注意：均值和标准差仅从训练集中提取，以防止数据泄露
+    """
+    mu = np.mean(X_train, axis=0)
+    sigma = np.std(X_train, axis=0) + 1e-8 # 加上极小值防止除零报错
+    
+    X_train_norm = (X_train - mu) / sigma
+    X_test_norm = (X_test - mu) / sigma
+    
+    return X_train_norm, X_test_norm
+</code></pre>
+
+
+    </div>
+
+    <script>
+        (function initDynamicContent() {
+            const canvas = document.getElementById('barChart');
+            if (!canvas || typeof Chart === 'undefined' || typeof hljs === 'undefined') {
+                setTimeout(initDynamicContent, 100);
+                return;
+            }
+
+            hljs.highlightAll();
+            if (window.myBarChart) { window.myBarChart.destroy(); }
+
+            const ctx = canvas.getContext('2d');
+            
+            // 波士顿房价数据集各特征与 MEDV 的真实皮尔逊相关系数
+            // 波士顿房价数据集 13 个特征与 MEDV 的完整皮尔逊相关系数 (从高到低排序)
+const featureLabels = [
+    'RM (房间)', 'ZN (大户型)', 'B (黑人指数)', 'DIS (距离)', 'CHAS (临河)', 
+    'AGE (房龄)', 'RAD (公路)', 'CRIM (犯罪)', 'NOX (污染)', 'TAX (税率)', 
+    'INDUS (工业)', 'PTRATIO (师生比)', 'LSTAT (底层)'
+];
+const correlations = [
+    0.695, 0.360, 0.333, 0.249, 0.175, 
+    -0.376, -0.381, -0.388, -0.427, -0.468, 
+    -0.483, -0.507, -0.737
+];
+            
+            // 动态颜色：正相关用蓝色，负相关用红色
+            const bgColors = correlations.map(val => val > 0 ? 'rgba(37, 99, 235, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+
+            window.myBarChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: featureLabels,
+                    datasets: [{
+                        label: '皮尔逊相关系数 (Pearson Correlation)',
+                        data: correlations,
+                        backgroundColor: bgColors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { 
+                        legend: { display: false } 
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: '数据集特征 (Features)' },
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 12 } }
+                        },
+                        y: { 
+                            title: { display: true, text: '相关系数 (1为完全正相关, -1为完全负相关)' },
+                            grid: { color: '#f1f5f9' },
+                            min: -1,
+                            max: 1
+                        }
+                    }
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

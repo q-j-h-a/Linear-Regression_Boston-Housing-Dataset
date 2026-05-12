@@ -1,81 +1,203 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：结果分析与模型解释</title>
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>预期成果</h1>
-    <p>完成本实验后，学生应能够手动实现简单线性回归算法，理解梯度下降原理，并完成一个可交互的房价预测 Demo。</p>
-  </div>
+    <style>
+        :root {
+            --text-main: #0f172a;
+            --text-body: #334155;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+            --positive-color: #3b82f6;
+            --negative-color: #ef4444;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        /* 现代系统字体栈 */
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            text-align: left;
+        }
+        
+        .content-container { max-width: 960px; margin-left: 0; }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        h3 { font-size: 16px; font-weight: 600; color: var(--text-main); margin: 24px 0 12px; }
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
+        
+        .chart-wrapper { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; margin: 24px 0; max-width: 800px; }
+        
+        .academic-highlight { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #1e3a8a; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .academic-warning { background-color: #f8fafc; border-left: 4px solid #64748b; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>1. 算法实现成果</h2>
-    <ul class="theory-list">
-      <li>能够手动实现 ŷ = wx + b 的预测过程。</li>
-      <li>能够手动计算 MSE 损失函数。</li>
-      <li>能够根据梯度下降公式更新 w 和 b。</li>
-      <li>能够记录每一轮训练的 w、b、Loss 和评价指标。</li>
-      <li>能够不调用高级模型库，完成从零训练简单线性回归。</li>
-    </ul>
-  </div>
+        pre { margin: 24px 0; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background-color: #f6f8fa; }
+        pre code { padding: 20px !important; line-height: 1.6; }
+        
+        ul { margin-left: 24px; margin-bottom: 16px; }
+        li { font-size: 15px; line-height: 1.8; margin-bottom: 8px; }
+        strong { color: var(--text-main); }
+    </style>
+</head>
+<body>
 
-  <div class="theory-card">
-    <h2>2. 可视化成果</h2>
-    <table>
-      <tr><th>可视化模块</th><th>预期作用</th></tr>
-      <tr><td>特征与 MEDV 散点图</td><td>观察单特征线性关系</td></tr>
-      <tr><td>回归线动态更新</td><td>观察模型训练过程</td></tr>
-      <tr><td>Loss 曲线</td><td>观察 MSE 是否下降</td></tr>
-      <tr><td>Loss 等高线图</td><td>观察参数在损失地形中的移动路径</td></tr>
-      <tr><td>w、b 参数轨迹</td><td>观察参数如何逐渐收敛</td></tr>
-      <tr><td>指标仪表盘</td><td>实时查看 RMSE、MAE、R²</td></tr>
-    </table>
-  </div>
+    <div class="content-container">
+        
+        <h1>实验结果：白盒模型之美与完整闭环</h1>
+        
 
-  <div class="theory-card">
-    <h2>3. 交互 Demo 成果</h2>
-    <p>学生应能够完成一个房价预测交互 Demo：</p>
-    <ul class="theory-list">
-      <li>选择一个输入特征，例如 RM。</li>
-      <li>选择原始特征或标准化特征。</li>
-      <li>输入新的特征值。</li>
-      <li>系统自动代入训练好的模型进行预测。</li>
-      <li>显示预测 MEDV、计算过程和预测点可视化。</li>
-    </ul>
-  </div>
+        <h2>1. 揭开黑盒：如何向业务方解释模型？</h2>
+        <p>相比于深度神经网络那种无法解释的“黑盒”，线性回归被誉为最优雅的<strong>白盒模型（White-box Model）</strong>。这是因为我们求出的最优参数矩阵 $\mathbf{w}$ 具有极其明确的业务和经济学含义。</p>
+        
+        <p>由于我们在特征工程阶段（<code>dataset.html</code>）已经对数据进行了标准化（Z-score），消除了量纲的影响，因此<strong>权重的绝对值大小直接代表了该特征对房价的影响力（Feature Importance）</strong>，而正负号则代表了相关性的方向。</p>
 
-  <div class="theory-card">
-    <h2>4. 学习理解成果</h2>
-    <p>学生应能够用自己的语言解释：</p>
-    <div class="note">
-      简单线性回归通过一条直线描述单个特征与房价 MEDV 的关系。训练过程通过最小化 MSE 调整 w 和 b。学习率会影响训练速度和稳定性，RMSE、MAE 和 R² 可以从不同角度评价模型效果。
+        <div class="chart-wrapper">
+            <canvas id="weightsChart" height="180"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：模型最终学到的特征权重（蓝色代表促使房价升值，红色代表导致房价贬值）</p>
+        </div>
+
+        <h3>数据科学家的洞察报告：</h3>
+        <ul>
+            <li><strong>最核心的升值因素：</strong> <code>RM (房间数)</code> 的权重最高。这符合常识：在波士顿，房子越大、房间越多，价格必然越贵。</li>
+            <li><strong>最核心的贬值因素：</strong> <code>LSTAT (弱势群体比例)</code> 具有最大的负权重。这从社会学角度反映了社区贫困率对该区域房产价值的严重负面打击。</li>
+            <li><strong>环境与教育的折价：</strong> <code>NOX (一氧化氮污染)</code> 和 <code>PTRATIO (师生比，数值越大说明老师越少)</code> 同样拉低了房价，说明买房者愿意为好空气和优质学区支付溢价。</li>
+        </ul>
+
+        <div class="academic-warning">
+            <strong>⚠️ 统计学陷阱：相关性 $\neq$ 因果性 (Correlation does NOT imply Causation)</strong><br>
+            需要极度警惕的是，线性回归的权重只能说明两个变量之间存在高度的“统计学相关”，而不能证明“因果关系”。例如，我们不能简单地得出“故意在小区里建几个大房子（人为提高 RM）就能带动整个小区房价上涨”的荒谬结论。因果推断需要借助更复杂的实验设计（如 A/B 测试）才能严谨证明。
+        </div>
+
+        <h2>2. 实验大结局：完整的训练闭环代码</h2>
+        <p>现在，我们将前几个页面的零散代码片段，组装成一个可以端到端运行的完整训练函数。这段代码就是你本次实验的核心产出：</p>
+
+<pre><code class="language-python">import numpy as np
+
+def train_linear_regression(X_train, y_train, epochs=1000, learning_rate=0.01):
+    """
+    完整的线性回归模型训练闭环
+    """
+    m, n_features = X_train.shape
+    
+    # 1. 吸收偏置项：在 X 最左侧拼接一列全为 1 的常数
+    X_train_bias = np.c_[np.ones((m, 1)), X_train]
+    
+    # 2. 参数初始化：随机生成形状为 (n_features + 1, 1) 的权重矩阵
+    w = np.random.randn(n_features + 1, 1) * 0.01
+    
+    # 用于记录损失下降历史
+    loss_history = []
+    
+    # 3. 梯度下降迭代
+    for epoch in range(epochs):
+        # 前向传播：计算预测值
+        y_pred = np.dot(X_train_bias, w)
+        
+        # 计算当前的 MSE 损失
+        loss = (1 / (2 * m)) * np.sum((y_pred - y_train) ** 2)
+        loss_history.append(loss)
+        
+        # 反向传播：计算梯度并更新参数
+        gradient = (1 / m) * np.dot(X_train_bias.T, (y_pred - y_train))
+        w = w - learning_rate * gradient
+        
+        # 打印训练进度
+        if epoch % 100 == 0:
+            print(f"Epoch {epoch} | MSE Loss: {loss:.4f}")
+            
+    return w, loss_history
+</code></pre>
+
+        <div class="academic-highlight">
+            <strong>🚀 实验结语</strong><br>
+            通过对波士顿房价的预测，你已经推开了人工智能世界的大门。从最简单的 $y = wx + b$ 出发，未来你可以将线性映射替换为非线性的激活函数，将单层叠加为多层，这套思想就是支撑起 ChatGPT、AlphaGo 等一切现代深度学习大模型的基础架构。继续前进吧！
+        </div>
+
     </div>
-  </div>
 
-  <div class="tip">
-    最终成果应包含代码、图表、训练过程、评价指标和预测交互，而不只是静态的预测结果。
-  </div>
-</div>
+    <script>
+        (function initDynamicContent() {
+            const canvas = document.getElementById('weightsChart');
+            
+            // 轮询等待外部库加载完毕
+            if (!canvas || typeof Chart === 'undefined' || typeof hljs === 'undefined') {
+                setTimeout(initDynamicContent, 100);
+                return;
+            }
+
+            // 执行代码高亮
+            hljs.highlightAll();
+
+            // 避免重复绘制图表
+            if (window.myWeightsChart) { window.myWeightsChart.destroy(); }
+
+            const ctx = canvas.getContext('2d');
+            
+            // 模拟波士顿房价数据集训练后真实的标准化权重特征
+            const features = ['RM (房间数)', 'RAD (公路便利度)', 'CHAS (临河虚拟量)', 'CRIM (犯罪率)', 'PTRATIO (师生比)', 'NOX (空气污染)', 'DIS (距就业中心)', 'LSTAT (弱势群体)'];
+            const weights = [3.02, 1.55, 0.82, -0.98, -1.90, -2.05, -3.10, -3.74];
+            
+            // 根据正负值动态分配颜色
+            const backgroundColors = weights.map(w => w > 0 ? 'rgba(59, 130, 246, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+
+            window.myWeightsChart = new Chart(ctx, {
+                type: 'bar', // 水平条形图对于展示特征非常友好
+                data: {
+                    labels: features,
+                    datasets: [{
+                        label: '特征权重 (Standardized Weight)',
+                        data: weights,
+                        backgroundColor: backgroundColors,
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y', // 设置为水平方向
+                    responsive: true,
+                    animation: false,
+                    plugins: { 
+                        legend: { display: false } 
+                    },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: '参数权重值 (绝对值越大影响越强)' }, 
+                            grid: { color: '#f1f5f9' },
+                            suggestedMin: -4,
+                            suggestedMax: 4
+                        },
+                        y: { 
+                            grid: { display: false },
+                            ticks: { font: { family: 'Inter', size: 13 } }
+                        }
+                    }
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

@@ -1,76 +1,192 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：模型定义与一元线性映射</title>
+    
+    <script>
+        window.MathJax = {
+            tex: { inlineMath: [['$', '$'], ['\\(', '\\)']], displayMath: [['$$', '$$'], ['\\[', '\\]']] },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>训练模型</h1>
-    <p>本实验训练的是简单线性回归模型。每次只使用一个特征 x，预测房价标签 MEDV。</p>
-  </div>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        :root { 
+            --text-main: #0f172a; 
+            --text-body: #334155; 
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            max-width: 960px; 
+            text-align: left;
+        }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); border-bottom: 1px solid var(--border-color); padding-bottom: 12px; margin-bottom: 24px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
+        
+        /* 纯净公式块：无边框、无底色 */
+        .math-display { padding: 12px 0; font-size: 1.2em; color: var(--text-main); margin: 16px 0; overflow-x: auto; text-align: center; }
+        
+        /* 教科书级引用块 */
+        .textbook-quote { margin: 24px 0; padding-left: 20px; border-left: 4px solid var(--accent-blue); color: var(--text-body); }
+        .textbook-quote strong { color: var(--text-main); display: block; margin-bottom: 8px;}
+        
+        /* 补充说明提示块 */
+        .academic-note { background-color: #f1f5f9; border-left: 4px solid #94a3b8; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #475569; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>1. 核心模型</h2>
-    <span class="formula">ŷ = wx + b</span>
-    <p>在房价预测实验中，x 可以是 RM、LSTAT、PTRATIO 等任意一个被选中的特征，ŷ 是预测的 MEDV。</p>
-    <ul class="theory-list">
-      <li><strong>w：</strong>权重或斜率，表示特征 x 增加时预测房价的变化趋势。</li>
-      <li><strong>b：</strong>偏置或截距，表示回归线的整体上下位置。</li>
-      <li><strong>ŷ：</strong>模型预测的房价中位数。</li>
-    </ul>
-  </div>
+        .chart-wrapper { margin: 40px 0; max-width: 750px; }
+        pre { margin: 24px 0; padding: 20px; background-color: #f8fafc; border-radius: 6px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 14px; overflow-x: auto; border: 1px solid var(--border-color);}
+    </style>
+</head>
+<body>
 
-  <div class="theory-card">
-    <h2>2. 手动实现模型训练</h2>
-    <p>本实验强调从零实现梯度下降算法，不依赖高级模型库直接完成训练。学生需要理解预测、误差、损失、梯度和参数更新之间的关系。</p>
-    <div class="step"><div class="step-num">1</div><div class="step-body">初始化参数 w 和 b，例如 w = 0，b = 0。</div></div>
-    <div class="step"><div class="step-num">2</div><div class="step-body">根据当前参数计算预测值 ŷ = wx + b。</div></div>
-    <div class="step"><div class="step-num">3</div><div class="step-body">计算预测值与真实 MEDV 的误差。</div></div>
-    <div class="step"><div class="step-num">4</div><div class="step-body">计算 MSE 损失函数。</div></div>
-    <div class="step"><div class="step-num">5</div><div class="step-body">根据梯度更新 w 和 b。</div></div>
-  </div>
+    <div>
+        <h1>模型定义：一元线性映射与参数的业务逻辑</h1>
+        
+        <p>在完成了数据探索与预处理后，我们得到了纯净的自变量 $x$（特征：例如房屋的房间数）和因变量 $y$（标签：真实的房屋价格）。现在的核心任务是：构建一个数学上的“映射机器”，让计算机能够根据我们输入的任意 $x$，自动输出一个预测的房价 $\hat{y}$。</p>
 
-  <div class="theory-card">
-    <h2>3. 模型训练可视化</h2>
-    <p>实验界面可以同时展示样本点、当前回归线和最优参考线。随着训练轮数增加，当前回归线会逐渐靠近更合理的位置。</p>
-    <table>
-      <tr><th>可视化内容</th><th>作用</th></tr>
-      <tr><td>样本点</td><td>显示特征 x 与 MEDV 的真实分布</td></tr>
-      <tr><td>当前回归线</td><td>显示当前参数 w、b 对应的模型</td></tr>
-      <tr><td>最优参考线</td><td>帮助观察当前模型与较优模型的差距</td></tr>
-      <tr><td>Loss 曲线</td><td>观察训练过程是否收敛</td></tr>
-    </table>
-  </div>
+        <p>基于奥卡姆剃刀原理（如无必要，勿增实体），在探索未知规律时，我们总是从最简单的假设开始。因此，我们假设房价与房间数之间存在着最基础的<strong>线性关系（Linearity）</strong>。</p>
 
-  <div class="theory-card">
-    <h2>4. 不同特征对应不同模型</h2>
-    <p>选择 RM 时，训练的是 RM → MEDV 的简单线性模型；选择 LSTAT 时，训练的是 LSTAT → MEDV 的简单线性模型。不同特征会得到不同的 w、b 和评价指标。</p>
-    <span class="formula">RM 模型：MEDV = w × RM + b<br>LSTAT 模型：MEDV = w × LSTAT + b<br>PTRATIO 模型：MEDV = w × PTRATIO + b</span>
-  </div>
+        <h2>1. 数学抽象：构造一元线性方程</h2>
+        <p>在二维空间中，任何一条直线都可以被两个参数完全确定：斜率和截距。在机器学习中，我们将其写为如下标准形式：</p>
 
-  <div class="tip">
-    判断模型是否训练成功，不只看回归线是否“看起来合理”，还要看 Loss 是否下降，以及 RMSE、MAE、R² 是否改善。
-  </div>
-</div>
+        <div class="math-display">
+            $$ f(x) = wx + b $$
+        </div>
+
+        <div class="textbook-quote">
+            <strong>参数的深层业务含义与经济学直觉</strong><br>
+            在这条看似简单的初中代数公式背后，隐藏着极其直观的业务逻辑：<br>
+            • <strong>权重参数 $w$ (Weight)：</strong> 在经济学上相当于“边际溢价”。它代表着特征 $x$ 每增加一个单位（即多建一个房间），房屋的整体价格预计会上涨多少。它决定了整条预测直线的“倾斜程度”。<br>
+            • <strong>偏置参数 $b$ (Bias)：</strong> 相当于方程的“截距”。在业务上，它可以被理解为该地区房屋的“基础底价”或“地皮价值”。即使极端假设房间数 $x=0$，这套房产也有一个基础的地段价值 $b$。
+        </div>
+
+        <h2>2. 从单一样本到批量计算 (Vectorization)</h2>
+        <p>在现实的工业实战中，我们绝不会使用极其低效的 Python <code>for</code> 循环去一条一条地计算 506 套房子的预测价格。由于 Python 的核心计算库 NumPy 具备强大的<strong>数组广播机制（Broadcasting）</strong>，我们可以将整个包含 $m$ 个样本的特征向量 $\mathbf{x}$ 一次性代入公式。</p>
+
+        <p>此时，模型输出的将不再是一个单独的标量，而是一个包含了所有样本预测结果的预测向量 $\mathbf{\hat{y}}$：</p>
+
+        <div class="math-display">
+            $$ \mathbf{\hat{y}} = w\mathbf{x} + b $$
+        </div>
+
+        <div class="academic-note">
+            <strong>🎓 符号规范提醒：</strong><br>
+            在学术界，我们通常用带帽子的 $\hat{y}$（y-hat）来表示模型“估算/预测出来的值”，以此来严格区分数据集中原本“真实的标签值” $y$。接下来的所有优化算法，其终极目的都是在努力缩小 $\hat{y}$ 与 $y$ 之间的差距。
+        </div>
+
+        <h2>3. 代码实现：前向传播 (Forward Propagation)</h2>
+        <p>将上述严谨的数学逻辑转化为代码其实非常简单。借助于 NumPy，我们只需要编写一行极简的代码，就能瞬间完成海量数据的前向预测计算：</p>
+
+<pre><code class="language-python">import numpy as np
+
+def predict(x, w, b):
+    """
+    一元线性回归的模型定义 (前向计算)
+    
+    参数:
+    x: numpy 数组, 包含所有样本的单一特征 (如所有房子的房间数)
+    w: 浮点数, 权重参数 (斜率)
+    b: 浮点数, 偏置参数 (截距)
+    
+    返回:
+    y_pred: numpy 数组, 包含所有样本的预测房价
+    """
+    # 利用 NumPy 的自动广播机制，一次性对所有样本进行标量乘法与加法计算
+    y_pred = w * x + b
+    
+    return y_pred
+</code></pre>
+
+        <h2>4. 可视化直觉：在散点中寻找直线</h2>
+        <p>在算法刚开始运行时，模型处于“未经训练”的懵懂状态。此时的 $w$ 和 $b$ 往往是随机猜出来的初始化数字。因此，此时模型画出的直线通常会偏离真实的数据群极其遥远。</p>
+
+        <div class="chart-wrapper">
+            <canvas id="modelChart" height="120"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：未经训练的初始线性模型（红线）与实际房屋数据点的分布对比</p>
+        </div>
+
+        <p>看着上面这条偏离轨道的红线，你自然会产生一个疑问：计算机怎么知道这条线画得“到底有多差”？它又要如何通过数学手段来“自动纠正”这根线条的位置呢？<br><br>带着这个问题，请进入下一节，我们将定义用来精准衡量这种差距的标尺——<strong>损失函数（Loss Function）</strong>。</p>
+
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const canvas = document.getElementById('modelChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            
+            // 真实的房间数与房价数据（学术灰散点）
+            const scatterData = [
+                {x: 4.1, y: 11}, {x: 4.5, y: 15}, {x: 4.8, y: 14}, {x: 5.0, y: 19}, 
+                {x: 5.3, y: 22}, {x: 5.8, y: 20}, {x: 6.0, y: 24}, {x: 6.2, y: 28}, 
+                {x: 6.6, y: 32}, {x: 7.0, y: 35}, {x: 7.4, y: 40}, {x: 7.8, y: 44}, {x: 8.2, y: 48}
+            ];
+
+            // 随机初始化的模型预测线 (例如瞎猜一个完全不对的斜率和截距)
+            const initialLine = [{x: 4.0, y: 28}, {x: 8.5, y: 14.5}];
+
+            new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: '真实房屋数据点 (Ground Truth)',
+                            data: scatterData,
+                            backgroundColor: 'rgba(37, 99, 235, 0.7)',
+                            borderColor: '#1d4ed8',
+                            pointRadius: 5
+                        },
+                        {
+                            type: 'line',
+                            label: '未训练的初始模型 (随机瞎猜)',
+                            data: initialLine,
+                            borderColor: '#ef4444', // 醒目的警示红，代表错误/未优化
+                            borderWidth: 3,
+                            fill: false,
+                            pointRadius: 0
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    animation: false, 
+                    plugins: { legend: { position: 'top', labels: { font: { family: 'Inter', size: 13 } } } },
+                    scales: {
+                        x: { 
+                            title: { display: true, text: '房间数 x (RM)' },
+                            grid: { display: false },
+                            min: 3.5, max: 9.0
+                        },
+                        y: { 
+                            title: { display: true, text: '预测房价 y (MEDV)' },
+                            grid: { color: '#f1f5f9' },
+                            min: 0, max: 55
+                        }
+                    }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

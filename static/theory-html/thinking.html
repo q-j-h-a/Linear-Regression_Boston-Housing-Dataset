@@ -1,89 +1,226 @@
-<style>
-  .theory-page{font-family:"Microsoft YaHei",Arial,sans-serif;color:#1f2937;line-height:1.85;padding:8px 4px 28px;}
-  .theory-hero{background:linear-gradient(135deg,#f5f3ff,#eef2ff);border:1px solid #ddd6fe;border-radius:18px;padding:22px 24px;margin-bottom:18px;}
-  .theory-hero h1{margin:0 0 8px;font-size:26px;color:#4f46e5;}
-  .theory-hero p{margin:0;color:#4b5563;}
-  .theory-card{background:#fff;border:1px solid #e5e7eb;border-radius:16px;padding:18px 20px;margin:16px 0;box-shadow:0 6px 18px rgba(15,23,42,.05);}
-  .theory-card h2{font-size:21px;margin:0 0 10px;color:#111827;border-left:5px solid #6d5dfc;padding-left:10px;}
-  .theory-card h3{font-size:18px;margin:18px 0 8px;color:#374151;}
-  .theory-card p{margin:8px 0;}
-  .theory-list{padding-left:22px;margin:8px 0;}
-  .theory-list li{margin:6px 0;}
-  .formula{display:block;background:#f8fafc;border:1px solid #e5e7eb;border-radius:12px;padding:12px 14px;margin:12px 0;font-family:Consolas,"Courier New",monospace;color:#111827;overflow-x:auto;}
-  .note{background:#fffbeb;border-left:5px solid #f59e0b;border-radius:10px;padding:12px 14px;margin:12px 0;color:#78350f;}
-  .tip{background:#ecfdf5;border-left:5px solid #10b981;border-radius:10px;padding:12px 14px;margin:12px 0;color:#064e3b;}
-  .warn{background:#fef2f2;border-left:5px solid #ef4444;border-radius:10px;padding:12px 14px;margin:12px 0;color:#7f1d1d;}
-  .grid-2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;}
-  .mini-card{background:#f9fafb;border:1px solid #e5e7eb;border-radius:14px;padding:14px;}
-  table{width:100%;border-collapse:collapse;margin:12px 0;background:#fff;}
-  th,td{border:1px solid #e5e7eb;padding:10px;text-align:center;}
-  th{background:#f3f4f6;color:#111827;}
-  .step{display:flex;gap:12px;margin:12px 0;align-items:flex-start;}
-  .step-num{flex:0 0 30px;height:30px;border-radius:50%;background:#6d5dfc;color:#fff;text-align:center;line-height:30px;font-weight:700;}
-  .step-body{flex:1;}
-  .tag{display:inline-block;background:#ede9fe;color:#5b21b6;border-radius:999px;padding:2px 10px;font-size:13px;margin-right:6px;}
-  @media(max-width:760px){.grid-2{grid-template-columns:1fr}.theory-hero h1{font-size:22px}}
-</style>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>实验：拓展思考与进阶</title>
+    
+    <script>
+        window.MathJax = {
+            tex: {
+                inlineMath: [['$', '$'], ['\\(', '\\)']],
+                displayMath: [['$$', '$$'], ['\\[', '\\]']]
+            },
+            svg: { fontCache: 'global' }
+        };
+    </script>
+    <script async src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>
+    
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.8.0/highlight.min.js"></script>
 
-<div class="theory-page">
-  <div class="theory-hero">
-    <h1>思考拓展</h1>
-    <p>本部分用于引导学生从简单线性回归出发，进一步思考模型适用条件、过拟合问题和更复杂的回归模型。</p>
-  </div>
+    <style>
+        :root {
+            --text-main: #0f172a;
+            --text-body: #334155;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --bg-color: #ffffff;
+            --accent-blue: #2563eb;
+        }
+        
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        
+        body { 
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; 
+            background-color: transparent; 
+            color: var(--text-body); 
+            padding: 40px 60px; 
+            text-align: left;
+        }
+        
+        .content-container { max-width: 960px; margin-left: 0; }
+        
+        h1 { font-size: 28px; font-weight: 700; color: var(--text-main); margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;}
+        h2 { font-size: 20px; font-weight: 600; color: var(--text-main); margin: 40px 0 16px; display: flex; align-items: center;}
+        h2::before { content: ""; display: inline-block; width: 4px; height: 18px; background-color: var(--accent-blue); margin-right: 10px; border-radius: 2px;}
+        h3 { font-size: 16px; font-weight: 600; color: var(--text-main); margin: 24px 0 12px; }
+        p { font-size: 15px; line-height: 1.8; margin-bottom: 16px; text-align: justify; }
+        
+        .chart-wrapper { background: var(--bg-color); border: 1px solid var(--border-color); border-radius: 8px; padding: 24px; margin: 24px 0; max-width: 850px; }
+        
+        .math-display { padding: 16px 20px; font-size: 1.1em; color: var(--text-main); background-color: #f8fafc; border-radius: 6px; margin: 16px 0; overflow-x: auto; text-align: center; border: 1px solid #e2e8f0; }
+        
+        .academic-highlight { background-color: #eff6ff; border-left: 4px solid #3b82f6; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #1e3a8a; line-height: 1.6; border-radius: 0 4px 4px 0; }
+        .academic-warning { background-color: #f8fafc; border-left: 4px solid #64748b; padding: 16px; margin: 20px 0; font-size: 14.5px; color: #334155; line-height: 1.6; border-radius: 0 4px 4px 0; }
 
-  <div class="theory-card">
-    <h2>1. 一个特征真的足够预测房价吗？</h2>
-    <p>简单线性回归只使用一个特征，例如 RM 或 LSTAT。它适合教学和解释，但真实房价往往受到多个因素共同影响。因此单特征模型可能无法捕捉全部房价变化。</p>
-    <div class="note">
-      简单线性回归适合理解“特征与标签的基本关系”，但不一定是最终预测效果最好的模型。
+        pre { margin: 24px 0; border-radius: 8px; border: 1px solid var(--border-color); overflow: hidden; font-size: 14px; font-family: ui-monospace, SFMono-Regular, Consolas, monospace; background-color: #f6f8fa; }
+        pre code { padding: 20px !important; line-height: 1.6; }
+    </style>
+</head>
+<body>
+
+    <div class="content-container">
+        
+        <h1>拓展思考：模型的局限与进阶探索</h1>
+        
+        <p>通过前面的实验，我们成功地用线性回归模型预测了波士顿的房价。然而，在真实的工业界和学术研究中，跑通 Baseline 模型仅仅是一个开始。作为一个严谨的数据科学家，我们必须能够反思模型的局限性，并知道下一步该往哪里走。</p>
+
+        <h2>1. 线性假设的局限与过拟合</h2>
+        <p>线性回归做了一个非常强烈的假设：<strong>特征与房价之间是纯粹的直线关系</strong>。但在现实世界中，这种关系往往是非线性的。比如，房间数从 1 增加到 2 时房价可能大幅上涨，但从 10 增加到 11 时，房价可能就不会再涨那么多了（边际效益递减）。</p>
+        
+        <p>为了捕捉非线性，我们可能会引入“多项式特征”（如 $RM^2, RM^3$）。但这又会引入机器学习中最致命的敌人：<strong>过拟合（Overfitting）</strong>。</p>
+
+        <div class="chart-wrapper">
+            <canvas id="fittingChart" height="120"></canvas>
+            <p style="text-align: center; font-size: 13px; color: #64748b; margin-top: 15px; margin-bottom: 0;">图 1：欠拟合 (Underfitting) vs 良好拟合 (Good Fit) vs 过拟合 (Overfitting)</p>
+        </div>
+
+        <h2>2. 引入惩罚项：正则化 (Regularization)</h2>
+        <p>当特征过多、模型过于复杂（发生过拟合）时，模型为了强行穿过每一个训练数据点，会导致权重参数 $w$ 变得极大。为了限制这种狂野的参数，统计学家在 MSE 损失函数的基础之上，加上了对参数大小的“惩罚项”，这就是<strong>正则化</strong>。</p>
+
+        <p>最常用的是 <strong>L2 正则化（岭回归，Ridge Regression）</strong>，其新的损失函数如下：</p>
+
+        <div class="math-display">
+            $$ J(\mathbf{w}) = \text{MSE} + \lambda \sum_{j=1}^{d} w_j^2 $$
+        </div>
+
+        <p>在这个公式中，$\lambda$ 是正则化强度。我们不仅要求预测误差 MSE 尽可能小，还要求权重 $w$ 尽可能接近于 0。这迫使模型变得平滑、简单，从而在未知的测试集上表现出更强的泛化能力。</p>
+
+        <h2>3. 穿越时空的数据集：时代的局限</h2>
+        <div class="academic-warning">
+            <strong>⚠️ 数据探索的盲区：著名的 50k 截断问题 (Censored Data)</strong><br>
+            波士顿房价数据集采集于 1978 年。如果你在做数据探索（EDA）时仔细观察过真实房价的直方图，你会发现：房价在刚好达到 $50,000 的地方，出现了一个异常突起的尖峰。<br>
+            这不是因为刚好有那么多价值 5 万美元的房子，而是因为当年在统计时，<strong>凡是超过 5 万美元的房子，都被强制记录为了 5 万美元</strong>。这种数据在统计学上称为“截断数据（Censored Data）”。如果不把这些异常的 5 万美元样本剔除，你的线性回归曲线将会被严重地往下拉扯！
+        </div>
+
+        <h2>4. 工业界的下一步：拥抱生态</h2>
+        <p>在本次实验中，我们为了理解底层数学原理，利用纯粹的 NumPy 手写了梯度下降和前向传播。但在真实的工业界业务中，为了追求极致的效率和稳定性，我们通常会直接调用高度封装的机器学习库，如 <strong>Scikit-Learn</strong>。</p>
+
+        <p>以下是用 Scikit-Learn 实现带正则化的岭回归（Ridge）的工业级写法：</p>
+
+<pre><code class="language-python"># 引入 Scikit-Learn 中成熟的模型库
+from sklearn.linear_model import Ridge
+from sklearn.metrics import mean_squared_error, r2_score
+
+# 1. 声明一个 L2 正则化的岭回归模型，alpha 即为惩罚系数 lambda
+ridge_model = Ridge(alpha=1.0)
+
+# 2. 拟合训练集（底层调用了高度优化的 C/Fortran 求解器，瞬间完成）
+ridge_model.fit(X_train_norm, y_train)
+
+# 3. 在测试集上进行预测
+y_pred = ridge_model.predict(X_test_norm)
+
+# 4. 调用库内置的评估函数
+print(f"RMSE: {np.sqrt(mean_squared_error(y_test, y_pred)):.4f}")
+print(f"R^2 Score: {r2_score(y_test, y_pred):.4f}")
+</code></pre>
+
+        <div class="academic-highlight">
+            <strong>🌟 恭喜结课！</strong><br>
+            你不仅掌握了线性回归的底层代码实现，更建立起了数据科学家应有的批判性思维。接下来，你可以尝试在实验平台上调整学习率、加入正则化，或者挑战更复杂的房价预测数据集（如 Kaggle 的 Ames Housing Dataset）。
+        </div>
+
     </div>
-  </div>
 
-  <div class="theory-card">
-    <h2>2. 当特征数量远大于样本数量时会怎样？</h2>
-    <p>如果特征数量远大于样本数量，模型可能过度依赖训练数据中的偶然规律，导致在训练集上表现很好，但在新数据上表现很差。这就是过拟合风险。</p>
-    <ul class="theory-list">
-      <li>模型参数过多，容易记住训练样本。</li>
-      <li>不同特征之间可能存在强相关，导致参数不稳定。</li>
-      <li>训练误差低，不代表预测新样本也准确。</li>
-    </ul>
-  </div>
+    <script>
+        (function initDynamicContent() {
+            const canvas = document.getElementById('fittingChart');
+            
+            // 轮询等待外部库加载完毕
+            if (!canvas || typeof Chart === 'undefined' || typeof hljs === 'undefined') {
+                setTimeout(initDynamicContent, 100);
+                return;
+            }
 
-  <div class="theory-card">
-    <h2>3. 如何判断模型是否过拟合？</h2>
-    <p>可以把数据划分为训练集和测试集，对比两部分的指标。</p>
-    <table>
-      <tr><th>现象</th><th>可能含义</th></tr>
-      <tr><td>训练集误差低，测试集误差也低</td><td>模型泛化较好</td></tr>
-      <tr><td>训练集误差低，测试集误差高</td><td>可能过拟合</td></tr>
-      <tr><td>训练集误差高，测试集误差也高</td><td>可能欠拟合</td></tr>
-    </table>
-  </div>
+            // 执行代码高亮
+            hljs.highlightAll();
 
-  <div class="theory-card">
-    <h2>4. 过拟合有哪些解决方法？</h2>
-    <ul class="theory-list">
-      <li>增加训练数据量。</li>
-      <li>减少无关特征或弱相关特征。</li>
-      <li>使用正则化方法，例如 Ridge 或 Lasso。</li>
-      <li>使用交叉验证选择更合适的模型。</li>
-      <li>控制模型复杂度，避免盲目增加特征或高阶项。</li>
-    </ul>
-  </div>
+            // 避免重复绘制图表
+            if (window.myFitChart) { window.myFitChart.destroy(); }
 
-  <div class="theory-card">
-    <h2>5. 可继续拓展的方向</h2>
-    <table>
-      <tr><th>拓展方向</th><th>说明</th></tr>
-      <tr><td>多元线性回归</td><td>把多个特征同时输入模型，比较与简单线性回归的效果差异</td></tr>
-      <tr><td>多项式回归</td><td>用于拟合非线性关系，例如 LSTAT 与 MEDV 可能不是严格直线</td></tr>
-      <tr><td>Ridge 回归</td><td>加入 L2 正则化，缓解参数过大和共线性问题</td></tr>
-      <tr><td>Lasso 回归</td><td>加入 L1 正则化，可用于特征选择</td></tr>
-      <tr><td>交叉验证</td><td>更稳定地评估模型泛化能力</td></tr>
-    </table>
-  </div>
+            const ctx = canvas.getContext('2d');
+            
+            // 模拟散点数据 (呈现一种略微弯曲的抛物线趋势)
+            const scatterData = [];
+            for(let x=1; x<=10; x+=0.8) {
+                // y = -0.5*(x-5)^2 + 10 + noise
+                let y = -0.5 * Math.pow(x - 5, 2) + 10 + (Math.random() * 2 - 1);
+                scatterData.push({x: x, y: y});
+            }
 
-  <div class="tip">
-    可以把本实验看作回归模型学习的起点：先理解一个特征和一条直线，再逐步扩展到多个特征、非线性关系和正则化模型。
-  </div>
-</div>
+            // 1. 欠拟合直线 (Underfitting)
+            const linearFit = [{x: 1, y: 3}, {x: 10, y: 6}];
+
+            // 2. 良好拟合曲线 (Good Fit - 二次曲线)
+            const goodFit = [];
+            for(let x=1; x<=10; x+=0.2) {
+                goodFit.push({x: x, y: -0.5 * Math.pow(x - 5, 2) + 10});
+            }
+
+            // 3. 过拟合曲线 (Overfitting - 震荡穿过大部分点)
+            const overFit = [];
+            for(let x=1; x<=10; x+=0.1) {
+                let base_y = -0.5 * Math.pow(x - 5, 2) + 10;
+                let wave = Math.sin(x * 4) * 1.5;
+                overFit.push({x: x, y: base_y + wave});
+            }
+
+            window.myFitChart = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    datasets: [
+                        {
+                            label: '真实数据',
+                            data: scatterData,
+                            backgroundColor: 'rgba(71, 85, 105, 0.8)', // 沉稳的灰色散点
+                            pointRadius: 6
+                        },
+                        {
+                            type: 'line',
+                            label: '欠拟合 (简单直线)',
+                            data: linearFit,
+                            borderColor: 'rgba(245, 158, 11, 0.8)', // 橙色
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            tension: 0
+                        },
+                        {
+                            type: 'line',
+                            label: '良好拟合 (平滑曲线)',
+                            data: goodFit,
+                            borderColor: 'rgba(34, 197, 94, 0.9)', // 绿色
+                            borderWidth: 3,
+                            pointRadius: 0,
+                            tension: 0.4
+                        },
+                        {
+                            type: 'line',
+                            label: '过拟合 (复杂震荡)',
+                            data: overFit,
+                            borderColor: 'rgba(239, 68, 68, 0.7)', // 红色
+                            borderWidth: 2,
+                            pointRadius: 0,
+                            tension: 0.4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    animation: false,
+                    plugins: { 
+                        legend: { position: 'top', labels: { font: { size: 12 } } } 
+                    },
+                    scales: {
+                        x: { display: false }, // 隐藏网格和刻度，强化概念感
+                        y: { display: false }
+                    }
+                }
+            });
+        })();
+    </script>
+</body>
+</html>

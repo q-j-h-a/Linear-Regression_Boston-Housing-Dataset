@@ -2,6 +2,10 @@ function num(value, digits = 4) {
   return Number(value).toFixed(digits);
 }
 
+const BLUE_POINT = "rgba(37,99,235,.72)";
+const BLUE_POINT_SOFT = "rgba(37,99,235,.42)";
+const BLUE_POINT_MEDIUM = "rgba(37,99,235,.7)";
+
 function scatterOption(scatter, line, xName, title, yName = "MEDV") {
   const safeXName = escapeHtml(xName);
   const safeYName = escapeHtml(yName);
@@ -46,7 +50,7 @@ function scatterOption(scatter, line, xName, title, yName = "MEDV") {
       }
     ],
     series: [
-      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(91,53,245,.72)" } },
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: BLUE_POINT } },
       { name: "线性趋势", type: "line", data: lineData, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } }
     ]
   };
@@ -145,7 +149,7 @@ function predictChartOption(data = null) {
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
     ],
     series: [
-      { name: "样本点", type: "scatter", data: points, symbolSize: 7, itemStyle: { color: "rgba(91, 53, 245, .42)" } },
+      { name: "样本点", type: "scatter", data: points, symbolSize: 7, itemStyle: { color: BLUE_POINT_SOFT } },
       { name: "回归线", type: "line", data: lineData, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } },
       { name: "预测辅助线", type: "line", data: guideLine, showSymbol: false, lineStyle: { color: "#f59e0b", width: 2, type: "dashed" } },
       { name: "预测点", type: "scatter", data: [inputPoint], symbolSize: 16, itemStyle: { color: "#e23b5a", borderColor: "#fff", borderWidth: 3 } }
@@ -255,7 +259,7 @@ function trainScatterOption(frameIndex, chartData = null) {
       { type: "inside", yAxisIndex: 0, filterMode: "none" }
     ],
     series: [
-      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(91,53,245,.7)" } },
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: BLUE_POINT_MEDIUM } },
       { name: "当前回归线", type: "line", data: currentLine, showSymbol: false, lineStyle: { color: "#d9354f", width: 3 } },
       { name: "最优参考线", type: "line", data: bestLine, showSymbol: false, lineStyle: { color: "#0f9f78", width: 2.6, type: "dashed" } }
     ]
