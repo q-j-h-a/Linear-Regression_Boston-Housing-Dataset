@@ -28,13 +28,21 @@ async function setPage(page) {
     if (page === "preprocess") {
       await renderDataShell();
       if (renderToken !== pageRenderToken) return;
-      await loadDataView();
+      if (dataCache) {
+        restoreDataView();
+      } else {
+        await loadDataView();
+      }
     } else if (page === "train_eval") {
       await renderTrainShell();
     } else if (page === "predict") {
       await renderPredictShell();
       if (renderToken !== pageRenderToken) return;
-      await loadPrediction();
+      if (predictData && predictionMatchesCurrentState()) {
+        restorePredictionView();
+      } else {
+        await loadPrediction();
+      }
     } else if (page === "student") {
       await renderStudentShell();
     } else {

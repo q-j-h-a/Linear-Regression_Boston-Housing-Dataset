@@ -2,9 +2,9 @@
     "id": "metrics",
     "page": "student",
     "title": "评估标准图",
-    "subtitle": "RMSE、MAE、R2 指标",
+    "subtitle": "RMSE、MAE、R² 当前值与训练趋势",
     "renderer": "student_metrics",
-    "size": "small",
+    "size": "wide",
     "default": False,
     "order": 80,
 }

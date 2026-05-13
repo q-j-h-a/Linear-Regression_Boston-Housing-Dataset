@@ -6,7 +6,7 @@ CHART = {
     "renderer": "predict_chart",
     "size": "wide",
     "default": True,
-    "order": 30,
+    "order": 20,
 }
 
 

@@ -47,12 +47,10 @@ PANEL = {
                     "name": "predictViews",
                     "label": "显示模式",
                     "summary_id": "predictModeSummary",
-                    "storage_key": "predictSelectedViewsV1",
+                    "storage_key": "predictSelectedViewsV2",
                     "options": [
-                        {"label": "预测输入与结果", "value": "result", "default": True},
-                        {"label": "预测计算过程", "value": "calc", "default": True},
                         {"label": "预测可视化", "value": "chart", "default": True},
-                        {"label": "相近样本对比", "value": "nearby", "default": True},
+                        {"label": "预测计算过程", "value": "calc", "default": True},
                     ],
                 }
             ],

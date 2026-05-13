@@ -56,11 +56,15 @@ let studentTrainDirty = false;
 
 let studentCurrentFrame = 0;
 
+let studentHasTrained = false;
+
 let currentFrame = 0;
 
 let timer = null;
 
 let trainRenderViewsKey = "";
+
+let predictRenderViewsKey = "";
 
 let trainChartDataCache = {};
 
@@ -108,8 +112,8 @@ function saveDataGridLayout() {
 
 function gridLayoutStorageKey(mode) {
   if (mode === "train") return "trainGridLayoutV2";
-  if (mode === "predict") return "predictGridLayoutV1";
-  if (mode === "student") return "studentGridLayoutV1";
+  if (mode === "predict") return "predictGridLayoutV3";
+  if (mode === "student") return "studentGridLayoutV2";
   return "preprocessGridLayoutV4";
 }
 
@@ -120,6 +124,7 @@ function destroyDataGrid() {
   dataGrid = null;
   dataGridMode = null;
   trainRenderViewsKey = "";
+  predictRenderViewsKey = "";
   studentRenderViewsKey = "";
 }
 
@@ -223,13 +228,16 @@ function setChartOptionWhenReady(ch, option, replace = true) {
 
 function persistActiveViewSelection() {
   if (currentPage === "preprocess" && document.querySelector('input[name="dataViews"]')) {
+    persistDataFormState();
     saveCheckedValues("dataViews", "preprocessSelectedViewsV1");
   }
   if (currentPage === "train_eval" && document.querySelector('input[name="trainViews"]')) {
+    persistTrainFormState();
     saveCheckedValues("trainViews", "trainSelectedViewsV1");
   }
   if (currentPage === "predict" && document.querySelector('input[name="predictViews"]')) {
-    saveCheckedValues("predictViews", "predictSelectedViewsV1");
+    persistPredictFormState();
+    saveCheckedValues("predictViews", "predictSelectedViewsV2");
   }
   if (currentPage === "student") {
     persistStudentFormState();
@@ -240,7 +248,7 @@ function persistActiveViewSelection() {
 }
 
 const studentFormStateIds = [
-  "studentSourceType", "studentTarget", "studentFeature", "studentStd",
+  "studentSourceType", "studentTarget", "studentFeature",
   "studentW0", "studentB0", "studentLr", "studentEpochs", "studentSpeed",
   "studentPredictInput"
 ];
@@ -351,7 +359,7 @@ function loadTrainGridLayout() {
 
 function loadPredictGridLayout() {
   try {
-    return viewStateStore.predictGridLayoutV1 || {};
+    return viewStateStore.predictGridLayoutV3 || {};
   } catch (err) {
     return {};
   }
@@ -359,7 +367,7 @@ function loadPredictGridLayout() {
 
 function loadStudentGridLayout() {
   try {
-    return viewStateStore.studentGridLayoutV1 || {};
+    return viewStateStore.studentGridLayoutV2 || {};
   } catch (err) {
     return {};
   }

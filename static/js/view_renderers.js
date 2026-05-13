@@ -13,9 +13,9 @@ function studentStageStrip() {
   </div>`;
 }
 
-function studentPreviewTable(rows) {
+function studentPreviewTable(rows, explicitColumns = null) {
   if (!rows.length) return `<div class="empty-state">暂无预览数据。</div>`;
-  const columns = Object.keys(rows[0]);
+  const columns = explicitColumns?.length ? explicitColumns : Object.keys(rows[0]);
   return `<div class="table-wrap"><table><thead><tr>${columns.map(col => `<th>${escapeHtml(col)}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${columns.map(col => `<td>${escapeHtml(row[col] ?? "")}</td>`).join("")}</tr>`).join("")}</tbody></table></div>`;
 }
 
@@ -25,13 +25,14 @@ function standardizeTableHtml(rows = []) {
 }
 
 function studentInfoCard(key, title, sub, html) {
-  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">${escapeHtml(sub || "")}</div></div></div><div style="padding:18px">${html}</div></section>`;
+  const subHtml = sub ? `<div class="chart-sub">${escapeHtml(sub)}</div>` : "";
+  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div>${subHtml}</div></div><div style="padding:18px">${html}</div></section>`;
 }
 
 function studentViewHtml(view, chartData = null) {
   const meta = studentChartMeta(view);
   const title = meta?.title || chartTitle(view);
-  const sub = meta?.subtitle || chartSub(view, studentData || studentTrainData || studentPredictData);
+  const sub = meta?.subtitle ?? chartSub(view, studentData || studentTrainData || studentPredictData);
   if (meta?.renderer === "student_table") {
     if (chartData?.stage === "train_prepare") return studentInfoCard(`student_${view}`, title, sub, tableHtmlFromRows(chartData.rows, studentCurrentFrame));
     return studentInfoCard(`student_${view}`, title, sub, standardizeTableHtml(chartData?.rows || studentData?.standardize_table || []));
@@ -48,13 +49,14 @@ function studentViewHtml(view, chartData = null) {
 function studentDataViewHtml(view, data) {
   if (view === "raw") return chartCardHtml("student_raw", "原始散点图", `${data.feature} 与 ${data.target} 的关系`);
   if (view === "standardized") return chartCardHtml("student_standardized", "预处理散点图", `${data.standardized?.feature_name || ""} 与 ${data.target || ""} 的关系`);
-  if (view === "corr") return chartCardHtml("student_corr", "相关系数", `已选特征与 ${data.target || "目标列"} 的 Pearson 相关系数`);
+  if (view === "single_corr") return chartCardHtml("student_single_corr", "单特征线性相关系数", `${data.feature} 与 ${data.target || "目标列"} 的 Pearson 相关系数`);
+  if (view === "all_corr") return chartCardHtml("student_all_corr", "全特征线性相关系数", `所有特征与 ${data.target || "目标列"} 的 Pearson 相关系数`);
   return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">标准化表</div><div class="chart-sub">当前特征集合的标准化摘要</div></div></div><div style="padding:18px">${standardizeTableHtml(data.standardize_table || [])}</div></section>`;
 }
 
 function studentTrainViewHtml(view, frame) {
   if (view === "calc") return infoCardHtml("student_calc", "本轮计算过程", calcHtml(frame));
-  if (view === "table") return infoCardHtml("student_table", "每轮参数表", tableHtml(studentCurrentFrame));
+  if (view === "table") return studentInfoCard("student_table", "参数表", "", tableHtml(studentCurrentFrame));
   if (view === "param_path") return chartCardHtml("student_param_path", "参数轨迹图", "w、b 随 epoch 的变化");
   if (view === "rmse_gauge") return chartCardHtml("student_rmse_gauge", "RMSE", "均方根误差，越小越好", "small");
   if (view === "mae_gauge") return chartCardHtml("student_mae_gauge", "MAE", "平均绝对误差，越小越好", "small");
@@ -72,47 +74,75 @@ function studentPredictViewHtml(view) {
 
 function predictViewHtml(view, chartData = null) {
   const meta = predictChartMeta(view);
-  if (meta?.renderer === "predict_result") return predictInfoCard(view, chartTitle(view), predictResultHtml(chartData));
-  if (meta?.renderer === "predict_calc") return predictInfoCard(view, chartTitle(view), predictCalcHtml(chartData));
-  if (meta?.renderer === "predict_nearby") return predictInfoCard(view, chartTitle(view), predictNearbyHtml(chartData));
-  return chartCardHtml(view, chartTitle(view), chartSub(view, predictData), meta?.size || "wide");
+  const title = meta?.title || chartTitle(view);
+  const sub = meta?.subtitle || chartSub(view, predictData);
+  if (meta?.renderer === "predict_result") return predictInfoCard(view, title, sub, predictResultHtml(chartData));
+  if (meta?.renderer === "predict_calc") return predictInfoCard(view, title, sub, predictCalcHtml(chartData));
+  if (meta?.renderer === "predict_nearby") return predictInfoCard(view, title, sub, predictNearbyHtml(chartData));
+  return chartCardHtml(view, title, sub, meta?.size || "wide");
 }
 
-function predictInfoCard(key, title, html) {
-  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">使用最优线性拟合参数预测</div></div></div><div style="padding:18px">${html}</div></section>`;
+function predictInfoCard(key, title, sub, html) {
+  return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">${escapeHtml(sub || "使用训练页当前模型参数预测")}</div></div></div><div style="padding:18px">${html}</div></section>`;
 }
 
 function predictResultHtml(data = null) {
   const d = data || predictData;
+  const inputLabel = d.input_mode === "standardized" ? "标准化输入" : "原始输入";
   return `<div class="best-param-grid">
     <div class="best-param"><span>输入特征</span><strong>${escapeHtml(d.feature)}</strong></div>
-    <div class="best-param"><span>原始输入</span><strong>${num(d.raw_value, 4)}</strong></div>
+    <div class="best-param"><span>${escapeHtml(inputLabel)}</span><strong>${num(d.input_value ?? d.raw_value, 4)}</strong></div>
     <div class="best-param"><span>模型输入 x</span><strong>${num(d.model_x, 4)}</strong></div>
     <div class="best-param"><span>预测 ${escapeHtml(d.target)}</span><strong>${num(d.prediction, 2)}</strong></div>
   </div>
-  <div class="formula-box">当前使用参数：w = ${num(d.w, 6)}, b = ${num(d.b, 6)}
+  <div class="formula-box">模型来源：${escapeHtml(d.model_source || "训练页当前模型")}
+当前使用参数：w = ${num(d.w, 6)}, b = ${num(d.b, 6)}
 目标列 ${escapeHtml(d.target)} 的预测值由当前单特征线性模型给出。</div>`;
 }
 
 function predictCalcHtml(data = null) {
   const d = data || predictData;
-  const standardize = d.use_standardized
-    ? `1. 输入标准化
-x_standardized = (x - mean) / std
-               = (${num(d.raw_value, 6)} - ${num(d.mean, 6)}) / ${num(d.std, 6)}
-               = ${num(d.model_x, 6)}
-
+  const inputValue = d.input_value ?? d.raw_value;
+  const inputStep = d.input_mode === "standardized"
+    ? `1. 读取标准化输入
+x_model = ${num(inputValue, 6)}
 `
-    : `1. 使用原始特征
-x = ${num(d.model_x, 6)}
-
+    : `1. 读取原始输入
+输入特征 ${d.feature} = ${num(inputValue, 6)}
 `;
-  return `<div class="formula-box">${standardize}2. 代入线性模型
-y_hat = w * x + b
+
+  let transformStep = "";
+  if (d.use_standardized && d.input_mode === "standardized") {
+    transformStep = `2. 换算对应的原始特征值
+x_raw = x_model * std + mean
+      = ${num(d.model_x, 6)} * ${num(d.std, 6)} + ${num(d.mean, 6)}
+      = ${num(d.raw_value, 6)}
+`;
+  } else if (d.use_standardized) {
+    transformStep = `2. 按训练时的数据版本转换模型输入
+当前模型使用标准化特征：
+x_model = (x_raw - mean) / std
+        = (${num(d.raw_value, 6)} - ${num(d.mean, 6)}) / ${num(d.std, 6)}
+        = ${num(d.model_x, 6)}
+`;
+  } else {
+    transformStep = `2. 按训练时的数据版本转换模型输入
+当前模型使用原始特征：
+x_model = x_raw = ${num(d.model_x, 6)}
+`;
+  }
+
+  return `<div class="formula-box">${inputStep}
+${transformStep}
+3. 代入训练页当前模型
+模型来源：${escapeHtml(d.model_source || "模型训练与评估页当前模型")}
+w = ${num(d.w, 6)}, b = ${num(d.b, 6)}
+
+y_hat = w * x_model + b
       = ${num(d.w, 6)} * ${num(d.model_x, 6)} + ${num(d.b, 6)}
       = ${num(d.prediction, 6)}
 
-3. 预测结果
+4. 预测结果
 预测 ${escapeHtml(d.target)} = ${num(d.prediction, 2)}</div>`;
 }
 

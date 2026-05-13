@@ -179,12 +179,15 @@ function studentMetricsOption(chartData = null) {
   const frame = chartData?.frame || studentTrainData?.history?.[studentCurrentFrame] || {};
   const metrics = chartData?.metrics || {};
   const history = studentTrainData?.history || [];
+  const rmse = metrics.rmse?.value ?? frame.rmse ?? 0;
+  const mae = metrics.mae?.value ?? frame.mae ?? 0;
+  const r2 = metrics.r2?.value ?? frame.r2 ?? 0;
   return {
     tooltip: { formatter: p => `${p.seriesName}<br>${Number(p.value).toFixed(4)}` },
     series: [
-      studentGaugeSeries("RMSE", metrics.rmse?.value ?? frame.rmse ?? 0, 0, metrics.rmse?.max || Math.max(...history.map(r => r.rmse), 1), ["18%", "52%"], "#5b35f5"),
-      studentGaugeSeries("MAE", metrics.mae?.value ?? frame.mae ?? 0, 0, metrics.mae?.max || Math.max(...history.map(r => r.mae), 1), ["50%", "52%"], "#c47a11"),
-      studentGaugeSeries("R²", Math.max(0, Math.min(1, metrics.r2?.value ?? frame.r2 ?? 0)), 0, 1, ["82%", "52%"], "#0f9f78")
+      studentGaugeSeries("RMSE", rmse, 0, metrics.rmse?.max || Math.max(...history.map(r => r.rmse), 1), ["17%", "48%"], "#5b35f5"),
+      studentGaugeSeries("MAE", mae, 0, metrics.mae?.max || Math.max(...history.map(r => r.mae), 1), ["50%", "48%"], "#c47a11"),
+      studentGaugeSeries("R²", Math.max(-1, Math.min(1, r2)), -1, 1, ["83%", "48%"], "#0f9f78")
     ]
   };
 }
@@ -221,18 +224,19 @@ function studentGaugeSeries(name, value, min, max, center, color) {
     min,
     max,
     center,
-    radius: "82%",
+    radius: "88%",
     startAngle: 205,
     endAngle: -25,
-    progress: { show: true, width: 14, itemStyle: { color } },
-    axisLine: { lineStyle: { width: 14, color: [[1, "#eef2f7"]] } },
+    splitNumber: 4,
+    progress: { show: true, width: 10, itemStyle: { color } },
+    axisLine: { lineStyle: { width: 10, color: [[1, "#eef2f7"]] } },
     axisTick: { show: false },
-    splitLine: { length: 7, lineStyle: { color: "#cbd5e1", width: 1 } },
-    axisLabel: { distance: 16, fontSize: 10, color: "#6b7280" },
-    pointer: { width: 4, length: "52%", itemStyle: { color } },
-    anchor: { show: true, size: 6, itemStyle: { color } },
-    title: { offsetCenter: [0, "58%"], fontSize: 14, fontWeight: 900, color: "#111827" },
-    detail: { valueAnimation: true, formatter: v => Number(v).toFixed(name === "R²" ? 3 : 2), offsetCenter: [0, "80%"], fontSize: 18, fontWeight: 900, color: "#111827" },
+    splitLine: { length: 6, lineStyle: { color: "#cbd5e1", width: 1 } },
+    axisLabel: { distance: 12, fontSize: 9, color: "#6b7280" },
+    pointer: { width: 3, length: "48%", itemStyle: { color } },
+    anchor: { show: true, size: 5, itemStyle: { color } },
+    title: { offsetCenter: [0, "54%"], fontSize: 13, fontWeight: 900, color: "#111827" },
+    detail: { valueAnimation: true, formatter: v => Number(v).toFixed(name === "R²" ? 3 : 2), offsetCenter: [0, "76%"], fontSize: 18, fontWeight: 900, color: "#111827" },
     data: [{ value, name }]
   };
 }

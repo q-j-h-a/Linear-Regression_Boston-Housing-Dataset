@@ -5,10 +5,10 @@ function studentStandardizedReady() {
 }
 
 function studentTargetValue(columns = studentMeta?.numeric_columns || []) {
-  const live = $("studentTarget")?.value;
-  const saved = studentMeta?.target;
+  if (studentMeta?.target && columns.includes(studentMeta.target)) return studentMeta.target;
+  const liveEl = $("studentTarget");
+  const live = liveEl && !liveEl.closest("[hidden]") ? liveEl.value : "";
   if (live && columns.includes(live)) return live;
-  if (saved && columns.includes(saved)) return saved;
   return columns[columns.length - 1] || "";
 }
 
@@ -17,15 +17,21 @@ function studentFeatureSet(features = [], target = "") {
   const saved = Array.isArray(studentMeta?.features)
     ? studentMeta.features.filter(col => features.includes(col) && col !== target)
     : [];
-  const selected = live.length ? live : (saved.length ? saved : features.slice(0, Math.min(4, features.length)));
+  const selected = live.length ? live : (saved.length ? saved : features);
   return new Set(selected);
+}
+
+function studentAllFeatureColumns(columns = studentMeta?.numeric_columns || []) {
+  const target = studentTargetValue(columns);
+  return columns.filter(col => col !== target);
 }
 
 function studentStdSelectValue() {
   if (!studentStandardizedReady()) return "0";
   const live = $("studentStd")?.value;
   if (live === "0" || live === "1") return live;
-  return studentMeta?.source_type === "standardized" ? "1" : "0";
+  if (studentMeta?.train_use_standardized === "0" || studentMeta?.train_use_standardized === "1") return studentMeta.train_use_standardized;
+  return "1";
 }
 
 function studentUseStandardized() {
@@ -37,12 +43,19 @@ function studentFeatureVersionLabel() {
 }
 
 function studentAllowedDataViews(views) {
-  const allowed = new Set(["raw", "corr"]);
+  const allowed = new Set(["raw", "single_corr", "all_corr"]);
   if (studentStandardizedReady()) {
     allowed.add("standardized");
-    allowed.add("table");
   }
   return views.filter(view => allowed.has(view));
+}
+
+function studentCurrentFeatureValue() {
+  const features = studentSelectedFeatures();
+  const live = $("studentDataFeature")?.value || $("studentFeature")?.value;
+  if (live && features.includes(live)) return live;
+  if (studentMeta?.feature && features.includes(studentMeta.feature)) return studentMeta.feature;
+  return features[0] || "";
 }
 
 function currentStudentTrainFrame(payload) {
@@ -64,7 +77,6 @@ async function renderStudentShell() {
         <div>
           <div class="eyebrow">实验部分</div>
           <h2>自主实验</h2>
-          <p class="lead">上传自己的 CSV 数据集，选择目标列和特征列，然后按数据预处理、模型训练与评估、模型预测的顺序完成一次完整实验。</p>
         </div>
       </div>
       <div id="studentWorkspace"></div>
@@ -84,7 +96,7 @@ function renderStudentPanel() {
   $("studentUploadBtn").addEventListener("click", uploadStudentDataset);
   if (!studentMeta) return;
   restoreStudentFormState();
-  $("studentTarget").addEventListener("change", () => {
+  if ($("studentTarget")) $("studentTarget").addEventListener("change", () => {
     const nextTarget = $("studentTarget").value;
     const state = viewStateStore.studentFormStateV1 || {};
     state.studentTarget = nextTarget;
@@ -97,6 +109,7 @@ function renderStudentPanel() {
     studentTrainData = null;
     studentPredictData = null;
     studentTrainDirty = false;
+    studentHasTrained = false;
     renderStudentPanel();
     renderStudentWorkspace();
   });
@@ -108,20 +121,30 @@ function renderStudentPanel() {
     studentTrainData = null;
     studentPredictData = null;
     studentTrainDirty = false;
+    studentHasTrained = false;
   }));
   updateStudentFeatureSelect();
-  $("studentPrepareDataBtn").addEventListener("click", prepareStudentDataView);
+  if ($("studentDataFeature")) $("studentDataFeature").addEventListener("change", () => {
+    studentMeta.feature = $("studentDataFeature").value;
+    if ($("studentFeature")) $("studentFeature").value = studentMeta.feature;
+    refreshStudentStageStrip();
+    if (studentData?.context_id) loadStudentDataView();
+  });
   $("studentPreprocessBtn").addEventListener("click", preprocessStudentDataset);
   $("studentDataBtn").addEventListener("click", loadStudentDataView);
   $("studentTrainBtn").addEventListener("click", prepareStudentTraining);
   $("studentResetBtn").addEventListener("click", () => {
     stopAuto();
     if (studentTrainDirty) return showStudentMessage("训练参数已修改，请先重新点击“准备训练”。", true);
+    studentHasTrained = false;
     renderStudentTrainFrame(0);
+    refreshStudentTrainStatus();
   });
   $("studentStepBtn").addEventListener("click", () => {
     if (studentTrainDirty) return showStudentMessage("训练参数已修改，请先重新点击“准备训练”。", true);
+    studentHasTrained = true;
     renderStudentTrainFrame(studentCurrentFrame + 1);
+    refreshStudentTrainStatus();
   });
   $("studentAutoBtn").addEventListener("click", startStudentAuto);
   $("studentPauseBtn").addEventListener("click", stopAuto);
@@ -131,9 +154,12 @@ function renderStudentPanel() {
   bindRangeStepperButtons();
   ["studentStd", "studentW0", "studentB0", "studentLr", "studentEpochs"].forEach(id => {
     const el = $(id);
-    if (el) el.addEventListener("change", markStudentTrainingDirty);
+    if (el) el.addEventListener("change", () => {
+      if (id === "studentStd") studentMeta.train_use_standardized = el.value;
+      markStudentTrainingDirty();
+    });
   });
-  $("studentFeature").addEventListener("change", markStudentTrainingDirty);
+  if ($("studentFeature")) $("studentFeature").addEventListener("change", markStudentTrainingDirty);
   $("studentPreparePredictBtn").addEventListener("click", prepareStudentPredictionView);
   $("studentPredictBtn").addEventListener("click", loadStudentPrediction);
   document.querySelectorAll('input[name="studentDataViews"]').forEach(el => el.addEventListener("change", () => {
@@ -157,36 +183,44 @@ function studentFormatCardHtml(message = "") {
     { area: 120, rooms: 3, price: 180 }
   ];
   const stdRows = [
-    { area: 80, rooms: 2, price: 120, area_standardized: -1.1355, rooms_standardized: -1.2247 },
-    { area: 100, rooms: 3, price: 160, area_standardized: -0.1622, rooms_standardized: 0 },
-    { area: 120, rooms: 3, price: 180, area_standardized: 0.8111, rooms_standardized: 0 }
+    { area_standardized: -1.1355, rooms_standardized: -1.2247, price: 120 },
+    { area_standardized: -0.1622, rooms_standardized: 0, price: 160 },
+    { area_standardized: 0.8111, rooms_standardized: 0, price: 180 }
   ];
   return `<section class="chart-card wide">
     <div class="chart-head">
       <div>
         <div class="chart-title">数据格式</div>
-        <div class="chart-sub">CSV 列名、原始数据和预处理数据示例</div>
       </div>
     </div>
     <div class="info-card-body" style="padding:18px">
+      <div class="format-intro">
+        <p><strong>规则：</strong>系统始终把 CSV 最后一列作为标签列 y；最后一列不参与预处理标准化，其余数值列作为特征列 x 并生成 <code>特征名_standardized</code>。</p>
+        <p>CSV 第一行必须是列名，至少包含 1 个数值特征列和 1 个数值目标列，最后一列作为目标列。原始数据集可以点击预处理生成 <code>特征名_standardized</code> 列；已预处理数据集应使用标准化特征列和目标列。</p>
+      </div>
       <div class="format-grid">
-        <div>
-          <p>CSV 第一行必须是列名，至少包含 1 个数值特征列和 1 个数值目标列。原始数据集可以点击预处理生成 <code>特征名_standardized</code> 列；已预处理数据集建议保留原始特征列、目标列和对应标准化列。</p>
-          <div class="format-points">
-            <div class="format-point"><strong>原始数据集</strong>只需要原始特征列和目标列，例如 <code>area</code>、<code>rooms</code>、<code>price</code>。</div>
-            <div class="format-point"><strong>已预处理数据集</strong>需要同时包含原始特征列、目标列和 <code>特征名_standardized</code> 列。</div>
-          </div>
-        </div>
-        <div>
+        <div class="format-column">
+          <div class="format-point"><strong>原始数据集</strong>只需要原始特征列和目标列，目标列放最后，例如 <code>area</code>、<code>rooms</code>、<code>price</code>。</div>
           <p class="sample-caption">原始 CSV 示例</p>
           ${studentPreviewTable(rawRows)}
-          <p class="sample-caption" style="margin-top:14px">预处理后 CSV 示例</p>
+        </div>
+        <div class="format-column">
+          <div class="format-point"><strong>已预处理数据集</strong>使用 <code>特征名_standardized</code> 列和目标列，目标列放最后。</div>
+          <p class="sample-caption">预处理后 CSV 示例</p>
           ${studentPreviewTable(stdRows)}
         </div>
       </div>
+      ${!studentMeta ? `<div class="format-upload-hint">请先在右侧上传 CSV 数据集。</div>` : ""}
       ${message ? `<p class="status-line">${escapeHtml(message)}</p>` : ""}
     </div>
   </section>`;
+}
+
+function studentPreviewColumns() {
+  if (Array.isArray(studentMeta?.preview_columns) && studentMeta.preview_columns.length) {
+    return studentMeta.preview_columns;
+  }
+  return studentMeta?.preview?.[0] ? Object.keys(studentMeta.preview[0]) : [];
 }
 
 function studentUploadPlaceholderHtml() {
@@ -194,24 +228,28 @@ function studentUploadPlaceholderHtml() {
     <div class="chart-head">
       <div>
         <div class="chart-title">数据集上传</div>
-        <div class="chart-sub">在右侧选择 CSV 文件并点击“加载数据集”</div>
       </div>
     </div>
-    <div class="empty-state">请先在右侧上传 CSV 数据集。</div>
+    <div class="empty-state student-upload-empty">请先在右侧上传 CSV 数据集。</div>
   </section>`;
 }
 
 function studentPreviewCardHtml() {
   const preview = studentMeta?.preview || [];
+  const isPreprocessed = studentMeta?.preview_stage === "preprocessed";
+  const title = isPreprocessed ? "预处理预览" : "数据预览";
+  const sub = isPreprocessed
+    ? `已生成标准化特征列，目标列 ${escapeHtml(studentMeta?.target || "--")} 保留在最后`
+    : `检测到 ${escapeHtml(studentMeta?.row_count ?? "--")} 行，数值列 ${escapeHtml(studentMeta?.numeric_columns?.length ?? "--")} 个`;
   return `<section class="chart-card wide">
     <div class="chart-head">
       <div>
-        <div class="chart-title">数据预览</div>
-        <div class="chart-sub">检测到 ${escapeHtml(studentMeta?.row_count ?? "--")} 行，数值列 ${escapeHtml(studentMeta?.numeric_columns?.length ?? "--")} 个</div>
+        <div class="chart-title">${title}</div>
+        <div class="chart-sub">${sub}</div>
       </div>
     </div>
     <div class="info-card-body" style="padding:18px">
-      ${studentPreviewTable(preview)}
+      ${studentPreviewTable(preview, studentPreviewColumns())}
     </div>
   </section>`;
 }
@@ -220,7 +258,7 @@ function renderStudentWorkspace(message = "") {
   $("studentWorkspace").innerHTML = `
     ${studentMeta ? studentStageStrip() : ""}
     <div class="chart-grid" id="studentChartGrid"></div>`;
-  renderStudentGrid(studentMeta ? ["format", "preview"] : ["format", "upload"], view => {
+  renderStudentGrid(studentMeta ? ["preview"] : ["format"], view => {
     if (view === "format") return studentFormatCardHtml(message);
     if (view === "preview") return studentPreviewCardHtml();
     return studentUploadPlaceholderHtml();
@@ -238,6 +276,10 @@ function restoreStudentWorkspaceState() {
     return;
   }
   if (studentStageKind === "data" && studentData) {
+    if (studentData.preview) {
+      renderStudentWorkspace();
+      return;
+    }
     if (studentData.raw || studentData.context_id) renderStudentDataDashboard();
     else renderStudentStandardizeTable(studentData.standardize_table || []);
   }
@@ -264,8 +306,20 @@ function markStudentTrainingDirty() {
   showStudentMessage("训练参数已修改，请重新点击“准备训练”生成新的训练过程。");
 }
 
+function refreshStudentTrainStatus() {
+  const el = $("studentTrainStatus");
+  if (!el) return;
+  el.textContent = studentHasTrained ? "\u5df2\u8bad\u7ec3" : "\u672a\u8bad\u7ec3";
+  el.className = `section-status ${studentHasTrained ? "ready" : ""}`;
+}
+
 function studentSelectedFeatures() {
-  return [...document.querySelectorAll('input[name="studentFeatures"]:checked')].map(el => el.value);
+  const checked = [...document.querySelectorAll('input[name="studentFeatures"]:checked')]
+    .filter(el => !el.closest("[hidden]"))
+    .map(el => el.value);
+  if (checked.length) return checked;
+  const columns = studentMeta?.numeric_columns || [];
+  return studentAllFeatureColumns(columns);
 }
 
 function updateStudentFeatureSelect() {
@@ -280,11 +334,12 @@ function updateStudentFeatureSelect() {
 function studentPayload(extra = {}) {
   const features = studentSelectedFeatures();
   const useStandardized = studentUseStandardized();
+  const feature = studentCurrentFeatureValue();
   return {
     dataset_id: studentMeta?.dataset_id,
-    target: $("studentTarget")?.value,
+    target: $("studentTarget")?.value || studentTargetValue(),
     features,
-    feature: $("studentFeature")?.value || features[0],
+    feature,
     use_standardized: useStandardized,
     ...extra
   };
@@ -324,8 +379,11 @@ async function uploadStudentDataset() {
     if (!resp.ok) throw new Error(data.error || `上传失败，状态码 ${resp.status}`);
     studentMeta = data;
     studentMeta.standardized_ready = data.source_type === "standardized";
-    studentMeta.target = "";
-    studentMeta.features = [];
+    studentMeta.target = data.target || studentTargetValue(data.numeric_columns || []);
+    studentMeta.features = data.features || studentAllFeatureColumns(data.numeric_columns || []);
+    studentMeta.feature = studentMeta.features[0] || "";
+    studentMeta.preview_columns = data.preview_columns || data.columns || [];
+    studentMeta.preview_stage = "raw";
     studentData = null;
     studentPredictData = null;
     studentTrainData = null;
@@ -333,6 +391,7 @@ async function uploadStudentDataset() {
     studentStage = "数据集";
     studentStageKind = "dataset";
     studentTrainDirty = false;
+    studentHasTrained = false;
     renderStudentPanel();
     renderStudentWorkspace("数据集已加载，请选择目标列和特征列。");
   } catch (err) {
@@ -356,10 +415,11 @@ function prepareStudentDataView() {
   studentStageKind = "data";
   renderStudentWorkspace(studentStandardizedReady() ? "已准备数据预处理区域。可以查看原始数据、预处理数据和标准化表。" : "已准备数据预处理区域。当前先使用原始特征，点击“预处理”后可以查看标准化结果。");
   const views = studentAllowedDataViews(selectedValues("studentDataViews"));
-  renderStudentGrid(views.length ? views : studentAllowedDataViews(["raw", "standardized", "corr"]), view => {
+  renderStudentGrid(views.length ? views : studentAllowedDataViews(["raw", "standardized", "single_corr", "all_corr"]), view => {
     if (view === "raw") return chartCardHtml("student_raw", "原始散点图", "点击“看数据”后显示当前特征与目标列的原始关系");
     if (view === "standardized") return chartCardHtml("student_standardized", "预处理散点图", "点击“预处理”或“看数据”后显示标准化特征关系");
-    if (view === "corr") return chartCardHtml("student_corr", "相关系数", "点击“看数据”后显示已选特征与目标列的相关性");
+    if (view === "single_corr") return chartCardHtml("student_single_corr", "单特征线性相关系数", "点击“看数据”后显示当前特征与目标列的 Pearson 相关系数");
+    if (view === "all_corr") return chartCardHtml("student_all_corr", "全特征线性相关系数", "点击“看数据”后显示所有特征与目标列的相关性");
     return `<section class="chart-card wide"><div class="chart-head"><div><div class="chart-title">标准化表</div><div class="chart-sub">点击“预处理”后生成</div></div></div><div style="padding:18px"><div class="empty-state">等待预处理结果。</div></div></section>`;
   });
 }
@@ -370,17 +430,21 @@ async function preprocessStudentDataset() {
     studentStageKind = "data";
     const data = await runAction("student_preprocess", studentPayload());
     studentMeta.preview = data.preview;
+    studentMeta.preview_columns = data.preview_columns || [];
     studentMeta.row_count = data.row_count;
     studentMeta.target = data.target;
     studentMeta.features = data.features;
+    studentMeta.feature = studentCurrentFeatureValue() || data.features?.[0] || "";
     studentMeta.standardized_ready = true;
-    studentData = { standardize_table: data.standardize_table };
+    studentMeta.train_use_standardized = "1";
+    studentMeta.preview_stage = "preprocessed";
+    studentData = { standardize_table: data.standardize_table, preview: data.preview };
     studentTrainData = null;
     studentPredictData = null;
     studentTrainDirty = false;
+    studentHasTrained = false;
     renderStudentPanel();
-    renderStudentWorkspace("预处理完成，已生成标准化特征列。");
-    renderStudentStandardizeTable(data.standardize_table);
+    renderStudentWorkspace();
   } catch (err) {
     renderStudentWorkspace(err.message);
   }
@@ -400,6 +464,7 @@ async function loadStudentDataView() {
     studentData = await runAction("student_data_view", payload);
     studentMeta.target = payload.target;
     studentMeta.features = payload.features;
+    studentMeta.feature = payload.feature;
     refreshStudentStageStrip();
     renderStudentDataDashboard();
   } catch (err) {
@@ -421,6 +486,7 @@ function studentChartOption(view, chartData = null) {
   const meta = studentChartMeta(view);
   if (!meta) return null;
   if (meta.renderer === "scatter_trend" && chartData) return scatterOption(chartData.scatter, chartData.trend_line, chartData.x_name, meta.title, chartData.y_name);
+  if (meta.renderer === "single_corr" && chartData) return singleCorrOptionFromData(chartData);
   if (meta.renderer === "all_corr" && chartData) return allCorrOption(chartData.rows, chartData.current_feature);
   if (meta.renderer === "linear_train_scatter" && chartData) return trainScatterOption(studentCurrentFrame, chartData);
   if (meta.renderer === "loss_curve" && chartData) return lossOption(studentCurrentFrame, chartData);
@@ -451,7 +517,8 @@ async function renderStudentDataDashboard() {
     }
     if (view === "raw") ch.setOption(scatterOption(studentData.raw.scatter, studentData.raw.trend_line, studentData.feature, "原始散点图", studentData.target), true);
     if (view === "standardized") ch.setOption(scatterOption(studentData.standardized.scatter, studentData.standardized.trend_line, studentData.standardized.feature_name, "预处理散点图", studentData.target), true);
-    if (view === "corr") ch.setOption(allCorrOption(studentData.correlations, studentData.feature), true);
+    if (view === "single_corr") ch.setOption(singleCorrOptionFromData({ feature: studentData.feature, corr: studentData.raw.summary.corr }), true);
+    if (view === "all_corr") ch.setOption(allCorrOption(studentData.correlations, studentData.feature), true);
   });
 }
 
@@ -468,10 +535,13 @@ async function prepareStudentTraining() {
     studentTrainData = await runAction("student_train_prepare", payload);
     studentMeta.target = payload.target;
     studentMeta.features = payload.features;
+    studentMeta.train_use_standardized = payload.use_standardized ? "1" : "0";
     studentCurrentFrame = 0;
     studentTrainDirty = false;
+    studentHasTrained = false;
     studentPredictData = null;
     renderStudentTrainFrame(0);
+    refreshStudentTrainStatus();
   } catch (err) {
     renderStudentWorkspace(err.message);
   }
@@ -522,6 +592,8 @@ function startStudentAuto() {
   if (!studentTrainData) return;
   if (studentTrainDirty) return showStudentMessage("训练参数已修改，请先重新点击“准备训练”。", true);
   stopAuto();
+  studentHasTrained = true;
+  refreshStudentTrainStatus();
   timer = setInterval(() => {
     if (studentCurrentFrame >= studentTrainData.history.length - 1) {
       stopAuto();
@@ -637,12 +709,13 @@ function defaultStudentGridLayout(view) {
     preview: { x: 0, y: 2, w: 4, h: 2 },
     raw: { x: 0, y: 0, w: 2, h: 2 },
     standardized: { x: 2, y: 0, w: 2, h: 2 },
-    corr: { x: 0, y: 2, w: 2, h: 2 },
-    table: { x: 2, y: 2, w: 2, h: 2 },
+    single_corr: { x: 0, y: 2, w: 2, h: 2 },
+    all_corr: { x: 2, y: 2, w: 2, h: 2 },
     model_train: { x: 0, y: 0, w: 2, h: 2 },
     learning: { x: 2, y: 0, w: 2, h: 2 },
     param_path: { x: 0, y: 2, w: 2, h: 2 },
-    metrics: { x: 2, y: 2, w: 2, h: 2 },
+    metrics: { x: 0, y: 2, w: 4, h: 1 },
+    table: { x: 0, y: 3, w: 4, h: 1 },
     rmse_gauge: { x: 2, y: 2, w: 1, h: 1 },
     mae_gauge: { x: 3, y: 2, w: 1, h: 1 },
     r2_gauge: { x: 2, y: 3, w: 1, h: 1 },

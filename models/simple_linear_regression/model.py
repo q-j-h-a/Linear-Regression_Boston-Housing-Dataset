@@ -4,7 +4,7 @@ from uuid import uuid4
 import numpy as np
 import pandas as pd
 
-from core.context_store import create_context
+from core.context_store import create_context, get_context
 
 
 RAW_DATA_PATH = Path("boston_housing.csv")
@@ -129,6 +129,10 @@ def clean_numeric_df(df: pd.DataFrame, columns: list[str]) -> pd.DataFrame:
     for col in columns:
         out[col] = pd.to_numeric(out[col], errors="coerce")
     return out.dropna(subset=columns).reset_index(drop=True)
+
+
+def preview_records(df: pd.DataFrame, columns: list[str], limit: int = 8) -> list[dict]:
+    return df.loc[:, columns].head(limit).replace({np.nan: None}).to_dict(orient="records")
 
 
 def student_dataset(dataset_id: str) -> dict:
@@ -307,14 +311,28 @@ def training_summary(context: dict) -> dict:
 
 
 def create_training_context(context: dict, model="simple_linear_regression", page="train_eval") -> dict:
+    final_frame = context["history"][-1]
+    model_state = {
+        "source": "gradient_descent",
+        "feature": context["feature"],
+        "x_column": context["x_column"],
+        "target": context["target"],
+        "use_standardized": context["use_standardized"],
+        "w": final_frame["w"],
+        "b": final_frame["b"],
+        "epoch": final_frame["epoch"],
+        "learning_rate": context["learning_rate"],
+    }
     stored_context = {
         "model": model,
         "page": page,
+        "model_state": model_state,
         **context,
     }
     context_id = create_context(stored_context)
     return {
         "context_id": context_id,
+        "model_state": model_state,
         "summary": training_summary(context),
         **context,
     }
@@ -413,33 +431,77 @@ def prepare_train(payload: dict) -> dict:
     return create_training_context(context)
 
 
+def prediction_model_from_training_context(payload: dict) -> dict:
+    train_context_id = payload.get("train_context_id")
+    if not train_context_id:
+        raise ValueError("请先在“模型训练与评估”页完成一次训练，再进行预测。")
+
+    train_context = get_context(train_context_id)
+    if train_context.get("page") != "train_eval":
+        raise ValueError("预测只能使用模型训练与评估页生成的模型。")
+
+    history = train_context.get("history") or []
+    if not history:
+        raise ValueError("训练上下文中没有可用的模型参数。")
+
+    frame_index = safe_int(payload.get("train_frame_index"), len(history) - 1, lo=0, hi=len(history) - 1)
+    frame = history[frame_index]
+    return {
+        "train_context_id": train_context_id,
+        "train_frame_index": frame_index,
+        "source": "train_eval_current",
+        "source_label": f"模型训练与评估页 epoch {frame['epoch']}",
+        "feature": train_context["feature"],
+        "target": train_context["target"],
+        "x_column": train_context["x_column"],
+        "use_standardized": train_context["use_standardized"],
+        "w": float(frame["w"]),
+        "b": float(frame["b"]),
+        "epoch": int(frame["epoch"]),
+        "learning_rate": train_context.get("learning_rate"),
+    }
+
+
 def predict(payload: dict) -> dict:
-    feature = payload.get("feature", "RM")
+    model_state = prediction_model_from_training_context(payload)
+    feature = model_state["feature"]
     if feature not in FEATURE_COLUMNS:
         raise ValueError(f"未知特征：{feature}")
     value = safe_float(payload.get("value"), 6.5)
-    use_standardized = bool(payload.get("use_standardized", True))
+    input_mode = payload.get("input_mode", "raw")
+    if input_mode not in {"raw", "standardized"}:
+        raise ValueError("输入类型必须是 raw 或 standardized。")
+    use_standardized = bool(model_state["use_standardized"])
+    if input_mode == "standardized" and not use_standardized:
+        raise ValueError("当前模型使用原始特征训练，预测输入不能选择标准化特征。")
     df_raw = load_raw_df()
     df_train = load_std_df() if use_standardized else df_raw
-    x_col = f"{feature}_standardized" if use_standardized else feature
+    x_col = model_state["x_column"]
 
     if use_standardized:
         mean = float(df_raw[feature].mean())
         std = float(df_raw[feature].std(ddof=0))
-        model_x = (value - mean) / std
+        if input_mode == "standardized":
+            model_x = value
+            raw_value = value * std + mean
+        else:
+            raw_value = value
+            model_x = (value - mean) / std
     else:
         mean = None
         std = None
+        raw_value = value
         model_x = value
 
     x = df_train[x_col].astype(float).to_numpy()
     y = df_train[TARGET_COLUMN].astype(float).to_numpy()
-    w, b = np.polyfit(x, y, 1)
+    w = model_state["w"]
+    b = model_state["b"]
     pred = float(w * model_x + b)
     line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
     line_y = w * line_x + b
     raw_x = df_raw[feature].astype(float).to_numpy()
-    distances = np.abs(raw_x - value)
+    distances = np.abs(raw_x - raw_value)
     nearest_idx = np.argsort(distances)[:5]
     nearby = []
     for idx in nearest_idx:
@@ -455,17 +517,23 @@ def predict(payload: dict) -> dict:
         "description": FEATURE_DESCRIPTIONS.get(feature, "暂无说明"),
         "target": TARGET_COLUMN,
         "x_column": x_col,
-        "raw_value": value,
+        "raw_value": float(raw_value),
+        "input_value": value,
+        "input_mode": input_mode,
         "model_x": float(model_x),
         "use_standardized": use_standardized,
         "mean": mean,
         "std": std,
         "w": float(w),
         "b": float(b),
+        "model_state": model_state,
+        "model_source": model_state["source_label"],
+        "train_context_id": model_state["train_context_id"],
+        "train_frame_index": model_state["train_frame_index"],
         "prediction": pred,
         "scatter": {"x": np.round(x, 6).tolist(), "y": np.round(y, 6).tolist()},
         "line": {"x": np.round(line_x, 6).tolist(), "y": np.round(line_y, 6).tolist()},
-        "predict_point": {"x": float(model_x), "y": pred, "raw_x": value},
+        "predict_point": {"x": float(model_x), "y": pred, "raw_x": float(raw_value)},
         "nearby": nearby,
         "summary": series_summary(pd.Series(x), pd.Series(y)),
     }
@@ -494,6 +562,11 @@ def student_upload(file, source_type: str = "raw") -> dict:
     if len(nums) < 2:
         raise ValueError("至少需要 2 个数值列：1 个特征列和 1 个目标列。")
 
+    target = df.columns[-1]
+    if target not in nums:
+        raise ValueError("CSV 最后一列必须是数值目标列，目标列不参与预处理标准化。")
+    features = [col for col in nums if col != target]
+
     dataset_id = uuid4().hex
     STUDENT_DATASETS[dataset_id] = {
         "raw": df,
@@ -506,18 +579,24 @@ def student_upload(file, source_type: str = "raw") -> dict:
         "row_count": int(len(df)),
         "columns": df.columns.tolist(),
         "numeric_columns": nums,
-        "preview": df.head(8).replace({np.nan: None}).to_dict(orient="records"),
+        "target": target,
+        "features": features,
+        "preview_columns": df.columns.tolist(),
+        "preview": preview_records(df, df.columns.tolist()),
     }
 
 
 def student_preprocess(payload: dict) -> dict:
     data = student_dataset(payload.get("dataset_id"))
-    target = payload.get("target")
-    features = payload.get("features") or []
+    raw = data["raw"]
+    target = raw.columns[-1]
+    numeric = numeric_columns(raw)
+    if target not in numeric:
+        raise ValueError("CSV 最后一列必须是数值目标列，目标列不参与预处理标准化。")
+    features = [col for col in numeric if col != target]
     if not target or not features:
         raise ValueError("请选择目标列和至少一个特征列。")
 
-    raw = data["raw"]
     missing = [col for col in features + [target] if col not in raw.columns]
     if missing:
         raise ValueError(f"数据集中不存在字段：{missing}")
@@ -552,13 +631,15 @@ def student_preprocess(payload: dict) -> dict:
     data["std"] = std
     data["features"] = features
     data["target"] = target
+    preview_columns = [student_std_col(feature) for feature in features] + [target]
     return {
         "dataset_id": payload.get("dataset_id"),
         "row_count": int(len(cleaned)),
         "features": features,
         "target": target,
         "standardize_table": table,
-        "preview": std.head(8).replace({np.nan: None}).to_dict(orient="records"),
+        "preview_columns": preview_columns,
+        "preview": preview_records(std, preview_columns),
     }
 
 

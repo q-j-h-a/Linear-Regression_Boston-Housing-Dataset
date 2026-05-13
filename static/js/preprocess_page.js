@@ -27,8 +27,9 @@ async function renderDataShell() {
         </div>
       </div>
       <div class="chart-grid" id="chartGrid"></div>
-    </section>`;
+  </section>`;
   $("rightPanel").innerHTML = renderPreprocessPanel(preprocessPageSchema);
+  restoreDataFormState();
   $("dataFeature").addEventListener("change", loadDataView);
   restoreCheckedValues("dataViews", "preprocessSelectedViewsV1");
   document.querySelectorAll('input[name="dataViews"]').forEach(el => el.addEventListener("change", () => {
@@ -37,8 +38,30 @@ async function renderDataShell() {
   }));
 }
 
+function persistDataFormState() {
+  if ($("dataFeature")) viewStateStore.preprocessFormStateV1 = { feature: $("dataFeature").value };
+}
+
+function restoreDataFormState() {
+  const state = viewStateStore.preprocessFormStateV1 || {};
+  if ($("dataFeature") && state.feature && FEATURE_NAMES.includes(state.feature)) {
+    $("dataFeature").value = state.feature;
+  } else if ($("dataFeature") && dataCache?.feature) {
+    $("dataFeature").value = dataCache.feature;
+  }
+}
+
+function restoreDataView() {
+  restoreDataFormState();
+  if ($("sampleCount")) $("sampleCount").textContent = dataCache?.raw?.summary?.sample_count ?? "--";
+  if ($("featureCount")) $("featureCount").textContent = dataCache?.correlations?.length ?? FEATURE_NAMES.length;
+  if (dataCache?.feature) $("topFeature").textContent = `当前特征 ${dataCache.feature}`;
+  renderDataCharts();
+}
+
 async function loadDataView() {
   const feature = $("dataFeature").value;
+  persistDataFormState();
   $("topFeature").textContent = `当前特征 ${feature}`;
   try {
     dataCache = await runAction("data_view", { feature });

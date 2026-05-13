@@ -485,6 +485,17 @@
       overflow: auto;
       color: #172033;
     }
+    .formula-box {
+      white-space: pre-wrap;
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      background: #f8fafc;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+      line-height: 1.75;
+      overflow: auto;
+      color: #172033;
+    }
     .best-param-panel {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -673,6 +684,10 @@
       color: var(--muted);
       padding: 30px;
     }
+    .student-upload-empty {
+      min-height: 300px;
+      align-content: center;
+    }
     .right-title {
       display: flex;
       align-items: center;
@@ -769,6 +784,49 @@
     .mini-stat strong {
       display: block;
       font-size: 23px;
+    }
+    .model-status-empty {
+      color: var(--muted);
+      line-height: 1.6;
+      font-size: 13px;
+    }
+    .model-status-grid {
+      display: grid;
+      gap: 10px;
+    }
+    .model-status-grid span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+    .model-status-grid strong {
+      display: block;
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .model-status-main,
+    .model-status-pair,
+    .model-param-row > div {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 10px;
+      min-width: 0;
+    }
+    .model-status-pair {
+      display: inline-block;
+    }
+    .model-param-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .model-param-row strong {
+      font-family: Consolas, "Microsoft YaHei", monospace;
+      font-size: 13px;
     }
     label.control-label {
       display: block;
@@ -959,14 +1017,17 @@
     }
     .format-grid {
       display: grid;
-      grid-template-columns: minmax(0, .86fr) minmax(360px, 1.14fr);
+      grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 18px;
       align-items: start;
     }
-    .format-points {
-      display: grid;
-      gap: 10px;
-      margin-top: 12px;
+    .format-intro p {
+      margin: 0 0 14px;
+      color: #273244;
+      line-height: 1.75;
+    }
+    .format-column {
+      min-width: 0;
     }
     .format-point {
       border: 1px solid var(--line);
@@ -975,11 +1036,24 @@
       padding: 12px;
       color: #273244;
       line-height: 1.65;
+      margin-bottom: 12px;
     }
     .format-point strong {
       display: block;
       margin-bottom: 3px;
       color: #111827;
+    }
+    .format-upload-hint {
+      margin-top: 22px;
+      border: 1px dashed #bfdbfe;
+      border-radius: 12px;
+      background: #eff6ff;
+      color: #1e3a8a;
+      display: grid;
+      place-items: center;
+      min-height: 96px;
+      text-align: center;
+      font-weight: 800;
     }
     .sample-caption {
       margin: 0 0 10px;

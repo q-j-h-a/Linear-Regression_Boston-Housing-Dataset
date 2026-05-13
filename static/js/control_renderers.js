@@ -161,6 +161,10 @@ function renderPredictPanel(schema) {
       <div class="mini-stats">
         ${stats.map(control => `<div class="mini-stat"><span>${escapeHtml(control.label)}</span><strong id="${escapeHtml(control.value_id)}">--</strong></div>`).join("")}
       </div>
+      <div class="control-group" aria-label="当前模型">
+        <label class="control-label">当前模型</label>
+        <div class="formula-box" id="predictModelStatus">请先在“模型训练与评估”页完成一次训练。</div>
+      </div>
       <div class="control-group" aria-label="预测数据设置">
         <label class="control-label" for="${escapeHtml(std.element_id)}">${escapeHtml(std.label)}</label>
         <select id="${escapeHtml(std.element_id)}">
@@ -170,13 +174,22 @@ function renderPredictPanel(schema) {
         <select id="${escapeHtml(feature.element_id)}">${featureOptionsHtml}</select>
       </div>
       <div class="control-group" aria-label="${escapeHtml(inputValue.label)}">
-        <label class="control-label" for="${escapeHtml(inputValue.element_id)}">${escapeHtml(inputValue.label)}</label>
-        <input id="${escapeHtml(inputValue.element_id)}" type="number" value="${escapeHtml(inputValue.default)}" step="${escapeHtml(inputValue.step || 1)}">
+        <div class="field-grid">
+          <label class="control-label" for="predictInputMode">输入类型
+            <select id="predictInputMode">
+              <option value="raw">原始特征</option>
+              <option value="standardized">标准化特征</option>
+            </select>
+          </label>
+          <label class="control-label" for="${escapeHtml(inputValue.element_id)}">${escapeHtml(inputValue.label)}
+            <input id="${escapeHtml(inputValue.element_id)}" type="number" value="${escapeHtml(inputValue.default)}" step="${escapeHtml(inputValue.step || 1)}">
+          </label>
+        </div>
       </div>
       <div class="control-group" aria-label="${escapeHtml(selector.label)}">
         <label class="control-label">${escapeHtml(selector.label)}</label>
         <details class="mode-menu">
-          <summary id="${escapeHtml(selector.summary_id)}">已选择 4 项</summary>
+          <summary id="${escapeHtml(selector.summary_id)}">已选择 ${selectorOptions.filter(opt => opt.default).length || selectorOptions.length} 项</summary>
           <div class="check-list">${checkboxOptionsHtml(selector.name, selectorOptions)}</div>
         </details>
       </div>
@@ -300,11 +313,11 @@ function studentPanelHtml() {
   const selectedFeatureSet = studentFeatureSet(features, target);
   const selectedFeatureCount = selectedFeatureSet.size;
   const standardizedReady = studentStandardizedReady();
-  const stdValue = studentStdSelectValue();
+  const stdValue = standardizedReady ? "1" : "0";
   const stdOptionLabel = standardizedReady ? "标准化特征" : "标准化特征（先完成预处理）";
   const datasetStatus = studentMeta ? "已加载" : "未加载";
   const preprocessStatus = standardizedReady ? (studentData ? "已预处理" : "标准化可用") : (studentData ? "已查看原始" : (studentMeta ? "待执行" : "未就绪"));
-  const trainStatus = studentTrainData ? (studentTrainDirty ? "需重新准备" : `epoch ${studentCurrentFrame}`) : "未训练";
+  const trainStatus = studentHasTrained ? "\u5df2\u8bad\u7ec3" : "\u672a\u8bad\u7ec3";
   const predictStatus = studentPredictData ? "已预测" : "待预测";
   return `
     <div class="right-title">${escapeHtml(studentPanelTitle())}</div>
@@ -331,40 +344,30 @@ function studentPanelHtml() {
       <div class="status-line hidden" id="studentUploadMessage"></div>
     </details>
     ${studentMeta ? `
-    <details class="control-card student-stage-card">
-      <summary><h3>02 字段设置</h3><span class="section-status ready">${selectedFeatureCount} 个特征</span></summary>
-      <div class="control-group" aria-label="目标列 y">
-        <label class="control-label" for="studentTarget">目标列 y</label>
-        <select id="studentTarget">${columns.map(col => optionHtml(col, target)).join("")}</select>
-      </div>
-      <div class="control-group" aria-label="特征列 x">
-        <label class="control-label">特征列 x</label>
-        <div class="check-list" id="studentFeatureChecks" style="max-height:230px;overflow:auto">
-          ${features.map(col => checkboxRowHtml("studentFeatures", col, col, selectedFeatureSet.has(col))).join("")}
-        </div>
-        <label class="control-label" for="studentFeature">当前观察/训练特征</label>
-        <select id="studentFeature"></select>
-      </div>
-    </details>
     <details class="control-card student-stage-card" open>
-      <summary><h3>03 数据预处理</h3><span class="section-status ${studentData ? "ready" : ""}">${preprocessStatus}</span></summary>
-      <div class="button-grid">
-        <button class="btn dark" id="studentPrepareDataBtn" type="button">准备预处理</button>
-        <button class="btn green" id="studentPreprocessBtn" type="button">预处理</button>
-        <button class="btn primary" id="studentDataBtn" type="button">看数据</button>
+      <summary><h3>02 数据预处理</h3><span class="section-status ${studentData ? "ready" : ""}">${preprocessStatus}</span></summary>
+      <div class="control-group" aria-label="特征选择">
+        <label class="control-label" for="studentDataFeature">特征选择</label>
+        <select id="studentDataFeature">
+          ${features.map(col => optionHtml(col, studentMeta?.feature || features[0])).join("")}
+        </select>
       </div>
-      <div class="control-group" aria-label="显示图表">
-        <label class="control-label">显示图表</label>
+      <div class="control-group" aria-label="显示模式">
+        <label class="control-label">显示模式</label>
         <details class="mode-menu">
-          <summary id="studentDataModeSummary">${standardizedReady ? "已选择 3 项" : "已选择 2 项"}</summary>
+          <summary id="studentDataModeSummary">${standardizedReady ? "已选择 1 项" : "已选择 1 项"}</summary>
           <div class="check-list">
             ${studentViewChoicesHtml("data_views", "studentDataViews", standardizedReady)}
           </div>
         </details>
       </div>
+      <div class="button-grid">
+        <button class="btn green" id="studentPreprocessBtn" type="button">预处理</button>
+        <button class="btn primary" id="studentDataBtn" type="button">看图</button>
+      </div>
     </details>
     <details class="control-card student-stage-card" open>
-      <summary><h3>04 模型训练与评估</h3><span class="section-status ${studentTrainData && !studentTrainDirty ? "ready" : studentTrainDirty ? "warn" : ""}">${trainStatus}</span></summary>
+      <summary><h3>03 &#x6A21;&#x578B;&#x8BAD;&#x7EC3;&#x4E0E;&#x8BC4;&#x4F30;</h3><span id="studentTrainStatus" class="section-status ${studentHasTrained ? "ready" : ""}">${trainStatus}</span></summary>
       <div class="control-group" aria-label="训练数据版本">
         <label class="control-label" for="studentStd">训练数据版本</label>
         <select id="studentStd">
@@ -429,7 +432,7 @@ function studentPanelHtml() {
       </div>
     </details>
     <details class="control-card student-stage-card">
-      <summary><h3>05 模型预测</h3><span class="section-status ${studentPredictData ? "ready" : ""}">${predictStatus}</span></summary>
+      <summary><h3>04 模型预测</h3><span class="section-status ${studentPredictData ? "ready" : ""}">${predictStatus}</span></summary>
       <div class="control-group" aria-label="预测输入值">
         <label class="control-label" for="studentPredictInput">预测输入值</label>
         <input id="studentPredictInput" type="number" value="0" step="0.1">

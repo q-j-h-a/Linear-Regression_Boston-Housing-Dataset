@@ -12,6 +12,7 @@ from models.simple_linear_regression.model import (
 
 app = Flask(__name__)
 app.config["TEMPLATES_AUTO_RELOAD"] = True
+app.json.sort_keys = False
 
 
 JSON_ACTION_HANDLERS = dict(JSON_ACTIONS)

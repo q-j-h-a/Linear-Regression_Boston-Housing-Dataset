@@ -102,10 +102,48 @@ async function renderTrainShell() {
   $("autoBtn").addEventListener("click", startAuto);
   $("pauseBtn").addEventListener("click", stopAuto);
   $("resetBtn").addEventListener("click", () => { stopAuto(); renderTrainFrame(0); });
-  prepareTraining();
+  if (trainData) {
+    restoreTrainView();
+  } else {
+    prepareTraining();
+  }
+}
+
+function persistTrainFormState() {
+  const ids = ["trainFeature", "trainStd", "w0", "b0", "lr", "epochs", "speed"];
+  const state = {};
+  ids.forEach(id => {
+    const el = $(id);
+    if (el) state[id] = el.value;
+  });
+  viewStateStore.trainFormStateV1 = state;
+}
+
+function restoreTrainFormState() {
+  const state = viewStateStore.trainFormStateV1 || {};
+  if (!state.trainFeature && trainData?.feature) state.trainFeature = trainData.feature;
+  if (!state.trainStd && trainData) state.trainStd = trainData.use_standardized ? "true" : "false";
+  ["trainFeature", "trainStd", "w0", "b0", "lr", "epochs", "speed"].forEach(id => {
+    const el = $(id);
+    if (!el || state[id] == null) return;
+    if (el.tagName === "SELECT" && ![...el.options].some(opt => opt.value === state[id])) return;
+    el.value = state[id];
+  });
+  if ($("lr") && $("lrText")) $("lrText").textContent = Number($("lr").value).toFixed(3);
+  if ($("epochs") && $("epochsText")) $("epochsText").textContent = $("epochs").value;
+  if ($("speed") && $("speedText")) $("speedText").textContent = `${$("speed").value}ms`;
+}
+
+function restoreTrainView() {
+  restoreTrainFormState();
+  if ($("sampleCount")) $("sampleCount").textContent = trainData?.scatter?.x?.length ?? "--";
+  if ($("featureCount")) $("featureCount").textContent = FEATURE_NAMES.length;
+  if (trainData?.feature) $("topFeature").textContent = `当前特征 ${trainData.feature}`;
+  renderTrainFrame(currentFrame);
 }
 
 async function prepareTraining() {
+  persistTrainFormState();
   const feature = $("trainFeature").value;
   $("topFeature").textContent = `当前特征 ${feature}`;
   try {

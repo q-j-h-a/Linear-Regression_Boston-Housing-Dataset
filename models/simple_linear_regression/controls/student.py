@@ -29,10 +29,10 @@ PANEL = {
                     "name": "studentDataViews",
                     "summary_id": "studentDataModeSummary",
                     "options": [
-                        {"label": "原始数据", "value": "raw", "default": True},
-                        {"label": "预处理数据", "value": "standardized", "default": True, "requires_standardized": True},
-                        {"label": "相关系数", "value": "corr", "default": True},
-                        {"label": "标准化表", "value": "table", "default": False, "requires_standardized": True},
+                        {"label": "原始散点图", "value": "raw", "default": True},
+                        {"label": "预处理散点图", "value": "standardized", "default": False, "requires_standardized": True},
+                        {"label": "单特征线性相关系数", "value": "single_corr", "default": False},
+                        {"label": "全特征线性相关系数", "value": "all_corr", "default": False},
                     ],
                 }
             ],

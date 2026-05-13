@@ -1,8 +1,8 @@
 ﻿CHART = {
     "id": "table",
     "page": "student",
-    "title": "标准化表",
-    "subtitle": "当前特征集合的标准化摘要",
+    "title": "参数表",
+    "subtitle": "",
     "renderer": "student_table",
     "size": "wide",
     "default": False,
