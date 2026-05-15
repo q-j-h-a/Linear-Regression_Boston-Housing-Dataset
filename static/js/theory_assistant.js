@@ -54,57 +54,97 @@
     open: false,
     speaking: false,
     paused: false,
-    listening: false,
     rate: savedRate(),
     voiceURI: savedVoice(),
+    chatHistory: [],
+    pageMemory: [],
+    activeTurn: null,
   };
 
-  const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-  const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
   const supportSpeech = "Audio" in window && "fetch" in window;
-  const hasRecognitionEngine = Boolean(Recognition);
-  const hasMicrophoneApi = Boolean(navigator.mediaDevices?.getUserMedia);
   let currentAudio = null;
   let currentAudioUrl = "";
-  let micStream = null;
-  let micAudioContext = null;
-  let micSource = null;
-  let micMonitorFrame = 0;
-  let micPeakLevel = 0;
+  let streamTimer = 0;
+  let streamToken = 0;
+  let selectedTheoryText = "";
+  let selectionCleanup = null;
+  let selectionFrame = null;
+  let selectionTimer = 0;
 
   const shell = document.createElement("div");
   shell.innerHTML = `
-    <button class="theory-assistant-fab" id="theoryAssistantFab" type="button" aria-label="打开理论智能助手">
-      <span class="digital-lecturer digital-lecturer-fab" aria-hidden="true">
-        <span class="lecturer-gif-stage">
-          <img class="lecturer-gif" src="/static/assets/digital-lecturer.gif" alt="" decoding="async">
+    <div class="theory-assistant-dock" id="theoryAssistantDock">
+      <div class="theory-assistant-quick" aria-label="AI助教快捷操作">
+        <button id="theoryQuickExplain" type="button">智能页面讲解</button>
+        <button id="theoryQuickAsk" type="button">输入问题提问</button>
+      </div>
+      <div class="theory-audio-controls" aria-label="朗读控制">
+        <button id="theoryFabPauseBtn" type="button">暂停</button>
+        <button id="theoryFabResumeBtn" type="button">继续</button>
+        <button id="theoryFabStopBtn" type="button">停止</button>
+      </div>
+      <div class="theory-dock-speech" id="theoryDockSpeech" aria-live="polite"></div>
+      <button class="theory-assistant-fab" id="theoryAssistantFab" type="button" aria-label="打开理论智能助手">
+        <span class="digital-lecturer digital-lecturer-fab" aria-hidden="true">
+          <span class="lecturer-gif-stage">
+            <img class="lecturer-static" src="/static/assets/digital-lecturer-static.png" alt="" decoding="async">
+            <img class="lecturer-motion" src="/static/assets/digital-lecturer.gif" alt="" decoding="async">
+          </span>
         </span>
-      </span>
-    </button>
+      </button>
+    </div>
+    <button class="theory-selection-help" id="theorySelectionHelp" type="button">这部分没看懂？问AI助教</button>
     <section class="theory-assistant-panel" id="theoryAssistantPanel" aria-label="理论智能助手">
       <div class="theory-assistant-head">
         <div class="theory-assistant-identity">
           <span class="theory-assistant-mark" aria-hidden="true">
             <span class="digital-lecturer digital-lecturer-mini" aria-hidden="true">
               <span class="lecturer-gif-stage">
-                <img class="lecturer-gif" src="/static/assets/digital-lecturer.gif" alt="" loading="lazy" decoding="async">
+                <img class="lecturer-static" src="/static/assets/digital-lecturer-static.png" alt="" loading="lazy" decoding="async">
+                <img class="lecturer-motion" src="/static/assets/digital-lecturer.gif" alt="" loading="lazy" decoding="async">
               </span>
             </span>
           </span>
           <div>
+            <span class="theory-assistant-eyebrow">智能语音助教</span>
             <strong id="theoryAssistantTitle">AI助教</strong>
             <span id="theoryAssistantSub">理论页讲解 / 朗读 / 问答</span>
           </div>
         </div>
-        <button class="theory-assistant-close" id="theoryAssistantClose" type="button" aria-label="关闭理论智能助手">×</button>
       </div>
+      <div class="theory-live-stage">
+        <span class="digital-lecturer digital-lecturer-panel" aria-hidden="true">
+          <span class="lecturer-gif-stage">
+            <img class="lecturer-static" src="/static/assets/digital-lecturer-static.png" alt="" loading="lazy" decoding="async">
+            <img class="lecturer-motion" src="/static/assets/digital-lecturer.gif" alt="" loading="lazy" decoding="async">
+          </span>
+        </span>
+        <div class="theory-live-copy">
+          <span>语音会话</span>
+          <strong id="theoryVoiceState">准备读取当前页</strong>
+          <em id="theoryAssistantStatus" role="status" aria-live="polite"></em>
+        </div>
+        <div class="theory-voice-meter" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span>
+        </div>
+      </div>
+      <div class="theory-assistant-body" id="theoryAssistantBody">我会根据当前页内容回答你的问题。</div>
       <div class="theory-assistant-actions">
-        <button class="primary" id="theoryExplainBtn" type="button">讲解当前页</button>
+        <button id="theoryExplainBtn" type="button">智能页面讲解</button>
         <button id="theoryReadBtn" type="button">朗读全文</button>
       </div>
-      <div class="theory-assistant-voice">
+      <div class="theory-assistant-ask">
+        <textarea id="theoryQuestionInput" rows="2"></textarea>
+        <button id="theoryAskBtn" type="button">发送</button>
+      </div>
+      <div class="theory-assistant-control">
+        <button id="theoryPauseBtn" type="button" disabled>暂停</button>
+        <button id="theoryResumeBtn" type="button" disabled>继续</button>
+        <button id="theoryStopBtn" type="button" disabled>停止</button>
+      </div>
+      <div class="theory-assistant-voice" hidden>
         <label>
-          <span>神经音色</span>
+          <span>音色</span>
           <select id="theoryVoiceSelect"></select>
         </label>
         <label>
@@ -112,27 +152,13 @@
           <input id="theoryRateInput" type="range" min="0.85" max="1.45" step="0.05" value="1.15">
         </label>
       </div>
-      <div class="theory-assistant-ask">
-        <textarea id="theoryQuestionInput" rows="2" placeholder="围绕当前页提问"></textarea>
-        <div class="theory-assistant-ask-actions">
-          <button id="theoryAskBtn" type="button">提问</button>
-          <button id="theoryVoiceBtn" type="button">语音提问</button>
-        </div>
-      </div>
-      <div class="theory-assistant-body" id="theoryAssistantBody">打开一个理论页面后，可以让助手讲解或朗读当前内容。</div>
-      <div class="theory-assistant-control">
-        <button id="theoryPauseBtn" type="button" disabled>暂停</button>
-        <button id="theoryResumeBtn" type="button" disabled>继续</button>
-        <button id="theoryStopBtn" type="button" disabled>停止</button>
-        <div class="theory-assistant-status" id="theoryAssistantStatus" role="status" aria-live="polite"></div>
-      </div>
     </section>
   `;
   document.body.append(...Array.from(shell.children));
 
   const fab = document.getElementById("theoryAssistantFab");
+  const selectionHelpBtn = document.getElementById("theorySelectionHelp");
   const panel = document.getElementById("theoryAssistantPanel");
-  const closeBtn = document.getElementById("theoryAssistantClose");
   const explainBtn = document.getElementById("theoryExplainBtn");
   const readBtn = document.getElementById("theoryReadBtn");
   const voiceSelect = document.getElementById("theoryVoiceSelect");
@@ -140,64 +166,464 @@
   const rateValue = document.getElementById("theoryRateValue");
   const questionInput = document.getElementById("theoryQuestionInput");
   const askBtn = document.getElementById("theoryAskBtn");
-  const voiceBtn = document.getElementById("theoryVoiceBtn");
   const pauseBtn = document.getElementById("theoryPauseBtn");
   const resumeBtn = document.getElementById("theoryResumeBtn");
   const stopBtn = document.getElementById("theoryStopBtn");
+  const fabPauseBtn = document.getElementById("theoryFabPauseBtn");
+  const fabResumeBtn = document.getElementById("theoryFabResumeBtn");
+  const fabStopBtn = document.getElementById("theoryFabStopBtn");
+  const quickExplainBtn = document.getElementById("theoryQuickExplain");
+  const quickAskBtn = document.getElementById("theoryQuickAsk");
+  const dockSpeech = document.getElementById("theoryDockSpeech");
   const titleEl = document.getElementById("theoryAssistantTitle");
   const subEl = document.getElementById("theoryAssistantSub");
   const bodyEl = document.getElementById("theoryAssistantBody");
   const statusEl = document.getElementById("theoryAssistantStatus");
+  const voiceStateEl = document.getElementById("theoryVoiceState");
+  let dockSpeechActive = false;
+  let dockSpeechText = "";
+  let dockSpeechLoading = false;
 
   function setStatus(message) {
     statusEl.textContent = message || "";
+    statusEl.hidden = !message;
   }
 
-  function voiceQuestionIssue() {
-    if (!window.isSecureContext) {
-      return "语音提问需要浏览器信任的 HTTPS 或 localhost，证书未被信任也会被拦截。";
+  function renderAssistantMessage(text, { loading = false, error = false } = {}) {
+    bodyEl.className = "theory-assistant-body";
+    bodyEl.textContent = text || "";
+    bodyEl.classList.toggle("is-loading", loading);
+    bodyEl.classList.toggle("is-error", error);
+  }
+
+  function renderAssistantBubble(text, { loading = false, error = false } = {}) {
+    bodyEl.className = "theory-assistant-body theory-conversation";
+    bodyEl.innerHTML = `
+      <div class="theory-message theory-message-assistant${loading ? " is-loading" : ""}${error ? " is-error" : ""}">
+        <span class="theory-message-avatar theory-message-avatar-assistant" aria-hidden="true">
+          <img src="/static/assets/assistant-avatar.svg" alt="" loading="lazy" decoding="async">
+        </span>
+        <div class="theory-message-content">
+          <span class="theory-message-name">AI助教</span>
+          <p>${safeHtml(text)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderCurrentTurnMessage(turn) {
+    const pageLabel = turn.title ? ` · ${turn.title}` : "";
+    return `
+      <div class="theory-message theory-message-user theory-message-current">
+        <span class="theory-message-avatar theory-message-avatar-user" aria-hidden="true">
+          <img src="/static/assets/trainee-avatar.svg" alt="" loading="lazy" decoding="async">
+        </span>
+        <div class="theory-message-content">
+          <span class="theory-message-name">${safeHtml(`参训学员${pageLabel}`)}</span>
+          <p>${safeHtml(turn.question)}</p>
+        </div>
+      </div>
+      <div class="theory-message theory-message-assistant theory-message-current${turn.loading ? " is-loading" : ""}${turn.error ? " is-error" : ""}">
+        <span class="theory-message-avatar theory-message-avatar-assistant" aria-hidden="true">
+          <img src="/static/assets/assistant-avatar.svg" alt="" loading="lazy" decoding="async">
+        </span>
+        <div class="theory-message-content">
+          <span class="theory-message-name">${safeHtml(`AI助教${pageLabel}`)}</span>
+          <p>${turn.loading && !turn.answer ? '<span class="typing-dots" aria-label="正在回答"><span></span><span></span><span></span></span>' : safeHtml(turn.answer)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderActiveTurn(options = {}) {
+    const { scrollToEnd = false } = options;
+    if (!state.activeTurn) return false;
+    const historyHtml = state.chatHistory.slice(-16).map(renderHistoryMessage).join("");
+    bodyEl.className = "theory-assistant-body theory-conversation";
+    bodyEl.innerHTML = `${historyHtml}${renderCurrentTurnMessage(state.activeTurn)}`;
+    if (scrollToEnd) {
+      requestAnimationFrame(() => {
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      });
     }
-    if (!hasMicrophoneApi) {
-      return "当前浏览器无法读取麦克风。";
+    return true;
+  }
+
+  function renderConversation(question, answer, { loading = false, error = false } = {}) {
+    state.activeTurn = {
+      question,
+      answer,
+      loading,
+      error,
+      page: state.pageId,
+      title: state.title,
+    };
+    renderActiveTurn({ scrollToEnd: true });
+  }
+
+  function renderHistoryMessage(item) {
+    const isUser = item.role === "user";
+    const name = isUser ? "参训学员" : "AI助教";
+    const pageLabel = item.title ? ` · ${item.title}` : "";
+    const avatar = isUser ? "/static/assets/trainee-avatar.svg" : "/static/assets/assistant-avatar.svg";
+    const typeClass = isUser ? "theory-message-user" : "theory-message-assistant";
+    const avatarClass = isUser ? "theory-message-avatar-user" : "theory-message-avatar-assistant";
+    return `
+      <div class="theory-message ${typeClass}">
+        <span class="theory-message-avatar ${avatarClass}" aria-hidden="true">
+          <img src="${avatar}" alt="" loading="lazy" decoding="async">
+        </span>
+        <div class="theory-message-content">
+          <span class="theory-message-name">${safeHtml(name + pageLabel)}</span>
+          <p>${safeHtml(item.content)}</p>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderChatHistory(options = {}) {
+    const { scrollToEnd = false } = options;
+    const history = state.chatHistory.slice(-16);
+    if (!history.length) return false;
+    bodyEl.className = "theory-assistant-body theory-conversation";
+    bodyEl.innerHTML = history.map(renderHistoryMessage).join("");
+    if (scrollToEnd) {
+      requestAnimationFrame(() => {
+        bodyEl.scrollTop = bodyEl.scrollHeight;
+      });
     }
-    if (!AudioContextCtor) {
-      return "当前浏览器无法检测麦克风音量。";
+    return true;
+  }
+
+  function updateActiveTurnAnswer(answer, { loading = false, error = false } = {}) {
+    if (!state.activeTurn) return null;
+    state.activeTurn.answer = answer;
+    state.activeTurn.loading = loading;
+    state.activeTurn.error = error;
+    if (!state.open) return null;
+    let assistantMessage = bodyEl.querySelector(".theory-message-current.theory-message-assistant");
+    let answerEl = assistantMessage?.querySelector("p");
+    if (!assistantMessage || !answerEl) {
+      renderActiveTurn({ scrollToEnd: true });
+      assistantMessage = bodyEl.querySelector(".theory-message-current.theory-message-assistant");
+      answerEl = assistantMessage?.querySelector("p");
     }
-    if (!hasRecognitionEngine) {
-      return "当前浏览器没有语音识别能力，建议使用 Chrome。";
+    if (!assistantMessage || !answerEl) return null;
+    assistantMessage.classList.toggle("is-loading", loading);
+    assistantMessage.classList.toggle("is-error", error);
+    if (loading && !answer) {
+      answerEl.innerHTML = '<span class="typing-dots" aria-label="正在回答"><span></span><span></span><span></span></span>';
+    } else {
+      answerEl.textContent = answer;
     }
-    return "";
+    bodyEl.scrollTop = bodyEl.scrollHeight;
+    return answerEl;
+  }
+
+  function stopAnswerStream() {
+    streamToken += 1;
+    if (streamTimer) {
+      clearTimeout(streamTimer);
+      streamTimer = 0;
+    }
+  }
+
+  function dockSpeechSnippet(text) {
+    const cleanText = String(text || "").replace(/\s+/g, " ").trim();
+    return cleanText.length > 420 ? cleanText.slice(-420) : cleanText;
+  }
+
+  function updateDockSpeech() {
+    const shouldShow = dockSpeechActive && !state.open && (Boolean(dockSpeechText) || dockSpeechLoading);
+    if (dockSpeechLoading && !dockSpeechText) {
+      dockSpeech.innerHTML = '<span class="dock-typing-dots" aria-label="正在回答"><span></span><span></span><span></span></span>';
+    } else {
+      dockSpeech.textContent = dockSpeechText;
+    }
+    dockSpeech.classList.toggle("is-loading", dockSpeechLoading && !dockSpeechText);
+    dockSpeech.classList.toggle("show", shouldShow);
+    if (shouldShow) {
+      dockSpeech.scrollTop = dockSpeech.scrollHeight;
+    }
+  }
+
+  function setDockSpeech(text, active = true, options = {}) {
+    const { loading = false } = options;
+    dockSpeechText = dockSpeechSnippet(text);
+    dockSpeechLoading = loading;
+    dockSpeechActive = active && (Boolean(dockSpeechText) || loading);
+    updateDockSpeech();
+  }
+
+  function hideDockSpeech() {
+    dockSpeechText = "";
+    dockSpeechLoading = false;
+    dockSpeechActive = false;
+    updateDockSpeech();
+  }
+
+  function clipContextText(text, limit = 900) {
+    return String(text || "").replace(/\s+/g, " ").trim().slice(0, limit);
+  }
+
+  function currentChatHistory() {
+    return state.chatHistory.slice(-12);
+  }
+
+  function rememberTurn(question, answer) {
+    const cleanQuestion = clipContextText(question);
+    const cleanAnswer = clipContextText(answer);
+    if (!cleanQuestion || !cleanAnswer) return;
+    state.chatHistory.push(
+      { role: "user", content: cleanQuestion, page: state.pageId, title: state.title },
+      { role: "assistant", content: cleanAnswer, page: state.pageId, title: state.title }
+    );
+    state.chatHistory = state.chatHistory.slice(-16);
+  }
+
+  function rememberPage(page) {
+    const pageId = String(page?.id || "").trim();
+    const title = String(page?.title || "当前理论页").trim();
+    const text = clipContextText(page?.text || "", 1800);
+    if (!pageId || text.length < 20) return;
+    state.pageMemory = state.pageMemory.filter(item => item.id !== pageId);
+    state.pageMemory.push({ id: pageId, title, text });
+    state.pageMemory = state.pageMemory.slice(-8);
+  }
+
+  function currentPageContext() {
+    if (state.pageId && state.text.length >= 20) {
+      rememberPage({ id: state.pageId, title: state.title, text: state.text });
+    }
+    return state.pageMemory.slice(-8);
+  }
+
+  function streamConversation(question, answer, options = {}) {
+    const { audio = null } = options;
+    stopAnswerStream();
+    const token = streamToken;
+    const cleanAnswer = String(answer || "");
+    renderConversation(question, "", { loading: true });
+    if (!cleanAnswer) {
+      renderConversation(question, "没有生成可用回答。");
+      return Promise.resolve();
+    }
+    let index = 0;
+    const fallbackMs = Math.max(2200, cleanAnswer.length * 130 / Math.max(state.rate, 0.85));
+    let fallbackElapsedMs = 0;
+    let lastTickAt = performance.now();
+
+    function finish(resolve) {
+      updateActiveTurnAnswer(cleanAnswer);
+      setDockSpeech(cleanAnswer, Boolean(audio && currentAudio === audio && !audio.ended));
+      streamTimer = 0;
+      resolve();
+    }
+
+    return new Promise(resolve => {
+      setDockSpeech("", true, { loading: true });
+      const fixedTick = () => {
+        if (token !== streamToken) {
+          resolve();
+          return;
+        }
+        const step = Math.max(1, Math.ceil(cleanAnswer.length / 320));
+        index = Math.min(cleanAnswer.length, index + step);
+        const partialAnswer = cleanAnswer.slice(0, index);
+        updateActiveTurnAnswer(partialAnswer);
+        setDockSpeech(partialAnswer, true);
+        if (index >= cleanAnswer.length) {
+          finish(resolve);
+          return;
+        }
+        streamTimer = setTimeout(fixedTick, 42);
+      };
+
+      const audioTick = () => {
+        if (token !== streamToken) {
+          resolve();
+          return;
+        }
+        if (audio !== currentAudio && !audio.ended) {
+          assistantMessage.classList.remove("is-loading");
+          streamTimer = 0;
+          resolve();
+          return;
+        }
+
+        const now = performance.now();
+        if (!audio.paused) {
+          fallbackElapsedMs += now - lastTickAt;
+        }
+        lastTickAt = now;
+
+        const duration = Number.isFinite(audio.duration) && audio.duration > 0 ? audio.duration : 0;
+        const progress = duration
+          ? Math.min(1, Math.max(0, audio.currentTime / duration))
+          : Math.min(1, fallbackElapsedMs / fallbackMs);
+        const nextIndex = Math.max(index, Math.min(cleanAnswer.length, Math.ceil(cleanAnswer.length * progress)));
+
+        if (nextIndex > index) {
+          index = nextIndex;
+          const partialAnswer = cleanAnswer.slice(0, index);
+          updateActiveTurnAnswer(partialAnswer);
+          setDockSpeech(partialAnswer, true);
+        }
+        if (audio.ended || progress >= 0.995) {
+          finish(resolve);
+          return;
+        }
+        streamTimer = setTimeout(audioTick, 90);
+      };
+
+      if (audio) {
+        audioTick();
+      } else {
+        fixedTick();
+      }
+    });
   }
 
   function updateButtons() {
     const hasText = state.text.length > 20;
     const hasQuestion = questionInput.value.trim().length >= 2;
-    const voiceIssue = voiceQuestionIssue();
+    const voiceState = state.speaking && state.paused
+      ? "朗读已暂停"
+      : state.speaking
+        ? "正在朗读"
+        : hasText
+          ? "可以开始讲解或提问"
+          : "等待理论页内容";
     document.body.classList.toggle("assistant-open", state.open);
     document.body.classList.toggle("assistant-speaking", state.speaking && !state.paused);
-    document.body.classList.toggle("assistant-listening", state.listening);
+    document.body.classList.toggle("assistant-audio-active", state.speaking);
+    document.body.classList.toggle("assistant-paused", state.speaking && state.paused);
+    voiceStateEl.textContent = voiceState;
     explainBtn.disabled = !hasText;
     readBtn.disabled = !hasText || !supportSpeech;
     askBtn.disabled = !hasText || !hasQuestion;
-    voiceBtn.disabled = !hasText || Boolean(voiceIssue) || state.listening;
-    voiceBtn.textContent = state.listening ? "正在听..." : "语音提问";
-    voiceBtn.title = voiceIssue || "";
+    quickExplainBtn.disabled = !hasText;
+    quickAskBtn.disabled = !hasText;
     voiceSelect.disabled = !supportSpeech;
     rateInput.disabled = !supportSpeech;
     pauseBtn.disabled = !state.speaking || state.paused;
     resumeBtn.disabled = !state.speaking || !state.paused;
     stopBtn.disabled = !state.speaking;
+    fabPauseBtn.disabled = !state.speaking || state.paused;
+    fabResumeBtn.disabled = !state.speaking || !state.paused;
+    fabStopBtn.disabled = !state.speaking;
   }
 
-  function openPanel() {
+  function openPanel(mode = "ask") {
     state.open = true;
+    panel.dataset.mode = mode;
     panel.classList.add("open");
+    updateDockSpeech();
     updateButtons();
   }
 
   function closePanel() {
     state.open = false;
+    panel.dataset.mode = "";
     panel.classList.remove("open");
+    updateDockSpeech();
+  }
+
+  function openQuestionPanel() {
+    openPanel("ask");
+    if (state.activeTurn && renderActiveTurn({ scrollToEnd: true })) {
+      window.requestAnimationFrame(() => questionInput.focus());
+      return;
+    }
+    if (renderChatHistory({ scrollToEnd: true })) {
+      window.requestAnimationFrame(() => questionInput.focus());
+      return;
+    }
+    if (
+      !bodyEl.textContent ||
+      bodyEl.textContent.includes("我已经读完这一页了") ||
+      bodyEl.textContent.includes("这页哪里没看懂")
+    ) {
+      renderAssistantBubble("这页哪里没看懂？可以直接问我。");
+    }
+    window.requestAnimationFrame(() => questionInput.focus());
+  }
+
+  function hideSelectionHelp() {
+    selectedTheoryText = "";
+    selectionHelpBtn.classList.remove("show");
+  }
+
+  function showSelectionHelp(iframe, selection) {
+    if (!selection || selection.rangeCount === 0) {
+      hideSelectionHelp();
+      return;
+    }
+    const selectedText = selection.toString().replace(/\s+/g, " ").trim();
+    if (selectedText.length < 6) {
+      hideSelectionHelp();
+      return;
+    }
+    const range = selection.getRangeAt(0);
+    const rect = range.getBoundingClientRect();
+    if (!rect || (rect.width === 0 && rect.height === 0)) {
+      hideSelectionHelp();
+      return;
+    }
+    const iframeRect = iframe.getBoundingClientRect();
+    const centerX = iframeRect.left + rect.left + rect.width / 2;
+    const top = iframeRect.top + rect.bottom + 10;
+    selectedTheoryText = selectedText.slice(0, 1200);
+    selectionHelpBtn.style.left = `${Math.min(window.innerWidth - 120, Math.max(120, centerX))}px`;
+    selectionHelpBtn.style.top = `${Math.min(window.innerHeight - 58, Math.max(12, top))}px`;
+    selectionHelpBtn.classList.add("show");
+  }
+
+  function scheduleSelectionHelp(iframe) {
+    clearTimeout(selectionTimer);
+    selectionTimer = setTimeout(() => {
+      try {
+        const doc = iframe.contentDocument || iframe.contentWindow.document;
+        showSelectionHelp(iframe, doc.getSelection());
+      } catch (err) {
+        hideSelectionHelp();
+      }
+    }, 80);
+  }
+
+  function attachSelectionTarget(iframe) {
+    if (selectionCleanup) selectionCleanup();
+    selectionCleanup = null;
+    selectionFrame = iframe || null;
+    hideSelectionHelp();
+    if (!iframe) return;
+    try {
+      const doc = iframe.contentDocument || iframe.contentWindow.document;
+      if (!doc) return;
+      const onSelection = () => scheduleSelectionHelp(iframe);
+      const onScrollOrBlur = () => hideSelectionHelp();
+      const onFramePointerDown = () => {
+        if (state.open) closePanel();
+        hideSelectionHelp();
+      };
+      doc.addEventListener("pointerdown", onFramePointerDown, true);
+      doc.addEventListener("mouseup", onSelection);
+      doc.addEventListener("keyup", onSelection);
+      doc.addEventListener("selectionchange", onSelection);
+      iframe.contentWindow.addEventListener("scroll", onScrollOrBlur, true);
+      window.addEventListener("resize", onScrollOrBlur);
+      selectionCleanup = () => {
+        clearTimeout(selectionTimer);
+        doc.removeEventListener("pointerdown", onFramePointerDown, true);
+        doc.removeEventListener("mouseup", onSelection);
+        doc.removeEventListener("keyup", onSelection);
+        doc.removeEventListener("selectionchange", onSelection);
+        try {
+          iframe.contentWindow.removeEventListener("scroll", onScrollOrBlur, true);
+        } catch (err) {}
+        window.removeEventListener("resize", onScrollOrBlur);
+      };
+    } catch (err) {}
   }
 
   function normalizeSpeechText(text) {
@@ -225,7 +651,14 @@
     rateInput.value = String(state.rate);
   }
 
-  function stopAudio(message = "已停止。") {
+  function stopAudio(message = "已停止。", options = {}) {
+    const { cancelStream = true, keepDockSpeech = false } = options;
+    if (cancelStream) {
+      stopAnswerStream();
+    }
+    if (!keepDockSpeech) {
+      hideDockSpeech();
+    }
     if (currentAudio) {
       const audio = currentAudio;
       audio.onplay = null;
@@ -246,76 +679,18 @@
     updateButtons();
   }
 
-  function stopMicMonitor() {
-    if (micMonitorFrame) {
-      cancelAnimationFrame(micMonitorFrame);
-      micMonitorFrame = 0;
-    }
-    if (micSource) {
-      micSource.disconnect();
-      micSource = null;
-    }
-    if (micAudioContext) {
-      micAudioContext.close().catch(() => {});
-      micAudioContext = null;
-    }
-    if (micStream) {
-      micStream.getTracks().forEach(track => track.stop());
-      micStream = null;
-    }
-  }
-
-  function startMicMonitor(stream) {
-    stopMicMonitor();
-    micStream = stream;
-    micPeakLevel = 0;
-    micAudioContext = new AudioContextCtor();
-    const analyser = micAudioContext.createAnalyser();
-    analyser.fftSize = 1024;
-    micSource = micAudioContext.createMediaStreamSource(stream);
-    micSource.connect(analyser);
-
-    const samples = new Uint8Array(analyser.fftSize);
-    const startedAt = performance.now();
-    let lastStatusAt = 0;
-
-    const readLevel = () => {
-      analyser.getByteTimeDomainData(samples);
-      let sum = 0;
-      for (let index = 0; index < samples.length; index += 1) {
-        const centered = (samples[index] - 128) / 128;
-        sum += centered * centered;
-      }
-      const rms = Math.sqrt(sum / samples.length);
-      micPeakLevel = Math.max(micPeakLevel, rms);
-
-      const now = performance.now();
-      if (state.listening && now - lastStatusAt > 700) {
-        if (rms > 0.025) {
-          setStatus("正在听，麦克风已有输入。请直接说出完整问题。");
-        } else if (now - startedAt > 1500) {
-          setStatus("正在听，但麦克风音量很低。请检查系统输入设备是否选中了耳机麦克风。");
-        }
-        lastStatusAt = now;
-      }
-
-      micMonitorFrame = requestAnimationFrame(readLevel);
-    };
-
-    readLevel();
-  }
-
-  async function speak(text) {
+  async function speak(text, options = {}) {
+    const { onPlay, keepDockSpeech = false } = options;
     if (!supportSpeech) {
       setStatus("当前浏览器不支持音频播放。");
-      return;
+      return false;
     }
     const speechText = normalizeSpeechText(text);
     if (!speechText) {
       setStatus("当前页面没有可朗读文本。");
-      return;
+      return false;
     }
-    stopAudio("正在生成朗读音频。");
+    stopAudio("正在生成朗读音频。", { keepDockSpeech });
     try {
       const resp = await fetch("/api/tts", {
         method: "POST",
@@ -333,11 +708,16 @@
       const blob = await resp.blob();
       currentAudioUrl = URL.createObjectURL(blob);
       currentAudio = new Audio(currentAudioUrl);
+      let didCallOnPlay = false;
       currentAudio.onplay = () => {
         state.speaking = true;
         state.paused = false;
         setStatus("正在朗读。");
         updateButtons();
+        if (!didCallOnPlay && typeof onPlay === "function") {
+          didCallOnPlay = true;
+          onPlay(currentAudio);
+        }
       };
       currentAudio.onpause = () => {
         if (!currentAudio || currentAudio.ended) return;
@@ -346,7 +726,7 @@
         updateButtons();
       };
       currentAudio.onended = () => {
-        stopAudio("朗读结束。");
+        stopAudio("朗读结束。", { cancelStream: false });
       };
       currentAudio.onerror = () => {
         stopAudio("朗读失败，请重新尝试。");
@@ -355,16 +735,20 @@
       state.paused = false;
       updateButtons();
       await currentAudio.play();
+      return true;
     } catch (err) {
       stopAudio(`朗读失败：${err.message}`);
+      return false;
     }
   }
 
   async function explainCurrentPage() {
     if (!state.text) return;
-    openPanel();
+    openPanel("ask");
     explainBtn.disabled = true;
-    bodyEl.textContent = "正在生成当前页讲解...";
+    const explainQuestion = "请帮我讲解当前页内容";
+    renderConversation(explainQuestion, "正在回答...", { loading: true });
+    setDockSpeech("", true, { loading: true });
     setStatus("AI 正在根据当前理论页生成讲解。");
     try {
       const resp = await fetch("/api/theory_explain", {
@@ -379,11 +763,31 @@
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || `请求失败：${resp.status}`);
       state.explanation = data.explanation || "";
-      bodyEl.textContent = state.explanation || "没有生成可用讲解。";
+      const visibleExplanation = state.explanation || "没有生成可用讲解。";
+      if (state.explanation) {
+        let streamStarted = false;
+        let streamPromise = Promise.resolve();
+        setStatus("讲解已生成，正在准备朗读。");
+        const audioStarted = await speak(state.explanation, {
+          keepDockSpeech: true,
+          onPlay: (audio) => {
+            streamStarted = true;
+            streamPromise = streamConversation(explainQuestion, visibleExplanation, { audio });
+          },
+        });
+        if (!audioStarted && !streamStarted) {
+          streamPromise = streamConversation(explainQuestion, visibleExplanation);
+        }
+        await streamPromise;
+        rememberTurn(explainQuestion, visibleExplanation);
+        state.activeTurn = null;
+        if (state.open) renderChatHistory({ scrollToEnd: true });
+      } else {
+        await streamConversation(explainQuestion, visibleExplanation);
+      }
       setStatus(data.model ? `讲解已生成，模型：${data.model}` : "讲解已生成。");
-      if (state.explanation) speak(state.explanation);
     } catch (err) {
-      bodyEl.textContent = `讲解生成失败：${err.message}`;
+      renderConversation(explainQuestion, `讲解生成失败：${err.message}`, { error: true });
       setStatus("可以先使用“朗读全文”。");
     } finally {
       updateButtons();
@@ -393,9 +797,12 @@
   async function askCurrentPage(question) {
     const cleanQuestion = String(question || "").trim();
     if (!state.text || cleanQuestion.length < 2) return;
-    openPanel();
+    openPanel("ask");
+    questionInput.value = "";
     askBtn.disabled = true;
-    bodyEl.textContent = `你问：${cleanQuestion}\n\n正在回答...`;
+    updateButtons();
+    renderConversation(cleanQuestion, "正在回答...", { loading: true });
+    setDockSpeech("", true, { loading: true });
     setStatus("AI 正在根据当前理论页回答。");
     try {
       const resp = await fetch("/api/theory_chat", {
@@ -405,137 +812,98 @@
           page: state.pageId,
           title: state.title,
           text: state.text,
+          history: currentChatHistory(),
+          pages: currentPageContext(),
           question: cleanQuestion,
         }),
       });
       const data = await resp.json().catch(() => ({}));
       if (!resp.ok) throw new Error(data.error || `请求失败：${resp.status}`);
       const answer = data.answer || "";
-      bodyEl.textContent = `你问：${cleanQuestion}\n\n助手：${answer || "没有生成可用回答。"}`;
+      const visibleAnswer = answer || "没有生成可用回答。";
+      if (answer) {
+        let streamStarted = false;
+        let streamPromise = Promise.resolve();
+        setStatus("回答已生成，正在准备朗读。");
+        const audioStarted = await speak(answer, {
+          keepDockSpeech: true,
+          onPlay: (audio) => {
+            streamStarted = true;
+            streamPromise = streamConversation(cleanQuestion, visibleAnswer, { audio });
+          },
+        });
+        if (!audioStarted && !streamStarted) {
+          streamPromise = streamConversation(cleanQuestion, visibleAnswer);
+        }
+        await streamPromise;
+        rememberTurn(cleanQuestion, visibleAnswer);
+        state.activeTurn = null;
+        if (state.open) renderChatHistory({ scrollToEnd: true });
+      } else {
+        await streamConversation(cleanQuestion, visibleAnswer);
+      }
       setStatus(data.model ? `回答已生成，模型：${data.model}` : "回答已生成。");
-      if (answer) speak(answer);
     } catch (err) {
-      bodyEl.textContent = `问答失败：${err.message}`;
-      setStatus("可以换个问法，或先使用“讲解当前页”。");
+      renderConversation(cleanQuestion, `问答失败：${err.message}`, { error: true });
+      setStatus("可以换个问法，或先使用“智能页面讲解”。");
     } finally {
       updateButtons();
     }
   }
 
   function readCurrentPage() {
-    openPanel();
-    bodyEl.textContent = state.text || "当前页面没有可朗读文本。";
+    openPanel("explain");
+    renderAssistantMessage(state.text || "当前页面没有可朗读文本。");
     speak(state.text);
-  }
-
-  function microphoneErrorMessage(error) {
-    const name = error?.name || "";
-    if (name === "NotAllowedError" || name === "SecurityError" || name === "PermissionDeniedError") {
-      return "麦克风权限被拒绝。请在地址栏允许麦克风，或在系统设置里给浏览器开启麦克风。";
-    }
-    if (name === "NotFoundError" || name === "DevicesNotFoundError") {
-      return "没有检测到可用麦克风。请检查耳机麦克风或系统输入设备。";
-    }
-    if (name === "NotReadableError" || name === "TrackStartError") {
-      return "麦克风暂时不可用，可能正在被其他应用占用。";
-    }
-    return `无法打开麦克风${error?.message ? `：${error.message}` : "。"}`;
-  }
-
-  function recognitionErrorMessage(error) {
-    switch (error) {
-      case "not-allowed":
-      case "service-not-allowed":
-        return "浏览器拒绝了语音识别。请允许麦克风权限，或换 Chrome 再试。";
-      case "audio-capture":
-        return "没有检测到可用麦克风。请检查耳机麦克风或系统输入设备。";
-      case "no-speech":
-        if (micPeakLevel < 0.018) {
-          return "麦克风没有收到明显声音。请在系统声音输入里选择耳机麦克风，并确认输入音量没有被静音。";
-        }
-        return "麦克风有声音，但浏览器没有转成文字。建议换 Chrome，或接入后端语音转文字接口。";
-      case "network":
-        return "浏览器语音识别服务连接失败。可以换 Chrome，或后续接入后端语音转文字接口。";
-      case "aborted":
-        return "语音提问已取消。";
-      default:
-        return error ? `语音识别失败（${error}）。可以使用文字提问。` : "语音识别失败，可以使用文字提问。";
-    }
-  }
-
-  async function requestMicrophoneStream() {
-    return navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-      },
-    });
-  }
-
-  async function startVoiceQuestion() {
-    const issue = voiceQuestionIssue();
-    if (issue) {
-      setStatus(issue);
-      return;
-    }
-    try {
-      setStatus("正在请求麦克风权限。");
-      const stream = await requestMicrophoneStream();
-      startMicMonitor(stream);
-    } catch (err) {
-      stopMicMonitor();
-      setStatus(microphoneErrorMessage(err));
-      return;
-    }
-    const recognition = new Recognition();
-    recognition.lang = "zh-CN";
-    recognition.interimResults = false;
-    recognition.maxAlternatives = 1;
-    recognition.onstart = () => {
-      state.listening = true;
-      setStatus("正在听，请看到这行提示后说出完整问题。");
-      updateButtons();
-    };
-    recognition.onresult = (event) => {
-      const transcript = event.results?.[0]?.[0]?.transcript?.trim() || "";
-      questionInput.value = transcript;
-      updateButtons();
-      if (transcript) askCurrentPage(transcript);
-    };
-    recognition.onerror = (event) => {
-      state.listening = false;
-      setStatus(recognitionErrorMessage(event?.error));
-      updateButtons();
-    };
-    recognition.onend = () => {
-      state.listening = false;
-      stopMicMonitor();
-      updateButtons();
-    };
-    try {
-      recognition.start();
-    } catch (err) {
-      stopMicMonitor();
-      setStatus(`语音识别启动失败${err?.message ? `：${err.message}` : "。"}`);
-      state.listening = false;
-      updateButtons();
-    }
   }
 
   fab.addEventListener("click", () => {
     if (state.open) {
       closePanel();
     } else {
-      openPanel();
+      openQuestionPanel();
     }
   });
-  closeBtn.addEventListener("click", closePanel);
+  document.addEventListener("pointerdown", (event) => {
+    if (!state.open) return;
+    const target = event.target;
+    if (!(target instanceof Element)) return;
+    if (target.closest(".theory-assistant-dock")) return;
+    if (target.closest(".theory-selection-help")) return;
+    if (target.closest(".theory-assistant-ask")) return;
+    closePanel();
+  });
   explainBtn.addEventListener("click", explainCurrentPage);
   readBtn.addEventListener("click", readCurrentPage);
+  quickExplainBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    explainCurrentPage();
+  });
+  quickAskBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    openQuestionPanel();
+  });
+  selectionHelpBtn.addEventListener("mousedown", event => {
+    event.preventDefault();
+  });
+  selectionHelpBtn.addEventListener("click", () => {
+    const text = selectedTheoryText;
+    hideSelectionHelp();
+    if (!text) return;
+    askCurrentPage(`我选中的这部分没看懂，请结合当前页详细讲讲：\n${text}`);
+    try {
+      const doc = selectionFrame?.contentDocument || selectionFrame?.contentWindow?.document;
+      doc?.getSelection()?.removeAllRanges();
+    } catch (err) {}
+  });
   questionInput.addEventListener("input", updateButtons);
+  questionInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
+      event.preventDefault();
+      askCurrentPage(questionInput.value);
+    }
+  });
   askBtn.addEventListener("click", () => askCurrentPage(questionInput.value));
-  voiceBtn.addEventListener("click", startVoiceQuestion);
   voiceSelect.addEventListener("change", () => {
     state.voiceURI = voiceSelect.value;
     writeStorage(VOICE_KEY, state.voiceURI);
@@ -557,8 +925,20 @@
   stopBtn.addEventListener("click", () => {
     stopAudio("已停止。");
   });
+  fabPauseBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (currentAudio) currentAudio.pause();
+  });
+  fabResumeBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    if (currentAudio) currentAudio.play();
+  });
+  fabStopBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    stopAudio("已停止。");
+  });
   window.addEventListener("beforeunload", () => {
-    stopMicMonitor();
+    stopAnswerStream();
     stopAudio("");
   });
   populateVoices();
@@ -577,27 +957,34 @@
       document.body.classList.remove("has-theory-assistant");
       closePanel();
       stopAudio("");
-      stopMicMonitor();
       state.speaking = false;
       state.paused = false;
-      state.listening = false;
+      hideSelectionHelp();
       updateButtons();
     },
+    attachSelectionTarget,
     setPage(page) {
-      state.pageId = page.id || "";
+      const nextPageId = page.id || "";
+      state.pageId = nextPageId;
       state.title = page.title || "当前理论页";
       state.text = page.text || "";
       state.explanation = "";
+      rememberPage({ id: state.pageId, title: state.title, text: state.text });
       questionInput.value = "";
       titleEl.textContent = "AI助教";
       subEl.textContent = state.title ? `正在阅读：${state.title}` : "理论页讲解 / 朗读 / 问答";
-      bodyEl.textContent = state.text
-        ? "已读取当前理论页内容。可以点击“讲解当前页”、朗读全文，或围绕当前页提问。"
-        : "当前理论页内容还在加载，稍后再试。";
+      if (!state.speaking && !streamTimer && !dockSpeechLoading) {
+        const hasHistory = renderChatHistory({ scrollToEnd: true });
+        if (!hasHistory) {
+          renderAssistantMessage(
+            state.text
+              ? "我已经读完这一页了，可以帮你讲解，也可以回答你对这一页的疑问。"
+              : "当前理论页内容还在加载，稍后再试。"
+          );
+        }
+      }
       const unsupported = [];
       if (!supportSpeech) unsupported.push("本机朗读");
-      const voiceIssue = voiceQuestionIssue();
-      if (voiceIssue) unsupported.push(voiceIssue);
       setStatus(unsupported.length ? unsupported.join(" ") : "");
       updateButtons();
     },

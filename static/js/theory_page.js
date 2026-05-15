@@ -158,11 +158,13 @@ function syncTheoryAssistant(page, iframe) {
       title,
       text,
     });
+    window.TheoryAssistant.attachSelectionTarget?.(iframe);
   } catch (err) {
     window.TheoryAssistant.setPage({
       id: page,
       title: theoryPages[page]?.title || "当前理论页",
       text: "",
     });
+    window.TheoryAssistant.attachSelectionTarget?.(iframe);
   }
 }

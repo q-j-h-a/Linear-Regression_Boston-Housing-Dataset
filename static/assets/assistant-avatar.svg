@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" role="img" aria-label="AI tutor avatar">
+  <defs>
+    <linearGradient id="assistant-bg" x1="12" y1="8" x2="84" y2="90" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EFF6FF"/>
+      <stop offset="1" stop-color="#D1FAE5"/>
+    </linearGradient>
+  </defs>
+  <rect width="96" height="96" rx="48" fill="url(#assistant-bg)"/>
+  <path d="M27 82c3-18 12-28 21-28s18 10 21 28H27z" fill="#0F766E"/>
+  <path d="M41 56h14l-2 15H43l-2-15z" fill="#F7C9A8"/>
+  <circle cx="48" cy="35" r="18" fill="#FFD9B7"/>
+  <path d="M29 34c3-17 16-23 29-18 8 3 11 9 10 18-11-8-25-8-39 0z" fill="#7C2D12"/>
+  <circle cx="40" cy="38" r="8" fill="none" stroke="#0F172A" stroke-width="4"/>
+  <circle cx="56" cy="38" r="8" fill="none" stroke="#0F172A" stroke-width="4"/>
+  <path d="M48 38h1" stroke="#0F172A" stroke-width="4" stroke-linecap="round"/>
+  <circle cx="40" cy="38" r="2" fill="#0F172A"/>
+  <circle cx="56" cy="38" r="2" fill="#0F172A"/>
+  <path d="M43 49c3 3 8 3 11 0" fill="none" stroke="#DC2626" stroke-width="3" stroke-linecap="round"/>
+  <path d="M62 60l17-17" stroke="#B45309" stroke-width="4" stroke-linecap="round"/>
+  <path d="M79 43l3 4" stroke="#EF4444" stroke-width="3" stroke-linecap="round"/>
+</svg>

@@ -1,10 +1,14 @@
 import json
 import os
+import re
 import subprocess
 import tempfile
 import urllib.error
 import urllib.request
 import asyncio
+from functools import lru_cache
+from html.parser import HTMLParser
+from pathlib import Path
 
 from flask import Flask, render_template, request, jsonify, make_response
 
@@ -44,6 +48,43 @@ EDGE_TTS_VOICES = {
     "zh-CN-YunxiaNeural": "云夏",
     "zh-CN-YunyangNeural": "云扬",
 }
+THEORY_PAGE_TITLES = {
+    "basic": "实验基本信息",
+    "purpose": "实验目的",
+    "knowledge": "前置知识",
+    "model": "模型介绍",
+    "dataset": "数据集",
+    "criterion": "学习准则",
+    "optimization": "参数优化",
+    "evaluation": "评价指标",
+    "result": "预期成果",
+    "thinking": "思考拓展",
+}
+
+
+class _TheoryHtmlTextExtractor(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self._skip_depth = 0
+        self._parts = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag in {"script", "style"}:
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag in {"script", "style"} and self._skip_depth:
+            self._skip_depth -= 1
+
+    def handle_data(self, data):
+        if self._skip_depth:
+            return
+        text = data.strip()
+        if text:
+            self._parts.append(text)
+
+    def text(self):
+        return re.sub(r"\s+", " ", " ".join(self._parts)).strip()
 
 
 def _json_action_response(handler, payload):
@@ -78,18 +119,97 @@ def _build_theory_explain_prompt(title, text):
     )
 
 
-def _build_theory_chat_prompt(title, text, question):
-    clipped_text = text[:7000]
+@lru_cache(maxsize=1)
+def _load_theory_page_library():
+    theory_dir = Path(app.root_path) / "static" / "theory-html"
+    pages = []
+    for page_id, title in THEORY_PAGE_TITLES.items():
+        path = theory_dir / f"{page_id}.html"
+        if not path.exists():
+            continue
+        extractor = _TheoryHtmlTextExtractor()
+        extractor.feed(path.read_text(encoding="utf-8", errors="ignore"))
+        text = extractor.text()
+        if len(text) < 20:
+            continue
+        display_title = "实验基本信息（实验基础信息）" if page_id == "basic" else title
+        pages.append({
+            "id": page_id,
+            "title": display_title,
+            "text": text[:1400],
+        })
+    return pages
+
+
+def _clean_theory_chat_history(history):
+    cleaned = []
+    if not isinstance(history, list):
+        return cleaned
+    for item in history[-12:]:
+        if not isinstance(item, dict):
+            continue
+        role = item.get("role")
+        if role not in {"user", "assistant"}:
+            continue
+        content = str(item.get("content") or "").strip()
+        if not content:
+            continue
+        cleaned.append({
+            "role": role,
+            "content": content[:900],
+            "title": str(item.get("title") or "").strip()[:80],
+        })
+    return cleaned
+
+
+def _build_theory_page_context(pages, current_title):
+    by_title = {}
+    current_title = str(current_title or "").strip()
+    for item in _load_theory_page_library():
+        if current_title and item["title"].startswith(current_title):
+            continue
+        by_title[item["title"]] = item
+    if not isinstance(pages, list):
+        return list(by_title.values())
+    for item in pages[-8:]:
+        if not isinstance(item, dict):
+            continue
+        title = str(item.get("title") or "").strip()[:80] or "未命名理论页"
+        text = str(item.get("text") or "").strip()
+        if title == current_title or len(text) < 20:
+            continue
+        by_title[title] = {
+            "title": title,
+            "text": text[:1400],
+        }
+    return list(by_title.values())
+
+
+def _build_theory_chat_prompt(title, text, question, history, pages):
+    clipped_text = text[:6500]
     clipped_question = question[:800]
+    history_lines = []
+    for item in history:
+        speaker = "参训学员" if item["role"] == "user" else "AI助教"
+        page_title = f"（页面：{item['title']}）" if item.get("title") else ""
+        history_lines.append(f"{speaker}{page_title}：{item['content']}")
+    history_text = "\n".join(history_lines) if history_lines else "无"
+    page_blocks = [f"【{item['title']}】\n{item['text']}" for item in pages]
+    pages_text = "\n\n".join(page_blocks) if page_blocks else "无"
     return (
-        "请基于当前理论页内容回答学生问题。\n"
+        "请基于当前理论页、理论页资料库和历史对话回答学生问题。\n"
         "要求：\n"
-        "1. 只使用页面正文明确出现的信息，不补充正文里没有出现的字段、数据、公式或案例。\n"
-        "2. 如果问题超出当前页面内容，请直接说明当前页面没有说明这点，并引导学生查看相关页面。\n"
-        "3. 回答要适合语音朗读，控制在 120 到 260 字之间。\n"
-        "4. 不要使用 Markdown 标题、表格和项目符号。\n\n"
-        f"页面标题：{title}\n\n"
-        f"页面正文：\n{clipped_text}\n\n"
+        "1. 只使用下面给出的理论页资料和历史对话，不补充资料里没有出现的字段、数据、公式或案例。\n"
+        "2. 学生问到其他理论页时，必须先在理论页资料库里查找，不要只按当前页判断。\n"
+        "3. 参考历史对话理解代词、追问和上下文，但不能让历史对话覆盖页面资料。\n"
+        "4. 学生口语里说的“实验基础信息”通常指“实验基本信息”。\n"
+        "5. 如果问题超出当前页和理论页资料库，请直接说明这些资料没有说明这点。\n"
+        "6. 回答要适合语音朗读，控制在 120 到 260 字之间。\n"
+        "7. 不要使用 Markdown 标题、表格和项目符号。\n\n"
+        f"当前页面标题：{title}\n\n"
+        f"当前页面正文：\n{clipped_text}\n\n"
+        f"理论页资料库：\n{pages_text}\n\n"
+        f"历史对话：\n{history_text}\n\n"
         f"学生问题：{clipped_question}"
     )
 
@@ -136,14 +256,16 @@ def _request_theory_explanation(title, text):
     )
 
 
-def _request_theory_answer(title, text, question):
+def _request_theory_answer(title, text, question, history=None, pages=None):
+    cleaned_history = _clean_theory_chat_history(history)
+    cleaned_pages = _build_theory_page_context(pages, title)
     return _request_chat_completion(
         [
             {
                 "role": "system",
-                "content": "你是一个中文机器学习实验课助教，只根据当前页面内容回答学生问题。",
+                "content": "你是一个中文机器学习实验课助教，只根据已提供的理论页资料和历史对话回答学生问题。",
             },
-            {"role": "user", "content": _build_theory_chat_prompt(title, text, question)},
+            {"role": "user", "content": _build_theory_chat_prompt(title, text, question, cleaned_history, cleaned_pages)},
         ],
         max_tokens=320,
     )
@@ -238,6 +360,8 @@ def api_theory_chat():
     title = str(body.get("title") or "当前理论页").strip()
     text = str(body.get("text") or "").strip()
     question = str(body.get("question") or "").strip()
+    history = body.get("history")
+    pages = body.get("pages")
     if len(text) < 20:
         return jsonify({"error": "当前页面文本太少，无法回答问题。"}), 400
     if len(question) < 2:
@@ -245,7 +369,7 @@ def api_theory_chat():
     try:
         return jsonify({
             "model": THEORY_ASSISTANT_MODEL,
-            "answer": _request_theory_answer(title, text, question),
+            "answer": _request_theory_answer(title, text, question, history, pages),
         })
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 503
