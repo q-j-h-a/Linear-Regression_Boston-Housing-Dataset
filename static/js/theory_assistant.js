@@ -75,13 +75,54 @@
   const shell = document.createElement("div");
   shell.innerHTML = `
     <button class="theory-assistant-fab" id="theoryAssistantFab" type="button" aria-label="打开理论智能助手">
-      <img class="theory-assistant-logo" src="/static/aiLogo-Cusx885-.png" alt="">
+      <span class="digital-lecturer digital-lecturer-fab" aria-hidden="true">
+        <span class="lecturer-pulse lecturer-pulse-one"></span>
+        <span class="lecturer-pulse lecturer-pulse-two"></span>
+        <span class="lecturer-stage">
+          <span class="lecturer-avatar">
+            <span class="lecturer-head">
+              <span class="lecturer-hair"></span>
+              <span class="lecturer-eye lecturer-eye-left"></span>
+              <span class="lecturer-eye lecturer-eye-right"></span>
+              <span class="lecturer-mouth"></span>
+            </span>
+            <span class="lecturer-neck"></span>
+            <span class="lecturer-body">
+              <span class="lecturer-lapel lecturer-lapel-left"></span>
+              <span class="lecturer-lapel lecturer-lapel-right"></span>
+              <span class="lecturer-badge">AI</span>
+            </span>
+            <span class="lecturer-pointer"></span>
+          </span>
+          <span class="lecturer-wave lecturer-wave-one"></span>
+          <span class="lecturer-wave lecturer-wave-two"></span>
+          <span class="lecturer-wave lecturer-wave-three"></span>
+        </span>
+      </span>
     </button>
     <section class="theory-assistant-panel" id="theoryAssistantPanel" aria-label="理论智能助手">
       <div class="theory-assistant-head">
         <div class="theory-assistant-identity">
           <span class="theory-assistant-mark" aria-hidden="true">
-            <img src="/static/aiLogo-Cusx885-.png" alt="">
+            <span class="digital-lecturer digital-lecturer-mini" aria-hidden="true">
+              <span class="lecturer-stage">
+                <span class="lecturer-avatar">
+                  <span class="lecturer-head">
+                    <span class="lecturer-hair"></span>
+                    <span class="lecturer-eye lecturer-eye-left"></span>
+                    <span class="lecturer-eye lecturer-eye-right"></span>
+                    <span class="lecturer-mouth"></span>
+                  </span>
+                  <span class="lecturer-neck"></span>
+                  <span class="lecturer-body">
+                    <span class="lecturer-lapel lecturer-lapel-left"></span>
+                    <span class="lecturer-lapel lecturer-lapel-right"></span>
+                    <span class="lecturer-badge">AI</span>
+                  </span>
+                  <span class="lecturer-pointer"></span>
+                </span>
+              </span>
+            </span>
           </span>
           <div>
             <strong id="theoryAssistantTitle">AI助教</strong>
@@ -165,6 +206,9 @@
     const hasText = state.text.length > 20;
     const hasQuestion = questionInput.value.trim().length >= 2;
     const voiceIssue = voiceQuestionIssue();
+    document.body.classList.toggle("assistant-open", state.open);
+    document.body.classList.toggle("assistant-speaking", state.speaking && !state.paused);
+    document.body.classList.toggle("assistant-listening", state.listening);
     explainBtn.disabled = !hasText;
     readBtn.disabled = !hasText || !supportSpeech;
     askBtn.disabled = !hasText || !hasQuestion;
@@ -216,8 +260,13 @@
 
   function stopAudio(message = "已停止。") {
     if (currentAudio) {
-      currentAudio.pause();
-      currentAudio.src = "";
+      const audio = currentAudio;
+      audio.onplay = null;
+      audio.onpause = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.pause();
+      audio.removeAttribute("src");
       currentAudio = null;
     }
     if (currentAudioUrl) {
