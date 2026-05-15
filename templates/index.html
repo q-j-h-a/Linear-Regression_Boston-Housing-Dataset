@@ -149,7 +149,7 @@
     }
     .sidebar {
       background: #fff;
-      padding: 22px 16px;
+      padding: 20px 14px;
       min-height: 0;
       height: 100%;
       overflow: auto;
@@ -197,23 +197,24 @@
       height: 100%;
       overflow: auto;
     }
-    details.nav-section {
+    .nav-section {
       border-bottom: 1px solid var(--line);
-      padding: 0 0 16px;
+      padding: 0 0 18px;
       margin-bottom: 18px;
     }
-    details.nav-section summary {
-      list-style: none;
+    .nav-section:last-of-type {
+      margin-bottom: 0;
+    }
+    .nav-section-title {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 10px;
       font-size: 15px;
       font-weight: 900;
       color: #111827;
-      margin-bottom: 14px;
+      min-height: 34px;
+      margin-bottom: 10px;
+      padding: 0 4px;
     }
-    details.nav-section summary::-webkit-details-marker { display: none; }
     .chev {
       width: 22px;
       height: 22px;
@@ -224,21 +225,21 @@
       place-items: center;
       transition: transform .18s ease;
     }
-    details[open] .chev { transform: rotate(90deg); }
+    details[open] > summary .chev { transform: rotate(90deg); }
     .step-list {
       position: relative;
       display: grid;
-      gap: 0;
-      padding-left: 14px;
+      gap: 6px;
+      padding-left: 10px;
     }
     .step-list:before {
       content: "";
       position: absolute;
-      left: 10px;
-      top: 14px;
-      bottom: 14px;
+      left: 28px;
+      top: 12px;
+      bottom: 12px;
       width: 1px;
-      background: var(--line);
+      background: #dbe3ef;
     }
     .nav-btn {
       position: relative;
@@ -246,13 +247,15 @@
       border: 0;
       background: transparent;
       display: grid;
-      grid-template-columns: 22px 1fr;
-      gap: 10px;
-      align-items: start;
+      grid-template-columns: 18px 1fr;
+      gap: 11px;
+      align-items: center;
       text-align: left;
-      padding: 10px 0;
+      min-height: 40px;
+      padding: 9px 10px;
       color: var(--text);
-      border-radius: 12px;
+      border-radius: 10px;
+      transition: background .16s ease, color .16s ease, box-shadow .16s ease;
     }
     .nav-btn:focus,
     .nav-btn:focus-visible,
@@ -266,17 +269,17 @@
     .dot {
       position: relative;
       z-index: 1;
-      width: 18px;
-      height: 18px;
+      width: 16px;
+      height: 16px;
       border-radius: 999px;
       border: 2px solid #cfd5df;
       background: #fff;
-      margin-top: 2px;
+      margin-top: 0;
       transition: all .18s ease;
     }
     .nav-btn strong {
       display: block;
-      font-size: 15px;
+      font-size: 14px;
       line-height: 1.35;
     }
     .nav-btn > span:not(.dot) {
@@ -304,6 +307,9 @@
       background: var(--purple);
       box-shadow: 0 0 0 5px var(--purple-soft);
     }
+    .nav-btn.active {
+      background: var(--purple-soft);
+    }
     .nav-btn.active strong { color: var(--purple); }
     .nav-subhead {
       margin: 8px 0 4px 32px;
@@ -319,13 +325,15 @@
     details.nested-section summary {
       list-style: none;
       display: grid;
-      grid-template-columns: 22px 1fr 22px;
-      align-items: start;
-      gap: 10px;
+      grid-template-columns: 18px 1fr 22px;
+      align-items: center;
+      gap: 11px;
       color: var(--text);
       cursor: pointer;
-      border-radius: 12px;
-      padding: 10px 0 6px;
+      min-height: 40px;
+      border-radius: 10px;
+      padding: 9px 10px;
+      transition: background .16s ease, color .16s ease;
     }
     details.nested-section summary::-webkit-details-marker { display: none; }
     details.nested-section summary:hover {
@@ -357,16 +365,22 @@
       box-shadow: 0 0 0 5px var(--purple-soft);
     }
     details.nested-section .step-list {
-      padding-left: 22px;
+      padding-left: 18px;
+      margin-top: 6px;
+      gap: 6px;
+    }
+    details.nested-section:not([open]) .step-list {
+      display: none;
       margin-top: 0;
-      gap: 0;
     }
     details.nested-section .step-list:before {
-      left: 18px;
-      top: 6px;
+      left: 36px;
+      top: 8px;
+      bottom: 8px;
     }
     details.nested-section .nav-btn {
-      padding: 7px 0;
+      min-height: 38px;
+      padding: 8px 10px;
     }
     details.nested-section .nav-btn strong {
       font-size: 14px;
@@ -460,7 +474,7 @@
       font-size: 16px;
     }
     .html-lesson {
-      margin-top: 18px;
+      margin-top: 0;
       border: 1px solid var(--line);
       border-radius: 14px;
       background: #fff;
@@ -1129,6 +1143,161 @@
       background: #fffbeb;
     }
     .hidden { display: none !important; }
+    .theory-assistant-fab {
+      position: fixed;
+      right: 28px;
+      bottom: 28px;
+      z-index: 50;
+      width: 52px;
+      height: 52px;
+      border: 0;
+      border-radius: 16px;
+      background: #111827;
+      color: #fff;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+      font-weight: 900;
+      box-shadow: 0 16px 36px rgba(15, 23, 42, .22);
+    }
+    .theory-assistant-fab:hover {
+      background: #1d4ed8;
+    }
+    .theory-assistant-panel {
+      position: fixed;
+      right: 28px;
+      bottom: 92px;
+      z-index: 50;
+      width: min(380px, calc(100vw - 32px));
+      max-height: min(620px, calc(100vh - 128px));
+      border: 1px solid rgba(214, 220, 231, .9);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .98);
+      box-shadow: 0 24px 60px rgba(15, 23, 42, .18);
+      overflow: hidden;
+      display: none;
+    }
+    .theory-assistant-panel.open {
+      display: grid;
+      grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    }
+    .theory-assistant-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+      padding: 16px 16px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .theory-assistant-head strong {
+      display: block;
+      color: #111827;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .theory-assistant-head span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .theory-assistant-close {
+      width: 28px;
+      height: 28px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: #334155;
+      font-weight: 900;
+    }
+    .theory-assistant-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #f8fafc;
+    }
+    .theory-assistant-actions button,
+    .theory-assistant-ask-actions button,
+    .theory-assistant-control button {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      color: #172033;
+      font-size: 13px;
+      font-weight: 900;
+    }
+    .theory-assistant-actions button.primary {
+      border-color: rgba(37, 99, 235, .24);
+      background: #2563eb;
+      color: #fff;
+    }
+    .theory-assistant-ask {
+      display: grid;
+      gap: 8px;
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .theory-assistant-ask textarea {
+      width: 100%;
+      resize: vertical;
+      min-height: 48px;
+      max-height: 96px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 9px 10px;
+      color: #172033;
+      font: inherit;
+      font-size: 13px;
+      line-height: 1.5;
+      outline: none;
+    }
+    .theory-assistant-ask textarea:focus {
+      border-color: rgba(37, 99, 235, .45);
+      box-shadow: 0 0 0 3px rgba(37, 99, 235, .10);
+    }
+    .theory-assistant-ask-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .theory-assistant-actions button:disabled,
+    .theory-assistant-ask-actions button:disabled,
+    .theory-assistant-control button:disabled {
+      cursor: not-allowed;
+      opacity: .55;
+    }
+    .theory-assistant-body {
+      min-height: 160px;
+      overflow: auto;
+      padding: 16px;
+      color: #263347;
+      font-size: 14px;
+      line-height: 1.8;
+      white-space: pre-wrap;
+    }
+    .theory-assistant-control {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      padding: 12px 16px 14px;
+      border-top: 1px solid var(--line);
+      background: #fff;
+    }
+    .theory-assistant-status {
+      grid-column: 1 / -1;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    body:not(.has-theory-assistant) .theory-assistant-fab,
+    body:not(.has-theory-assistant) .theory-assistant-panel {
+      display: none !important;
+    }
     @media (max-width: 1260px) {
       .shell {
         --sidebar-width: 240px;
@@ -1146,6 +1315,14 @@
       .sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
       .splitter { display: none; }
       .chart-card.wide { grid-column: auto; }
+      .theory-assistant-fab {
+        right: 16px;
+        bottom: 16px;
+      }
+      .theory-assistant-panel {
+        right: 16px;
+        bottom: 80px;
+      }
     }
   </style>
 </head>
@@ -1156,7 +1333,6 @@
       <div class="logo">ML</div>
       <div>
         <h1>简单线性回归教学实验</h1>
-        <p>机器学习基础实验 / Boston Housing 房价预测</p>
       </div>
     </div>
     <div class="top-actions hidden-top">
@@ -1167,8 +1343,8 @@
 
   <div class="shell">
     <aside class="sidebar">
-      <details class="nav-section" open>
-        <summary>理论部分 <span class="chev">›</span></summary>
+      <section class="nav-section">
+        <div class="nav-section-title">理论部分</div>
         <div class="step-list">
           <button class="nav-btn" data-page="basic" type="button"><span class="dot"></span><span><strong>实验基本信息</strong><span>实验背景与任务</span></span></button>
           <button class="nav-btn" data-page="purpose" type="button"><span class="dot"></span><span><strong>实验目的</strong><span>你需要掌握什么</span></span></button>
@@ -1186,17 +1362,17 @@
           <button class="nav-btn" data-page="result" type="button"><span class="dot"></span><span><strong>预期成果</strong><span>实验完成标准</span></span></button>
           <button class="nav-btn" data-page="thinking" type="button"><span class="dot"></span><span><strong>思考拓展</strong><span>从单特征到多特征</span></span></button>
         </div>
-      </details>
+      </section>
 
-      <details class="nav-section" open>
-        <summary>实验部分 <span class="chev">›</span></summary>
+      <section class="nav-section">
+        <div class="nav-section-title">实验部分</div>
         <div class="step-list">
           <button class="nav-btn" data-page="preprocess" type="button"><span class="dot"></span><span><strong>数据预处理</strong><span>观察数据与相关性</span></span></button>
           <button class="nav-btn" data-page="train_eval" type="button"><span class="dot"></span><span><strong>模型训练与评估</strong><span>训练、优化和指标</span></span></button>
           <button class="nav-btn" data-page="predict" type="button"><span class="dot"></span><span><strong>模型预测</strong><span>输入样本并查看结果</span></span></button>
           <button class="nav-btn" data-page="student" type="button"><span class="dot"></span><span><strong>自主实验</strong><span>上传数据并完成训练</span></span></button>
         </div>
-      </details>
+      </section>
     </aside>
 
     <div class="splitter splitter-left" data-resize-edge="left" role="separator" aria-orientation="vertical" aria-label="调整左侧导航宽度"></div>
@@ -1222,6 +1398,7 @@ const DEFAULT_FEATURE = {{ default_feature | tojson }};
 <script src="/static/js/student_page.js"></script>
 <script src="/static/js/predict_page.js"></script>
 <script src="/static/js/train_page.js"></script>
+<script src="/static/js/theory_assistant.js"></script>
 <script src="/static/js/app_shell.js"></script>
 </body>
 </html>

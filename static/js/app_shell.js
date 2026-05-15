@@ -21,6 +21,9 @@ async function setPage(page) {
   stopAuto();
   currentPage = page;
   setActive(page);
+  if (window.TheoryAssistant && ["preprocess", "train_eval", "predict", "student"].includes(page)) {
+    window.TheoryAssistant.hide();
+  }
   destroyDataGrid();
   disposeCharts();
   $("topFeature").textContent = `当前特征 ${currentFeature()}`;

@@ -73,15 +73,7 @@ async function renderTrainShell() {
   const schema = await loadTrainPageSchema();
   document.querySelector(".shell").classList.remove("theory");
   $("main").innerHTML = `
-    <section class="hero-card">
-      <div class="hero-line">
-        <div>
-          <div class="eyebrow">实验部分</div>
-          <h2>模型训练与评估</h2>
-        </div>
-      </div>
-      <div class="chart-grid" id="chartGrid"></div>
-    </section>`;
+    <div class="chart-grid" id="chartGrid"></div>`;
   $("rightPanel").innerHTML = renderTrainControlPanel(schema);
   bindTrainControlPanel();
   $("trainFeature").addEventListener("change", prepareTraining);

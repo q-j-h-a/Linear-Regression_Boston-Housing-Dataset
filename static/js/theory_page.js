@@ -80,20 +80,15 @@ const theoryPages = {
 
 function renderTheory(page) {
   document.querySelector(".shell").classList.add("theory");
-  const item = theoryPages[page] || theoryPages.dataset;
+  const pageId = theoryPages[page] ? page : "dataset";
+  if (window.TheoryAssistant) {
+    window.TheoryAssistant.show(pageId, theoryPages[pageId]?.title || "当前理论页");
+  }
   $("main").innerHTML = `
-    <section class="hero-card">
-      <div class="hero-line">
-        <div>
-          <div class="eyebrow">理论部分</div>
-          <h2>${escapeHtml(item.title)}</h2>
-        </div>
-      </div>
-      ${renderTheoryHtmlSlot(page)}
-    </section>
+    ${renderTheoryHtmlSlot(pageId)}
   `;
   $("rightPanel").innerHTML = "";
-  loadTheoryHtml(page);
+  loadTheoryHtml(pageId);
 }
 
 function renderTheoryHtmlSlot(page) {
@@ -111,7 +106,10 @@ async function loadTheoryHtml(page) {
     const html = await resp.text();
     const iframe = wrap.querySelector("iframe");
     iframe.setAttribute("scrolling", "no");
-    iframe.onload = () => fitTheoryIframe(iframe);
+    iframe.onload = () => {
+      fitTheoryIframe(iframe);
+      syncTheoryAssistant(page, iframe);
+    };
     iframe.srcdoc = html;
     wrap.classList.remove("hidden");
   } catch (err) {
@@ -147,4 +145,24 @@ function fitTheoryIframe(iframe) {
       observer.observe(doc.body);
     }
   } catch (err) {}
+}
+
+function syncTheoryAssistant(page, iframe) {
+  if (!window.TheoryAssistant) return;
+  try {
+    const doc = iframe.contentDocument || iframe.contentWindow.document;
+    const title = theoryPages[page]?.title || doc.querySelector("h1, h2")?.textContent?.trim() || "当前理论页";
+    const text = doc.body?.innerText?.replace(/\s+/g, " ").trim() || "";
+    window.TheoryAssistant.setPage({
+      id: page,
+      title,
+      text,
+    });
+  } catch (err) {
+    window.TheoryAssistant.setPage({
+      id: page,
+      title: theoryPages[page]?.title || "当前理论页",
+      text: "",
+    });
+  }
 }

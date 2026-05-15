@@ -72,15 +72,7 @@ async function renderStudentShell() {
   });
   document.querySelector(".shell").classList.remove("theory");
   $("main").innerHTML = `
-    <section class="hero-card">
-      <div class="hero-line">
-        <div>
-          <div class="eyebrow">实验部分</div>
-          <h2>自主实验</h2>
-        </div>
-      </div>
-      <div id="studentWorkspace"></div>
-    </section>`;
+    <div id="studentWorkspace"></div>`;
   renderStudentPanel();
   renderStudentWorkspace();
   restoreStudentWorkspaceState();
