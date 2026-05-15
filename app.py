@@ -1,9 +1,12 @@
 import json
 import os
+import subprocess
+import tempfile
 import urllib.error
 import urllib.request
+import asyncio
 
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, make_response
 
 from core.context_store import get_context
 from core.registry import discover_chart_builders, discover_charts, discover_models, get_model, get_panel
@@ -24,6 +27,23 @@ JSON_ACTION_HANDLERS = dict(JSON_ACTIONS)
 FORM_ACTION_HANDLERS = {"student_upload": model_student_upload}
 THEORY_ASSISTANT_MODEL = os.getenv("THEORY_ASSISTANT_MODEL", "JoyAI-1.3T")
 THEORY_ASSISTANT_BASE_URL = os.getenv("THEORY_ASSISTANT_BASE_URL", "https://api.masterjie.eu.cc/v1").rstrip("/")
+LOCAL_TTS_VOICES = {
+    "Tingting": "婷婷",
+    "Meijia": "美佳",
+    "Sinji": "善怡",
+    "Flo (中文（中国大陆）)": "Flo",
+    "Shelley (中文（中国大陆）)": "Shelley",
+    "Sandy (中文（中国大陆）)": "Sandy",
+    "Eddy (中文（中国大陆）)": "Eddy",
+}
+EDGE_TTS_VOICES = {
+    "zh-CN-XiaoxiaoNeural": "晓晓",
+    "zh-CN-XiaoyiNeural": "小艺",
+    "zh-CN-YunxiNeural": "云希",
+    "zh-CN-YunjianNeural": "云健",
+    "zh-CN-YunxiaNeural": "云夏",
+    "zh-CN-YunyangNeural": "云扬",
+}
 
 
 def _json_action_response(handler, payload):
@@ -129,6 +149,58 @@ def _request_theory_answer(title, text, question):
     )
 
 
+def _local_tts_audio(text, voice, rate):
+    selected_voice = voice if voice in LOCAL_TTS_VOICES else "Tingting"
+    selected_rate = int(min(260, max(140, rate)))
+    clipped_text = text[:6000]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        text_path = os.path.join(tmpdir, "speech.txt")
+        aiff_path = os.path.join(tmpdir, "speech.aiff")
+        m4a_path = os.path.join(tmpdir, "speech.m4a")
+        with open(text_path, "w", encoding="utf-8") as file:
+            file.write(clipped_text)
+        subprocess.run(
+            ["say", "-v", selected_voice, "-r", str(selected_rate), "-f", text_path, "-o", aiff_path],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=90,
+        )
+        subprocess.run(
+            ["afconvert", "-f", "m4af", "-d", "aac", aiff_path, m4a_path],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=60,
+        )
+        with open(m4a_path, "rb") as file:
+            return file.read()
+
+
+async def _save_edge_tts_audio(text, voice, rate_percent, output_path):
+    import edge_tts
+
+    communicate = edge_tts.Communicate(text, voice, rate=f"{rate_percent:+d}%")
+    await communicate.save(output_path)
+
+
+def _edge_tts_audio(text, voice, rate):
+    selected_voice = voice if voice in EDGE_TTS_VOICES else "zh-CN-XiaoxiaoNeural"
+    selected_rate = int(min(35, max(-15, round((rate - 1) * 100))))
+    clipped_text = text[:6000]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        mp3_path = os.path.join(tmpdir, "speech.mp3")
+        asyncio.run(_save_edge_tts_audio(clipped_text, selected_voice, selected_rate, mp3_path))
+        with open(mp3_path, "rb") as file:
+            return file.read()
+
+
+def _tts_audio(text, voice, rate):
+    if voice in EDGE_TTS_VOICES:
+        return _edge_tts_audio(text, voice, rate), "audio/mpeg", "edge"
+    return _local_tts_audio(text, voice, 180 * rate), "audio/mp4", "macos"
+
+
 @app.route("/")
 def index():
     load_raw_df()
@@ -182,6 +254,39 @@ def api_theory_chat():
         return jsonify({"error": f"AI 接口请求失败：HTTP {exc.code} {detail}"}), 502
     except Exception as exc:
         return jsonify({"error": f"AI 问答失败：{exc}"}), 500
+
+
+@app.route("/api/tts", methods=["POST"])
+@app.route("/api/local_tts", methods=["POST"])
+def api_tts():
+    body = request.get_json() or {}
+    text = str(body.get("text") or "").strip()
+    voice = str(body.get("voice") or "zh-CN-XiaoxiaoNeural").strip()
+    try:
+        rate = float(body.get("rate") or 1.12)
+    except (TypeError, ValueError):
+        rate = 1.12
+    rate = min(1.45, max(0.85, rate))
+    if len(text) < 2:
+        return jsonify({"error": "缺少需要朗读的文本。"}), 400
+    try:
+        audio, content_type, provider = _tts_audio(text, voice, rate)
+        resp = make_response(audio)
+        resp.headers["Content-Type"] = content_type
+        resp.headers["Cache-Control"] = "no-store"
+        resp.headers["X-TTS-Provider"] = provider
+        return resp
+    except FileNotFoundError:
+        return jsonify({"error": "当前系统缺少 say 或 afconvert，无法生成本机语音。"}), 500
+    except ImportError:
+        return jsonify({"error": "当前环境缺少 edge-tts，请先安装依赖。"}), 500
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or b"").decode("utf-8", errors="replace")[:200]
+        return jsonify({"error": f"本机语音生成失败：{detail or exc}"}), 500
+    except subprocess.TimeoutExpired:
+        return jsonify({"error": "本机语音生成超时，文本可能太长。"}), 504
+    except Exception as exc:
+        return jsonify({"error": f"语音生成失败：{exc}"}), 500
 
 
 @app.route("/api/chart_registry", methods=["GET"])
