@@ -2,6 +2,7 @@
 
 const ASSISTANT_VOICE_KEY = "linearRegressionTheoryAssistantVoice";
 const ASSISTANT_RATE_KEY = "linearRegressionTheoryAssistantRate";
+const ASSISTANT_TTS_PROVIDER_KEY = "linearRegressionTheoryAssistantTtsProvider";
 const ASSISTANT_SAMPLE_TEXT = "你好，我是 AI 助教。这是当前音色和语速的试听效果。";
 
 const ASSISTANT_VOICE_OPTIONS = [
@@ -12,6 +13,9 @@ const ASSISTANT_VOICE_OPTIONS = [
   { value: "zh-CN-YunjianNeural", label: "云健 · 男声 · 有力" },
   { value: "zh-CN-YunxiaNeural", label: "云夏 · 男声 · 年轻" },
   { value: "Tingting", label: "婷婷 · 本机备用" },
+  { value: "Meijia", label: "美佳 · macOS 本机" },
+  { value: "Sinji", label: "善怡 · macOS 本机" },
+  { value: "melotts:ZH", label: "MeloTTS 中文 · 本地模型" },
 ];
 
 let settingsAudioUrl = "";
@@ -42,20 +46,47 @@ function assistantRuntimeLabel(provider, model) {
   return model || "-";
 }
 
+function assistantTtsProviderLabel(provider) {
+  if (provider === "melotts") return "MeloTTS 本地模型";
+  if (provider === "macos") return "macOS 本机语音";
+  return "Edge TTS 在线语音";
+}
+
 function assistantVoiceLabel(value) {
   return ASSISTANT_VOICE_OPTIONS.find(item => item.value === value)?.label || value || "未设置";
 }
 
-function currentAssistantAudioSettings() {
+function normalizeVoiceForProvider(provider, voice) {
+  const edgeVoices = new Set([
+    "zh-CN-XiaoxiaoNeural",
+    "zh-CN-XiaoyiNeural",
+    "zh-CN-YunxiNeural",
+    "zh-CN-YunyangNeural",
+    "zh-CN-YunjianNeural",
+    "zh-CN-YunxiaNeural",
+  ]);
+  const macosVoices = new Set(["Tingting", "Meijia", "Sinji"]);
+  if (provider === "melotts") return "melotts:ZH";
+  if (provider === "macos") return macosVoices.has(voice) ? voice : "Tingting";
+  return edgeVoices.has(voice) ? voice : "zh-CN-XiaoxiaoNeural";
+}
+
+function currentAssistantAudioSettings(config = null) {
+  const savedProvider = readAssistantSetting(ASSISTANT_TTS_PROVIDER_KEY);
+  const provider = ["edge", "macos", "melotts"].includes(savedProvider)
+    ? savedProvider
+    : (config?.tts?.provider || "edge");
   const savedVoice = readAssistantSetting(ASSISTANT_VOICE_KEY);
+  const configVoice = config?.tts?.default_voice || "";
   const voice = ASSISTANT_VOICE_OPTIONS.some(item => item.value === savedVoice)
     ? savedVoice
-    : "zh-CN-XiaoxiaoNeural";
+    : (ASSISTANT_VOICE_OPTIONS.some(item => item.value === configVoice) ? configVoice : "zh-CN-XiaoxiaoNeural");
   const rateValue = Number(readAssistantSetting(ASSISTANT_RATE_KEY));
+  const configRate = Number(config?.tts?.default_rate);
   const rate = Number.isFinite(rateValue) && rateValue >= 0.85 && rateValue <= 1.45
     ? rateValue
-    : 1.15;
-  return { voice, rate };
+    : (Number.isFinite(configRate) && configRate >= 0.85 && configRate <= 1.45 ? configRate : 1.15);
+  return { provider, voice: normalizeVoiceForProvider(provider, voice), rate };
 }
 
 function providerPill(provider, model) {
@@ -94,8 +125,11 @@ function renderSettingsSide(config, audio, latestTest = null) {
     </div>
     <div class="helper-card">
       <h3>语音设置</h3>
+      <p>${escapeHtml(assistantTtsProviderLabel(audio.provider))}</p>
       <p>${escapeHtml(assistantVoiceLabel(audio.voice))}</p>
       <p>语速：${audio.rate.toFixed(2)}x</p>
+      ${audio.provider === "melotts" ? `<p>服务：${escapeHtml(config?.tts?.melotts?.service_url || "http://127.0.0.1:8000/speech")}</p>` : ""}
+      ${audio.provider === "melotts" ? `<p>命令：${escapeHtml(config?.tts?.melotts?.command || "melo")}</p>` : ""}
     </div>
     <div class="helper-card">
       <h3>外部接口</h3>
@@ -144,7 +178,7 @@ function renderSettingsSummary(config, audio) {
           </div>
           <div class="settings-state-card">
             <span>朗读声音</span>
-            <strong id="settingsVoiceValue">${escapeHtml(assistantVoiceLabel(audio.voice))} · ${audio.rate.toFixed(2)}x</strong>
+            <strong id="settingsVoiceValue">${escapeHtml(assistantTtsProviderLabel(audio.provider))} · ${escapeHtml(assistantVoiceLabel(audio.voice))} · ${audio.rate.toFixed(2)}x</strong>
           </div>
         </div>
       </div>
@@ -159,13 +193,14 @@ function updateSettingsSummary(config, audio) {
   const voiceEl = $("settingsVoiceValue");
   if (modeEl) modeEl.textContent = assistantProviderLabel(config?.provider || "ollama_first");
   if (modelEl) modelEl.textContent = config?.ollama?.model || "-";
-  if (voiceEl) voiceEl.textContent = `${assistantVoiceLabel(audio.voice)} · ${audio.rate.toFixed(2)}x`;
+  if (voiceEl) voiceEl.textContent = `${assistantTtsProviderLabel(audio.provider)} · ${assistantVoiceLabel(audio.voice)} · ${audio.rate.toFixed(2)}x`;
 }
 
-function currentFormAudio(voiceEl, rateEl) {
+function currentFormAudio(providerEl, voiceEl, rateEl) {
   const rateValue = Number(rateEl.value);
   return {
-    voice: voiceEl.value || "zh-CN-XiaoxiaoNeural",
+    provider: providerEl.value || "edge",
+    voice: normalizeVoiceForProvider(providerEl.value || "edge", voiceEl.value || "zh-CN-XiaoxiaoNeural"),
     rate: Number.isFinite(rateValue) ? rateValue : 1.15,
   };
 }
@@ -174,7 +209,6 @@ async function renderSettingsShell() {
   document.querySelector(".shell").classList.remove("theory");
   if (window.TheoryAssistant) window.TheoryAssistant.hide();
 
-  const audio = currentAssistantAudioSettings();
   let config;
   let initialError = "";
   try {
@@ -185,8 +219,15 @@ async function renderSettingsShell() {
       provider: "ollama_first",
       ollama: { base_url: "http://127.0.0.1:11434/v1", model: "gpt-oss:20b" },
       external: { base_url: "https://api.masterjie.eu.cc/v1", model: "JoyAI-1.3T", api_key_configured: false },
+      tts: {
+        provider: "edge",
+        default_voice: "zh-CN-XiaoxiaoNeural",
+        default_rate: 1.15,
+        melotts: { service_url: "http://127.0.0.1:8000/speech", command: "melo", language: "ZH", speaker: "ZH" },
+      },
     };
   }
+  const audio = currentAssistantAudioSettings(config);
 
   $("main").innerHTML = `
     ${renderSettingsSummary(config, audio)}
@@ -234,16 +275,44 @@ async function renderSettingsShell() {
             <h3>语音配置</h3>
             <div class="settings-grid">
               <div class="settings-field">
+                <label for="assistantTtsProvider">语音引擎</label>
+                <select id="assistantTtsProvider">
+                  <option value="edge">Edge TTS 在线语音</option>
+                  <option value="melotts">MeloTTS 本地模型</option>
+                  <option value="macos">macOS 本机语音</option>
+                </select>
+                <p class="settings-hint">演示音质优先用 Edge TTS；离线演示用 MeloTTS；macOS 语音只作为备用。</p>
+              </div>
+              <div class="settings-field">
                 <label for="assistantVoice">音色</label>
                 <select id="assistantVoice">
                   ${ASSISTANT_VOICE_OPTIONS.map(item => `<option value="${escapeHtml(item.value)}">${escapeHtml(item.label)}</option>`).join("")}
                 </select>
-                <p class="settings-hint">Edge TTS 音色需要网络；“婷婷”走 macOS 本机语音。</p>
+                <p class="settings-hint">MeloTTS 使用本地模型，页面里的音色名只用于显示。</p>
               </div>
               <div class="settings-field">
                 <div class="settings-label"><span>语速</span><strong id="assistantRateValue">1.15x</strong></div>
                 <input id="assistantRate" type="range" min="0.85" max="1.45" step="0.05" value="1.15">
                 <p class="settings-hint">会同步到朗读当前页和 AI 回答朗读。</p>
+              </div>
+              <div class="settings-field">
+                <label for="melottsServiceUrl">MeloTTS 服务地址</label>
+                <input id="melottsServiceUrl" type="url" autocomplete="off" placeholder="http://127.0.0.1:8000/speech">
+                <p class="settings-hint">推荐使用服务地址。文章里的 FastAPI 服务是 <code>/speech</code>；Docker 版通常是 <code>/tts/convert/tts</code>。</p>
+              </div>
+              <div class="settings-field">
+                <label for="melottsCommand">MeloTTS 命令</label>
+                <input id="melottsCommand" type="text" autocomplete="off" placeholder="melo">
+                <p class="settings-hint">只在服务地址留空时使用。如果命令不在 PATH，可以写完整路径。</p>
+              </div>
+              <div class="settings-field">
+                <label for="melottsLanguage">MeloTTS 语言</label>
+                <input id="melottsLanguage" type="text" autocomplete="off" placeholder="ZH">
+              </div>
+              <div class="settings-field">
+                <label for="melottsSpeaker">MeloTTS 说话人</label>
+                <input id="melottsSpeaker" type="text" autocomplete="off" placeholder="默认即可">
+                <p class="settings-hint">中文一般填 <code>ZH</code>；如果本地模型有多个 speaker，再填写对应名称。</p>
               </div>
             </div>
           </div>
@@ -279,9 +348,14 @@ async function renderSettingsShell() {
   const externalModelEl = $("externalModel");
   const externalKeyEl = $("externalApiKey");
   const clearKeyEl = $("clearExternalKey");
+  const ttsProviderEl = $("assistantTtsProvider");
   const voiceEl = $("assistantVoice");
   const rateEl = $("assistantRate");
   const rateValueEl = $("assistantRateValue");
+  const melottsServiceUrlEl = $("melottsServiceUrl");
+  const melottsCommandEl = $("melottsCommand");
+  const melottsLanguageEl = $("melottsLanguage");
+  const melottsSpeakerEl = $("melottsSpeaker");
   const statusEl = $("assistantSettingsStatus");
   const modelListEl = $("ollamaModelList");
   const testBoxEl = $("assistantTestResult");
@@ -293,9 +367,14 @@ async function renderSettingsShell() {
   ollamaModelEl.value = config.ollama?.model || "gpt-oss:20b";
   externalBaseEl.value = config.external?.base_url || "https://api.masterjie.eu.cc/v1";
   externalModelEl.value = config.external?.model || "JoyAI-1.3T";
+  ttsProviderEl.value = audio.provider;
   voiceEl.value = audio.voice;
   rateEl.value = String(audio.rate);
   rateValueEl.textContent = `${audio.rate.toFixed(2)}x`;
+  melottsServiceUrlEl.value = config.tts?.melotts?.service_url || "http://127.0.0.1:8000/speech";
+  melottsCommandEl.value = config.tts?.melotts?.command || "melo";
+  melottsLanguageEl.value = config.tts?.melotts?.language || "ZH";
+  melottsSpeakerEl.value = config.tts?.melotts?.speaker || "ZH";
   renderSettingsSide(config, audio);
 
   const setStatus = (text, type = "") => {
@@ -310,7 +389,7 @@ async function renderSettingsShell() {
         provider: providerEl.value,
         ollama: { model: ollamaModelEl.value.trim() },
       },
-      currentFormAudio(voiceEl, rateEl)
+      currentFormAudio(ttsProviderEl, voiceEl, rateEl)
     );
   }
 
@@ -344,16 +423,25 @@ async function renderSettingsShell() {
       external_base_url: externalBaseEl.value.trim(),
       external_model: externalModelEl.value.trim(),
       clear_external_api_key: clearKeyEl.checked,
+      tts_provider: ttsProviderEl.value,
+      tts_voice: voiceEl.value,
+      tts_rate: nextRate,
+      melotts_service_url: melottsServiceUrlEl.value.trim(),
+      melotts_command: melottsCommandEl.value.trim(),
+      melotts_language: melottsLanguageEl.value.trim(),
+      melotts_speaker: melottsSpeakerEl.value.trim(),
     };
     const apiKey = externalKeyEl.value.trim();
     if (apiKey) payload.external_api_key = apiKey;
     if (!quiet) setStatus("正在保存...");
     const saved = await postJson("/api/assistant_config", payload);
-    const audioSettings = currentFormAudio(voiceEl, rateEl);
+    const audioSettings = currentFormAudio(ttsProviderEl, voiceEl, rateEl);
+    writeAssistantSetting(ASSISTANT_TTS_PROVIDER_KEY, audioSettings.provider);
     writeAssistantSetting(ASSISTANT_VOICE_KEY, audioSettings.voice);
     writeAssistantSetting(ASSISTANT_RATE_KEY, String(Number.isFinite(nextRate) ? nextRate : 1.15));
     if (window.TheoryAssistant?.updateAudioSettings) {
       window.TheoryAssistant.updateAudioSettings({
+        ttsProvider: audioSettings.provider,
         voiceURI: audioSettings.voice,
         rate: audioSettings.rate,
       });
@@ -367,9 +455,14 @@ async function renderSettingsShell() {
     return saved;
   }
 
-  [providerEl, ollamaBaseEl, ollamaModelEl, externalBaseEl, externalModelEl, voiceEl].forEach(el => {
+  [providerEl, ollamaBaseEl, ollamaModelEl, externalBaseEl, externalModelEl, ttsProviderEl, voiceEl, melottsServiceUrlEl, melottsCommandEl, melottsLanguageEl, melottsSpeakerEl].forEach(el => {
     el.addEventListener("input", syncSummary);
     el.addEventListener("change", syncSummary);
+  });
+
+  ttsProviderEl.addEventListener("change", () => {
+    voiceEl.value = normalizeVoiceForProvider(ttsProviderEl.value, voiceEl.value);
+    syncSummary();
   });
 
   rateEl.addEventListener("input", () => {
@@ -404,7 +497,7 @@ async function renderSettingsShell() {
         <p style="margin-top:8px">${escapeHtml(result.answer || "")}</p>
         <p class="settings-hint">耗时：${escapeHtml(String(result.elapsed_ms || "-"))} ms</p>
       `);
-      renderSettingsSide(config, currentFormAudio(voiceEl, rateEl), result);
+      renderSettingsSide(config, currentFormAudio(ttsProviderEl, voiceEl, rateEl), result);
       setStatus("模型测试通过。", "ready");
     } catch (err) {
       updateTestBox(`
@@ -420,11 +513,14 @@ async function renderSettingsShell() {
   testVoiceBtn.addEventListener("click", async () => {
     try {
       testVoiceBtn.disabled = true;
-      const audioSettings = currentFormAudio(voiceEl, rateEl);
+      await saveSettings({ quiet: true });
+      const audioSettings = currentFormAudio(ttsProviderEl, voiceEl, rateEl);
+      writeAssistantSetting(ASSISTANT_TTS_PROVIDER_KEY, audioSettings.provider);
       writeAssistantSetting(ASSISTANT_VOICE_KEY, audioSettings.voice);
       writeAssistantSetting(ASSISTANT_RATE_KEY, String(audioSettings.rate));
       if (window.TheoryAssistant?.updateAudioSettings) {
         window.TheoryAssistant.updateAudioSettings({
+          ttsProvider: audioSettings.provider,
           voiceURI: audioSettings.voice,
           rate: audioSettings.rate,
         });
@@ -435,6 +531,7 @@ async function renderSettingsShell() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: ASSISTANT_SAMPLE_TEXT,
+          provider: audioSettings.provider,
           voice: audioSettings.voice,
           rate: audioSettings.rate,
         }),

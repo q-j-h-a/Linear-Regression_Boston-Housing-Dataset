@@ -3,6 +3,7 @@
 (function initTheoryAssistant() {
   const VOICE_KEY = "linearRegressionTheoryAssistantVoice";
   const RATE_KEY = "linearRegressionTheoryAssistantRate";
+  const TTS_PROVIDER_KEY = "linearRegressionTheoryAssistantTtsProvider";
   const TTS_VOICES = [
     { value: "zh-CN-XiaoxiaoNeural", label: "晓晓 · 女声 · 温暖" },
     { value: "zh-CN-XiaoyiNeural", label: "小艺 · 女声 · 活泼" },
@@ -11,6 +12,9 @@
     { value: "zh-CN-YunjianNeural", label: "云健 · 男声 · 有力" },
     { value: "zh-CN-YunxiaNeural", label: "云夏 · 男声 · 年轻" },
     { value: "Tingting", label: "婷婷 · 本机备用" },
+    { value: "Meijia", label: "美佳 · macOS 本机" },
+    { value: "Sinji", label: "善怡 · macOS 本机" },
+    { value: "melotts:ZH", label: "MeloTTS 中文 · 本地模型" },
   ];
 
   function readStorage(key) {
@@ -41,9 +45,30 @@
     return Number.isFinite(value) && value >= 0.75 && value <= 1.55 ? value : 1.15;
   }
 
+  function normalizeVoiceForProvider(provider, voice) {
+    const edgeVoices = new Set([
+      "zh-CN-XiaoxiaoNeural",
+      "zh-CN-XiaoyiNeural",
+      "zh-CN-YunxiNeural",
+      "zh-CN-YunyangNeural",
+      "zh-CN-YunjianNeural",
+      "zh-CN-YunxiaNeural",
+    ]);
+    const macosVoices = new Set(["Tingting", "Meijia", "Sinji"]);
+    if (provider === "melotts") return "melotts:ZH";
+    if (provider === "macos") return macosVoices.has(voice) ? voice : "Tingting";
+    return edgeVoices.has(voice) ? voice : "zh-CN-XiaoxiaoNeural";
+  }
+
+  function savedTtsProvider() {
+    const value = readStorage(TTS_PROVIDER_KEY);
+    return ["edge", "macos", "melotts"].includes(value) ? value : "edge";
+  }
+
   function savedVoice() {
     const value = readStorage(VOICE_KEY);
-    return TTS_VOICES.some(voice => voice.value === value) ? value : "zh-CN-XiaoxiaoNeural";
+    const voice = TTS_VOICES.some(item => item.value === value) ? value : "zh-CN-XiaoxiaoNeural";
+    return normalizeVoiceForProvider(savedTtsProvider(), voice);
   }
 
   const state = {
@@ -55,6 +80,7 @@
     speaking: false,
     paused: false,
     rate: savedRate(),
+    ttsProvider: savedTtsProvider(),
     voiceURI: savedVoice(),
     chatHistory: [],
     pageMemory: [],
@@ -704,6 +730,7 @@
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           text: speechText,
+          provider: state.ttsProvider || "edge",
           voice: state.voiceURI || "zh-CN-XiaoxiaoNeural",
           rate: state.rate,
         }),
@@ -914,8 +941,9 @@
   });
   askBtn.addEventListener("click", () => askCurrentPage(questionInput.value));
   voiceSelect.addEventListener("change", () => {
-    state.voiceURI = voiceSelect.value;
+    state.voiceURI = normalizeVoiceForProvider(state.ttsProvider, voiceSelect.value);
     writeStorage(VOICE_KEY, state.voiceURI);
+    populateVoices();
   });
   rateInput.addEventListener("input", () => {
     const nextRate = Number(rateInput.value);
@@ -975,13 +1003,18 @@
     audioSettings() {
       return {
         voiceURI: state.voiceURI,
+        ttsProvider: state.ttsProvider,
         rate: state.rate,
         voices: TTS_VOICES.slice(),
       };
     },
     updateAudioSettings(settings = {}) {
+      if (settings.ttsProvider && ["edge", "macos", "melotts"].includes(settings.ttsProvider)) {
+        state.ttsProvider = settings.ttsProvider;
+        writeStorage(TTS_PROVIDER_KEY, state.ttsProvider);
+      }
       if (settings.voiceURI && TTS_VOICES.some(voice => voice.value === settings.voiceURI)) {
-        state.voiceURI = settings.voiceURI;
+        state.voiceURI = normalizeVoiceForProvider(state.ttsProvider, settings.voiceURI);
         writeStorage(VOICE_KEY, state.voiceURI);
       }
       const nextRate = Number(settings.rate);

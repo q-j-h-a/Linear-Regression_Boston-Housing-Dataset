@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shlex
 import subprocess
 import tempfile
 import time
@@ -34,6 +35,7 @@ FORM_ACTION_HANDLERS = {"student_upload": model_student_upload}
 ASSISTANT_CONFIG_LOCK = RLock()
 ASSISTANT_CONFIG_PATH = Path(app.instance_path) / "assistant_settings.json"
 ASSISTANT_PROVIDERS = {"ollama_first", "ollama", "external"}
+TTS_PROVIDERS = {"edge", "macos", "melotts"}
 DEFAULT_OLLAMA_BASE_URL = os.getenv(
     "THEORY_ASSISTANT_OLLAMA_BASE_URL",
     os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"),
@@ -50,6 +52,15 @@ DEFAULT_EXTERNAL_MODEL = os.getenv(
     "THEORY_ASSISTANT_EXTERNAL_MODEL",
     os.getenv("THEORY_ASSISTANT_MODEL", "JoyAI-1.3T"),
 )
+
+
+def _env_float(name, default):
+    try:
+        return float(os.getenv(name, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
 ASSISTANT_CONFIG = {
     "provider": os.getenv("THEORY_ASSISTANT_PROVIDER", "ollama_first"),
     "ollama_base_url": DEFAULT_OLLAMA_BASE_URL,
@@ -57,6 +68,16 @@ ASSISTANT_CONFIG = {
     "external_base_url": DEFAULT_EXTERNAL_BASE_URL,
     "external_model": DEFAULT_EXTERNAL_MODEL,
     "external_api_key": os.getenv("THEORY_ASSISTANT_API_KEY", ""),
+    "tts_provider": os.getenv("THEORY_ASSISTANT_TTS_PROVIDER", "edge"),
+    "tts_voice": os.getenv("THEORY_ASSISTANT_TTS_VOICE", "zh-CN-XiaoxiaoNeural"),
+    "tts_rate": _env_float("THEORY_ASSISTANT_TTS_RATE", 1.15),
+    "melotts_service_url": os.getenv(
+        "THEORY_ASSISTANT_MELOTTS_SERVICE_URL",
+        "http://127.0.0.1:8000/speech",
+    ).strip(),
+    "melotts_command": os.getenv("THEORY_ASSISTANT_MELOTTS_COMMAND", "melo"),
+    "melotts_language": os.getenv("THEORY_ASSISTANT_MELOTTS_LANGUAGE", "ZH"),
+    "melotts_speaker": os.getenv("THEORY_ASSISTANT_MELOTTS_SPEAKER", "ZH"),
 }
 LOCAL_TTS_VOICES = {
     "Tingting": "婷婷",
@@ -74,6 +95,9 @@ EDGE_TTS_VOICES = {
     "zh-CN-YunjianNeural": "云健",
     "zh-CN-YunxiaNeural": "云夏",
     "zh-CN-YunyangNeural": "云扬",
+}
+MELOTTS_VOICES = {
+    "melotts:ZH": "MeloTTS 中文",
 }
 THEORY_PAGE_TITLES = {
     "basic": "实验基本信息",
@@ -96,13 +120,34 @@ def _load_saved_assistant_config():
         data = json.loads(ASSISTANT_CONFIG_PATH.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError):
         return
-    allowed_keys = {"provider", "ollama_base_url", "ollama_model", "external_base_url", "external_model"}
+    allowed_keys = {
+        "provider",
+        "ollama_base_url",
+        "ollama_model",
+        "external_base_url",
+        "external_model",
+        "tts_provider",
+        "tts_voice",
+        "tts_rate",
+        "melotts_service_url",
+        "melotts_command",
+        "melotts_language",
+        "melotts_speaker",
+    }
     with ASSISTANT_CONFIG_LOCK:
         for key in allowed_keys:
+            if key == "tts_rate":
+                try:
+                    ASSISTANT_CONFIG[key] = min(1.45, max(0.85, float(data.get(key))))
+                except (TypeError, ValueError):
+                    pass
+                continue
             value = str(data.get(key) or "").strip()
-            if not value:
+            if not value and key != "melotts_speaker":
                 continue
             if key == "provider" and value not in ASSISTANT_PROVIDERS:
+                continue
+            if key == "tts_provider" and value not in TTS_PROVIDERS:
                 continue
             ASSISTANT_CONFIG[key] = value.rstrip("/") if key.endswith("_base_url") else value
 
@@ -115,6 +160,13 @@ def _save_assistant_config():
             "ollama_model": ASSISTANT_CONFIG["ollama_model"],
             "external_base_url": ASSISTANT_CONFIG["external_base_url"],
             "external_model": ASSISTANT_CONFIG["external_model"],
+            "tts_provider": ASSISTANT_CONFIG["tts_provider"],
+            "tts_voice": ASSISTANT_CONFIG["tts_voice"],
+            "tts_rate": ASSISTANT_CONFIG["tts_rate"],
+            "melotts_service_url": ASSISTANT_CONFIG["melotts_service_url"],
+            "melotts_command": ASSISTANT_CONFIG["melotts_command"],
+            "melotts_language": ASSISTANT_CONFIG["melotts_language"],
+            "melotts_speaker": ASSISTANT_CONFIG["melotts_speaker"],
         }
     ASSISTANT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     ASSISTANT_CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -140,10 +192,18 @@ def _public_assistant_config():
             "api_key_configured": bool(config.get("external_api_key")),
         },
         "tts": {
-            "default_voice": "zh-CN-XiaoxiaoNeural",
-            "default_rate": 1.15,
+            "provider": config.get("tts_provider") if config.get("tts_provider") in TTS_PROVIDERS else "edge",
+            "default_voice": config.get("tts_voice") or "zh-CN-XiaoxiaoNeural",
+            "default_rate": config.get("tts_rate") or 1.15,
             "edge_voices": EDGE_TTS_VOICES,
             "local_voices": LOCAL_TTS_VOICES,
+            "melotts_voices": MELOTTS_VOICES,
+            "melotts": {
+                "service_url": config.get("melotts_service_url") or "",
+                "command": config.get("melotts_command") or "melo",
+                "language": config.get("melotts_language") or "ZH",
+                "speaker": config.get("melotts_speaker") or "ZH",
+            },
         },
     }
 
@@ -160,6 +220,32 @@ def _update_assistant_config(payload):
         "external_base_url": str(payload.get("external_base_url") or "").strip().rstrip("/"),
         "external_model": str(payload.get("external_model") or "").strip(),
     }
+    tts_provider = str(payload.get("tts_provider") or ASSISTANT_CONFIG.get("tts_provider") or "edge").strip()
+    if tts_provider not in TTS_PROVIDERS:
+        raise ValueError("语音引擎无效")
+    try:
+        tts_rate = float(payload.get("tts_rate") if "tts_rate" in payload else ASSISTANT_CONFIG.get("tts_rate", 1.15))
+    except (TypeError, ValueError):
+        raise ValueError("语速配置无效")
+    tts_rate = min(1.45, max(0.85, tts_rate))
+    tts_voice = str(payload.get("tts_voice") or ASSISTANT_CONFIG.get("tts_voice") or "zh-CN-XiaoxiaoNeural").strip()
+    melotts_service_url = str(payload.get("melotts_service_url") if "melotts_service_url" in payload else ASSISTANT_CONFIG.get("melotts_service_url", "")).strip()
+    melotts_command = str(payload.get("melotts_command") or ASSISTANT_CONFIG.get("melotts_command") or "melo").strip()
+    melotts_language = str(payload.get("melotts_language") or ASSISTANT_CONFIG.get("melotts_language") or "ZH").strip()
+    melotts_speaker = str(payload.get("melotts_speaker") if "melotts_speaker" in payload else ASSISTANT_CONFIG.get("melotts_speaker", "ZH")).strip()
+    if not tts_voice:
+        raise ValueError("缺少音色配置")
+    if tts_provider == "melotts" and not melotts_service_url and not melotts_command:
+        raise ValueError("缺少 MeloTTS 服务地址或本机命令")
+    next_config.update({
+        "tts_provider": tts_provider,
+        "tts_voice": tts_voice,
+        "tts_rate": tts_rate,
+        "melotts_service_url": melotts_service_url,
+        "melotts_command": melotts_command,
+        "melotts_language": melotts_language or "ZH",
+        "melotts_speaker": melotts_speaker or "ZH",
+    })
     if not next_config["ollama_base_url"]:
         raise ValueError("缺少 Ollama 接口地址")
     if not next_config["ollama_model"]:
@@ -494,10 +580,93 @@ def _edge_tts_audio(text, voice, rate):
             return file.read()
 
 
-def _tts_audio(text, voice, rate):
-    if voice in EDGE_TTS_VOICES:
-        return _edge_tts_audio(text, voice, rate), "audio/mpeg", "edge"
-    return _local_tts_audio(text, voice, 180 * rate), "audio/mp4", "macos"
+def _melotts_service_audio(text, rate, config):
+    service_url = str(config.get("melotts_service_url") or "").strip()
+    language = str(config.get("melotts_language") or "ZH").strip() or "ZH"
+    speaker = str(config.get("melotts_speaker") or "ZH").strip() or "ZH"
+    clipped_text = text[:4000]
+    if "/speech" in service_url:
+        payload = {
+            "input": clipped_text,
+            "speed": rate,
+            "language": language,
+        }
+    else:
+        payload = {
+            "text": clipped_text,
+            "speed": rate,
+            "language": language,
+            "speaker_id": speaker,
+            "format": "mp3",
+        }
+    req = urllib.request.Request(
+        service_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "LinearRegressionTeachingLab/1.0",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=180) as resp:
+        content_type = resp.headers.get("Content-Type") or "audio/wav"
+        return resp.read(), content_type.split(";")[0]
+
+
+def _melotts_cli_audio(text, rate, config):
+    command = shlex.split(config.get("melotts_command") or "melo")
+    if not command:
+        command = ["melo"]
+    language = str(config.get("melotts_language") or "ZH").strip() or "ZH"
+    speaker = str(config.get("melotts_speaker") or "").strip()
+    clipped_text = text[:4000]
+    with tempfile.TemporaryDirectory() as tmpdir:
+        text_path = os.path.join(tmpdir, "speech.txt")
+        wav_path = os.path.join(tmpdir, "speech.wav")
+        with open(text_path, "w", encoding="utf-8") as file:
+            file.write(clipped_text)
+        args = [
+            *command,
+            text_path,
+            wav_path,
+            "--file",
+            "-l",
+            language,
+            "--speed",
+            f"{rate:.2f}",
+        ]
+        if speaker:
+            args.extend(["--speaker", speaker])
+        subprocess.run(
+            args,
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            timeout=180,
+        )
+        with open(wav_path, "rb") as file:
+            return file.read()
+
+
+def _melotts_tts_audio(text, rate, config):
+    service_url = str(config.get("melotts_service_url") or "").strip()
+    if service_url:
+        return _melotts_service_audio(text, rate, config)
+    return _melotts_cli_audio(text, rate, config), "audio/wav"
+
+
+def _tts_audio(text, voice, rate, provider=None):
+    config = _assistant_config_snapshot()
+    selected_provider = str(provider or config.get("tts_provider") or "edge").strip()
+    if selected_provider not in TTS_PROVIDERS:
+        selected_provider = "edge"
+    selected_voice = voice or config.get("tts_voice") or "zh-CN-XiaoxiaoNeural"
+    if selected_provider == "edge":
+        return _edge_tts_audio(text, selected_voice, rate), "audio/mpeg", "edge"
+    if selected_provider == "macos":
+        return _local_tts_audio(text, selected_voice, 180 * rate), "audio/mp4", "macos"
+    audio, content_type = _melotts_tts_audio(text, rate, config)
+    return audio, content_type, "melotts"
 
 
 @app.route("/")
@@ -641,6 +810,7 @@ def api_tts():
     body = request.get_json() or {}
     text = str(body.get("text") or "").strip()
     voice = str(body.get("voice") or "zh-CN-XiaoxiaoNeural").strip()
+    provider = str(body.get("provider") or "").strip()
     try:
         rate = float(body.get("rate") or 1.12)
     except (TypeError, ValueError):
@@ -649,14 +819,14 @@ def api_tts():
     if len(text) < 2:
         return jsonify({"error": "缺少需要朗读的文本。"}), 400
     try:
-        audio, content_type, provider = _tts_audio(text, voice, rate)
+        audio, content_type, used_provider = _tts_audio(text, voice, rate, provider if provider else None)
         resp = make_response(audio)
         resp.headers["Content-Type"] = content_type
         resp.headers["Cache-Control"] = "no-store"
-        resp.headers["X-TTS-Provider"] = provider
+        resp.headers["X-TTS-Provider"] = used_provider
         return resp
     except FileNotFoundError:
-        return jsonify({"error": "当前系统缺少 say 或 afconvert，无法生成本机语音。"}), 500
+        return jsonify({"error": "当前系统缺少语音生成命令，请在设置页检查 MeloTTS 命令，或改用 Edge TTS / macOS 语音。"}), 500
     except ImportError:
         return jsonify({"error": "当前环境缺少 edge-tts，请先安装依赖。"}), 500
     except subprocess.CalledProcessError as exc:
@@ -664,6 +834,11 @@ def api_tts():
         return jsonify({"error": f"本机语音生成失败：{detail or exc}"}), 500
     except subprocess.TimeoutExpired:
         return jsonify({"error": "本机语音生成超时，文本可能太长。"}), 504
+    except urllib.error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace")[:200]
+        return jsonify({"error": f"MeloTTS 服务请求失败：HTTP {exc.code} {detail}"}), 502
+    except urllib.error.URLError as exc:
+        return jsonify({"error": f"MeloTTS 服务没有启动，或服务地址不可访问：{exc.reason}"}), 503
     except Exception as exc:
         return jsonify({"error": f"语音生成失败：{exc}"}), 500
 
