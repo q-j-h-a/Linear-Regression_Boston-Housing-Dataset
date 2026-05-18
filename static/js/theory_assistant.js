@@ -28,6 +28,15 @@
     { value: "mlx_audio:zm_yunxia", label: "Kokoro 云夏 · 中文男声 · MLX" },
     { value: "mlx_audio:zm_yunyang", label: "Kokoro 云扬 · 中文男声 · MLX" },
     { value: "mlx_audio:zm_yunjian", label: "Kokoro 云健 · 中文男声 · MLX" },
+    { value: "qwen3_tts:vivian", label: "Qwen3 Vivian · 中文女声" },
+    { value: "qwen3_tts:serena", label: "Qwen3 Serena · 中文女声" },
+    { value: "qwen3_tts:uncle_fu", label: "Qwen3 Uncle Fu · 中文男声" },
+    { value: "qwen3_tts:dylan", label: "Qwen3 Dylan · 北京男声" },
+    { value: "qwen3_tts:eric", label: "Qwen3 Eric · 成都男声" },
+    { value: "qwen3_tts:ryan", label: "Qwen3 Ryan · 英文男声" },
+    { value: "qwen3_tts:aiden", label: "Qwen3 Aiden · 英文男声" },
+    { value: "qwen3_tts:ono_anna", label: "Qwen3 Ono Anna · 日文女声" },
+    { value: "qwen3_tts:sohee", label: "Qwen3 Sohee · 韩文女声" },
   ];
 
   function readStorage(key) {
@@ -79,6 +88,18 @@
       "mlx_audio:zm_yunyang",
       "mlx_audio:zm_yunjian",
     ]);
+    const qwen3Voices = new Set([
+      "qwen3_tts:vivian",
+      "qwen3_tts:serena",
+      "qwen3_tts:uncle_fu",
+      "qwen3_tts:dylan",
+      "qwen3_tts:eric",
+      "qwen3_tts:ryan",
+      "qwen3_tts:aiden",
+      "qwen3_tts:ono_anna",
+      "qwen3_tts:sohee",
+    ]);
+    if (provider === "qwen3_tts") return qwen3Voices.has(voice) ? voice : "qwen3_tts:vivian";
     if (provider === "mlx_audio") return mlxAudioVoices.has(voice) ? voice : "mlx_audio:zf_xiaoxiao";
     if (provider === "cosyvoice") return cosyVoices.has(voice) ? voice : "cosyvoice:中文女";
     if (provider === "melotts") return "melotts:ZH";
@@ -88,7 +109,7 @@
 
   function savedTtsProvider() {
     const value = readStorage(TTS_PROVIDER_KEY);
-    return ["edge", "macos", "melotts", "cosyvoice", "mlx_audio"].includes(value) ? value : "edge";
+    return ["edge", "macos", "melotts", "cosyvoice", "mlx_audio", "qwen3_tts"].includes(value) ? value : "edge";
   }
 
   function savedVoice() {
@@ -1035,7 +1056,7 @@
       };
     },
     updateAudioSettings(settings = {}) {
-      if (settings.ttsProvider && ["edge", "macos", "melotts", "cosyvoice", "mlx_audio"].includes(settings.ttsProvider)) {
+      if (settings.ttsProvider && ["edge", "macos", "melotts", "cosyvoice", "mlx_audio", "qwen3_tts"].includes(settings.ttsProvider)) {
         state.ttsProvider = settings.ttsProvider;
         writeStorage(TTS_PROVIDER_KEY, state.ttsProvider);
       }

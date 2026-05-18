@@ -38,7 +38,7 @@ FORM_ACTION_HANDLERS = {"student_upload": model_student_upload}
 ASSISTANT_CONFIG_LOCK = RLock()
 ASSISTANT_CONFIG_PATH = Path(app.instance_path) / "assistant_settings.json"
 ASSISTANT_PROVIDERS = {"ollama_first", "ollama", "external"}
-TTS_PROVIDERS = {"edge", "macos", "melotts", "cosyvoice", "mlx_audio"}
+TTS_PROVIDERS = {"edge", "macos", "melotts", "cosyvoice", "mlx_audio", "qwen3_tts"}
 DEFAULT_OLLAMA_BASE_URL = os.getenv(
     "THEORY_ASSISTANT_OLLAMA_BASE_URL",
     os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"),
@@ -93,6 +93,16 @@ ASSISTANT_CONFIG = {
     ).strip(),
     "mlx_audio_model": os.getenv("THEORY_ASSISTANT_MLX_AUDIO_MODEL", "mlx-community/Kokoro-82M-bf16"),
     "mlx_audio_voice": os.getenv("THEORY_ASSISTANT_MLX_AUDIO_VOICE", "zf_xiaoxiao"),
+    "qwen3_tts_service_url": os.getenv(
+        "THEORY_ASSISTANT_QWEN3_TTS_SERVICE_URL",
+        "http://127.0.0.1:50010/v1/audio/speech",
+    ).strip(),
+    "qwen3_tts_model": os.getenv(
+        "THEORY_ASSISTANT_QWEN3_TTS_MODEL",
+        ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit",
+    ),
+    "qwen3_tts_voice": os.getenv("THEORY_ASSISTANT_QWEN3_TTS_VOICE", "vivian"),
+    "qwen3_tts_language": os.getenv("THEORY_ASSISTANT_QWEN3_TTS_LANGUAGE", "chinese"),
 }
 LOCAL_TTS_VOICES = {
     "Tingting": "婷婷",
@@ -130,6 +140,17 @@ MLX_AUDIO_VOICES = {
     "mlx_audio:zm_yunxia": "Kokoro 云夏 · 中文男声",
     "mlx_audio:zm_yunyang": "Kokoro 云扬 · 中文男声",
     "mlx_audio:zm_yunjian": "Kokoro 云健 · 中文男声",
+}
+QWEN3_TTS_VOICES = {
+    "qwen3_tts:vivian": "Qwen3 Vivian · 中文女声",
+    "qwen3_tts:serena": "Qwen3 Serena · 中文女声",
+    "qwen3_tts:uncle_fu": "Qwen3 Uncle Fu · 中文男声",
+    "qwen3_tts:dylan": "Qwen3 Dylan · 北京男声",
+    "qwen3_tts:eric": "Qwen3 Eric · 成都男声",
+    "qwen3_tts:ryan": "Qwen3 Ryan · 英文男声",
+    "qwen3_tts:aiden": "Qwen3 Aiden · 英文男声",
+    "qwen3_tts:ono_anna": "Qwen3 Ono Anna · 日文女声",
+    "qwen3_tts:sohee": "Qwen3 Sohee · 韩文女声",
 }
 THEORY_PAGE_TITLES = {
     "basic": "实验基本信息",
@@ -171,6 +192,10 @@ def _load_saved_assistant_config():
         "mlx_audio_service_url",
         "mlx_audio_model",
         "mlx_audio_voice",
+        "qwen3_tts_service_url",
+        "qwen3_tts_model",
+        "qwen3_tts_voice",
+        "qwen3_tts_language",
     }
     with ASSISTANT_CONFIG_LOCK:
         for key in allowed_keys:
@@ -217,6 +242,10 @@ def _save_assistant_config():
             "mlx_audio_service_url": ASSISTANT_CONFIG["mlx_audio_service_url"],
             "mlx_audio_model": ASSISTANT_CONFIG["mlx_audio_model"],
             "mlx_audio_voice": ASSISTANT_CONFIG["mlx_audio_voice"],
+            "qwen3_tts_service_url": ASSISTANT_CONFIG["qwen3_tts_service_url"],
+            "qwen3_tts_model": ASSISTANT_CONFIG["qwen3_tts_model"],
+            "qwen3_tts_voice": ASSISTANT_CONFIG["qwen3_tts_voice"],
+            "qwen3_tts_language": ASSISTANT_CONFIG["qwen3_tts_language"],
         }
     ASSISTANT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     ASSISTANT_CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -250,6 +279,7 @@ def _public_assistant_config():
             "melotts_voices": MELOTTS_VOICES,
             "cosyvoice_voices": COSYVOICE_VOICES,
             "mlx_audio_voices": MLX_AUDIO_VOICES,
+            "qwen3_tts_voices": QWEN3_TTS_VOICES,
             "melotts": {
                 "service_url": config.get("melotts_service_url") or "",
                 "command": config.get("melotts_command") or "melo",
@@ -265,6 +295,12 @@ def _public_assistant_config():
                 "service_url": config.get("mlx_audio_service_url") or "",
                 "model": config.get("mlx_audio_model") or "mlx-community/Kokoro-82M-bf16",
                 "voice": config.get("mlx_audio_voice") or "zf_xiaoxiao",
+            },
+            "qwen3_tts": {
+                "service_url": config.get("qwen3_tts_service_url") or "",
+                "model": config.get("qwen3_tts_model") or ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit",
+                "voice": config.get("qwen3_tts_voice") or "vivian",
+                "language": config.get("qwen3_tts_language") or "chinese",
             },
         },
     }
@@ -300,6 +336,10 @@ def _update_assistant_config(payload):
     mlx_audio_service_url = str(payload.get("mlx_audio_service_url") if "mlx_audio_service_url" in payload else ASSISTANT_CONFIG.get("mlx_audio_service_url", "")).strip()
     mlx_audio_model = str(payload.get("mlx_audio_model") or ASSISTANT_CONFIG.get("mlx_audio_model") or "mlx-community/Kokoro-82M-bf16").strip()
     mlx_audio_voice = str(payload.get("mlx_audio_voice") or ASSISTANT_CONFIG.get("mlx_audio_voice") or "zf_xiaoxiao").strip()
+    qwen3_tts_service_url = str(payload.get("qwen3_tts_service_url") if "qwen3_tts_service_url" in payload else ASSISTANT_CONFIG.get("qwen3_tts_service_url", "")).strip()
+    qwen3_tts_model = str(payload.get("qwen3_tts_model") or ASSISTANT_CONFIG.get("qwen3_tts_model") or ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit").strip()
+    qwen3_tts_voice = str(payload.get("qwen3_tts_voice") or ASSISTANT_CONFIG.get("qwen3_tts_voice") or "vivian").strip()
+    qwen3_tts_language = str(payload.get("qwen3_tts_language") or ASSISTANT_CONFIG.get("qwen3_tts_language") or "chinese").strip()
     try:
         cosyvoice_sample_rate = int(float(payload.get("cosyvoice_sample_rate") if "cosyvoice_sample_rate" in payload else ASSISTANT_CONFIG.get("cosyvoice_sample_rate", 22050)))
     except (TypeError, ValueError):
@@ -314,6 +354,10 @@ def _update_assistant_config(payload):
         raise ValueError("缺少 MLX-Audio 服务地址")
     if tts_provider == "mlx_audio" and not mlx_audio_model:
         raise ValueError("缺少 MLX-Audio 模型名")
+    if tts_provider == "qwen3_tts" and not qwen3_tts_service_url:
+        raise ValueError("缺少 Qwen3-TTS 服务地址")
+    if tts_provider == "qwen3_tts" and not qwen3_tts_model:
+        raise ValueError("缺少 Qwen3-TTS 模型名")
     next_config.update({
         "tts_provider": tts_provider,
         "tts_voice": tts_voice,
@@ -328,6 +372,10 @@ def _update_assistant_config(payload):
         "mlx_audio_service_url": mlx_audio_service_url,
         "mlx_audio_model": mlx_audio_model,
         "mlx_audio_voice": mlx_audio_voice or "zf_xiaoxiao",
+        "qwen3_tts_service_url": qwen3_tts_service_url,
+        "qwen3_tts_model": qwen3_tts_model,
+        "qwen3_tts_voice": qwen3_tts_voice or "vivian",
+        "qwen3_tts_language": qwen3_tts_language or "chinese",
     })
     if not next_config["ollama_base_url"]:
         raise ValueError("缺少 Ollama 接口地址")
@@ -811,6 +859,42 @@ def _mlx_audio_tts_audio(text, voice, rate, config):
     return audio, "audio/wav"
 
 
+def _qwen3_tts_audio(text, voice, rate, config):
+    service_url = str(config.get("qwen3_tts_service_url") or "").strip()
+    model = str(config.get("qwen3_tts_model") or ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit").strip()
+    selected_voice = str(voice or config.get("qwen3_tts_voice") or "qwen3_tts:vivian").strip()
+    if selected_voice.startswith("qwen3_tts:"):
+        selected_voice = selected_voice.split(":", 1)[1]
+    if not selected_voice:
+        selected_voice = str(config.get("qwen3_tts_voice") or "vivian").strip() or "vivian"
+    language = str(config.get("qwen3_tts_language") or "chinese").strip() or "chinese"
+    clipped_text = text[:6000]
+    payload = {
+        "model": model,
+        "input": clipped_text,
+        "voice": selected_voice,
+        "speed": rate,
+        "language": language,
+        "response_format": "wav",
+        "max_tokens": 8192,
+    }
+    req = urllib.request.Request(
+        service_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "LinearRegressionTeachingLab/1.0",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=600) as resp:
+        content_type = (resp.headers.get("Content-Type") or "audio/wav").split(";")[0].strip()
+        audio = resp.read()
+    if content_type in {"audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3", "audio/mp4"}:
+        return audio, content_type
+    return audio, "audio/wav"
+
+
 def _tts_audio(text, voice, rate, provider=None):
     config = _assistant_config_snapshot()
     selected_provider = str(provider or config.get("tts_provider") or "edge").strip()
@@ -827,6 +911,9 @@ def _tts_audio(text, voice, rate, provider=None):
     if selected_provider == "mlx_audio":
         audio, content_type = _mlx_audio_tts_audio(text, selected_voice, rate, config)
         return audio, content_type, "mlx_audio"
+    if selected_provider == "qwen3_tts":
+        audio, content_type = _qwen3_tts_audio(text, selected_voice, rate, config)
+        return audio, content_type, "qwen3_tts"
     audio, content_type = _melotts_tts_audio(text, rate, config)
     return audio, content_type, "melotts"
 

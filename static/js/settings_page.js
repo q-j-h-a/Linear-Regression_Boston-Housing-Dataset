@@ -29,6 +29,15 @@ const ASSISTANT_VOICE_OPTIONS = [
   { value: "mlx_audio:zm_yunxia", label: "Kokoro 云夏 · 中文男声 · MLX" },
   { value: "mlx_audio:zm_yunyang", label: "Kokoro 云扬 · 中文男声 · MLX" },
   { value: "mlx_audio:zm_yunjian", label: "Kokoro 云健 · 中文男声 · MLX" },
+  { value: "qwen3_tts:vivian", label: "Qwen3 Vivian · 中文女声" },
+  { value: "qwen3_tts:serena", label: "Qwen3 Serena · 中文女声" },
+  { value: "qwen3_tts:uncle_fu", label: "Qwen3 Uncle Fu · 中文男声" },
+  { value: "qwen3_tts:dylan", label: "Qwen3 Dylan · 北京男声" },
+  { value: "qwen3_tts:eric", label: "Qwen3 Eric · 成都男声" },
+  { value: "qwen3_tts:ryan", label: "Qwen3 Ryan · 英文男声" },
+  { value: "qwen3_tts:aiden", label: "Qwen3 Aiden · 英文男声" },
+  { value: "qwen3_tts:ono_anna", label: "Qwen3 Ono Anna · 日文女声" },
+  { value: "qwen3_tts:sohee", label: "Qwen3 Sohee · 韩文女声" },
 ];
 
 let settingsAudioUrl = "";
@@ -60,6 +69,7 @@ function assistantRuntimeLabel(provider, model) {
 }
 
 function assistantTtsProviderLabel(provider) {
+  if (provider === "qwen3_tts") return "Qwen3-TTS 本地语音";
   if (provider === "mlx_audio") return "MLX-Audio Kokoro 本地语音";
   if (provider === "cosyvoice") return "CosyVoice 本地模型";
   if (provider === "melotts") return "MeloTTS 本地模型";
@@ -92,6 +102,18 @@ function normalizeVoiceForProvider(provider, voice) {
     "mlx_audio:zm_yunyang",
     "mlx_audio:zm_yunjian",
   ]);
+  const qwen3Voices = new Set([
+    "qwen3_tts:vivian",
+    "qwen3_tts:serena",
+    "qwen3_tts:uncle_fu",
+    "qwen3_tts:dylan",
+    "qwen3_tts:eric",
+    "qwen3_tts:ryan",
+    "qwen3_tts:aiden",
+    "qwen3_tts:ono_anna",
+    "qwen3_tts:sohee",
+  ]);
+  if (provider === "qwen3_tts") return qwen3Voices.has(voice) ? voice : "qwen3_tts:vivian";
   if (provider === "mlx_audio") return mlxAudioVoices.has(voice) ? voice : "mlx_audio:zf_xiaoxiao";
   if (provider === "cosyvoice") return cosyVoices.has(voice) ? voice : "cosyvoice:中文女";
   if (provider === "melotts") return "melotts:ZH";
@@ -101,7 +123,7 @@ function normalizeVoiceForProvider(provider, voice) {
 
 function currentAssistantAudioSettings(config = null) {
   const savedProvider = readAssistantSetting(ASSISTANT_TTS_PROVIDER_KEY);
-  const provider = ["edge", "macos", "melotts", "cosyvoice", "mlx_audio"].includes(savedProvider)
+  const provider = ["edge", "macos", "melotts", "cosyvoice", "mlx_audio", "qwen3_tts"].includes(savedProvider)
     ? savedProvider
     : (config?.tts?.provider || "edge");
   const savedVoice = readAssistantSetting(ASSISTANT_VOICE_KEY);
@@ -163,6 +185,9 @@ function renderSettingsSide(config, audio, latestTest = null) {
       ${audio.provider === "mlx_audio" ? `<p>服务：${escapeHtml(config?.tts?.mlx_audio?.service_url || "http://127.0.0.1:50010/v1/audio/speech")}</p>` : ""}
       ${audio.provider === "mlx_audio" ? `<p>模型：${escapeHtml(config?.tts?.mlx_audio?.model || "mlx-community/Kokoro-82M-bf16")}</p>` : ""}
       ${audio.provider === "mlx_audio" ? `<p>音色：${escapeHtml(config?.tts?.mlx_audio?.voice || "zf_xiaoxiao")}</p>` : ""}
+      ${audio.provider === "qwen3_tts" ? `<p>服务：${escapeHtml(config?.tts?.qwen3_tts?.service_url || "http://127.0.0.1:50010/v1/audio/speech")}</p>` : ""}
+      ${audio.provider === "qwen3_tts" ? `<p>模型：${escapeHtml(config?.tts?.qwen3_tts?.model || ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit")}</p>` : ""}
+      ${audio.provider === "qwen3_tts" ? `<p>角色：${escapeHtml(config?.tts?.qwen3_tts?.voice || "vivian")}</p>` : ""}
     </div>
     <div class="helper-card">
       <h3>外部接口</h3>
@@ -259,6 +284,7 @@ async function renderSettingsShell() {
         melotts: { service_url: "http://127.0.0.1:8000/speech", command: "melo", language: "ZH", speaker: "ZH" },
         cosyvoice: { service_url: "http://127.0.0.1:50000/inference_sft", speaker: "中文女", sample_rate: 22050 },
         mlx_audio: { service_url: "http://127.0.0.1:50010/v1/audio/speech", model: "mlx-community/Kokoro-82M-bf16", voice: "zf_xiaoxiao" },
+        qwen3_tts: { service_url: "http://127.0.0.1:50010/v1/audio/speech", model: ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit", voice: "vivian", language: "chinese" },
       },
     };
   }
@@ -316,9 +342,10 @@ async function renderSettingsShell() {
                   <option value="melotts">MeloTTS 本地模型</option>
                   <option value="cosyvoice">CosyVoice 本地模型</option>
                   <option value="mlx_audio">MLX-Audio Kokoro 本地语音</option>
+                  <option value="qwen3_tts">Qwen3-TTS 本地语音</option>
                   <option value="macos">macOS 本机语音</option>
                 </select>
-                <p class="settings-hint">演示音质优先用 Edge TTS；离线演示可用 MeloTTS、CosyVoice 或 MLX-Audio；macOS 语音只作为备用。</p>
+                <p class="settings-hint">演示音质优先用 Edge TTS；离线演示可用 MeloTTS、CosyVoice、Kokoro 或 Qwen3-TTS；macOS 语音只作为备用。</p>
               </div>
               <div class="settings-field">
                 <label for="assistantVoice">音色</label>
@@ -381,6 +408,26 @@ async function renderSettingsShell() {
                 <input id="mlxAudioVoice" type="text" autocomplete="off" placeholder="zf_xiaoxiao">
                 <p class="settings-hint">常用中文音色：<code>zf_xiaoxiao</code>、<code>zf_xiaobei</code>、<code>zm_yunxi</code>。</p>
               </div>
+              <div class="settings-field">
+                <label for="qwen3TtsServiceUrl">Qwen3-TTS 服务地址</label>
+                <input id="qwen3TtsServiceUrl" type="url" autocomplete="off" placeholder="http://127.0.0.1:50010/v1/audio/speech">
+                <p class="settings-hint">复用本项目 MLX-Audio 本地服务，接口同样是 <code>/v1/audio/speech</code>。</p>
+              </div>
+              <div class="settings-field">
+                <label for="qwen3TtsModel">Qwen3-TTS 模型</label>
+                <input id="qwen3TtsModel" type="text" autocomplete="off" placeholder=".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit">
+                <p class="settings-hint">当前使用本机已下载的 <code>0.6B CustomVoice 4bit</code>。</p>
+              </div>
+              <div class="settings-field">
+                <label for="qwen3TtsVoice">Qwen3-TTS 角色 ID</label>
+                <input id="qwen3TtsVoice" type="text" autocomplete="off" placeholder="vivian">
+                <p class="settings-hint">中文推荐：<code>vivian</code>、<code>serena</code>、<code>uncle_fu</code>、<code>dylan</code>、<code>eric</code>。</p>
+              </div>
+              <div class="settings-field">
+                <label for="qwen3TtsLanguage">Qwen3-TTS 语言</label>
+                <input id="qwen3TtsLanguage" type="text" autocomplete="off" placeholder="chinese">
+                <p class="settings-hint">中文填 <code>chinese</code>。也可以填 <code>auto</code> 自动判断。</p>
+              </div>
             </div>
           </div>
 
@@ -429,6 +476,10 @@ async function renderSettingsShell() {
   const mlxAudioServiceUrlEl = $("mlxAudioServiceUrl");
   const mlxAudioModelEl = $("mlxAudioModel");
   const mlxAudioVoiceEl = $("mlxAudioVoice");
+  const qwen3TtsServiceUrlEl = $("qwen3TtsServiceUrl");
+  const qwen3TtsModelEl = $("qwen3TtsModel");
+  const qwen3TtsVoiceEl = $("qwen3TtsVoice");
+  const qwen3TtsLanguageEl = $("qwen3TtsLanguage");
   const statusEl = $("assistantSettingsStatus");
   const modelListEl = $("ollamaModelList");
   const testBoxEl = $("assistantTestResult");
@@ -454,6 +505,10 @@ async function renderSettingsShell() {
   mlxAudioServiceUrlEl.value = config.tts?.mlx_audio?.service_url || "http://127.0.0.1:50010/v1/audio/speech";
   mlxAudioModelEl.value = config.tts?.mlx_audio?.model || "mlx-community/Kokoro-82M-bf16";
   mlxAudioVoiceEl.value = config.tts?.mlx_audio?.voice || "zf_xiaoxiao";
+  qwen3TtsServiceUrlEl.value = config.tts?.qwen3_tts?.service_url || "http://127.0.0.1:50010/v1/audio/speech";
+  qwen3TtsModelEl.value = config.tts?.qwen3_tts?.model || ".qwen3-tts/mlx-community/Qwen3-TTS-12Hz-0.6B-CustomVoice-4bit";
+  qwen3TtsVoiceEl.value = config.tts?.qwen3_tts?.voice || "vivian";
+  qwen3TtsLanguageEl.value = config.tts?.qwen3_tts?.language || "chinese";
   renderSettingsSide(config, audio);
 
   const setStatus = (text, type = "") => {
@@ -475,6 +530,12 @@ async function renderSettingsShell() {
   function syncMlxVoiceField() {
     if (voiceEl.value.startsWith("mlx_audio:")) {
       mlxAudioVoiceEl.value = voiceEl.value.split(":", 2)[1] || "zf_xiaoxiao";
+    }
+  }
+
+  function syncQwen3VoiceField() {
+    if (voiceEl.value.startsWith("qwen3_tts:")) {
+      qwen3TtsVoiceEl.value = voiceEl.value.split(":", 2)[1] || "vivian";
     }
   }
 
@@ -523,6 +584,12 @@ async function renderSettingsShell() {
       mlx_audio_voice: voiceEl.value.startsWith("mlx_audio:")
         ? (voiceEl.value.split(":", 2)[1] || "zf_xiaoxiao")
         : mlxAudioVoiceEl.value.trim(),
+      qwen3_tts_service_url: qwen3TtsServiceUrlEl.value.trim(),
+      qwen3_tts_model: qwen3TtsModelEl.value.trim(),
+      qwen3_tts_voice: voiceEl.value.startsWith("qwen3_tts:")
+        ? (voiceEl.value.split(":", 2)[1] || "vivian")
+        : qwen3TtsVoiceEl.value.trim(),
+      qwen3_tts_language: qwen3TtsLanguageEl.value.trim(),
     };
     const apiKey = externalKeyEl.value.trim();
     if (apiKey) payload.external_api_key = apiKey;
@@ -548,7 +615,7 @@ async function renderSettingsShell() {
     return saved;
   }
 
-  [providerEl, ollamaBaseEl, ollamaModelEl, externalBaseEl, externalModelEl, ttsProviderEl, voiceEl, melottsServiceUrlEl, melottsCommandEl, melottsLanguageEl, melottsSpeakerEl, cosyvoiceServiceUrlEl, cosyvoiceSpeakerEl, cosyvoiceSampleRateEl, mlxAudioServiceUrlEl, mlxAudioModelEl, mlxAudioVoiceEl].forEach(el => {
+  [providerEl, ollamaBaseEl, ollamaModelEl, externalBaseEl, externalModelEl, ttsProviderEl, voiceEl, melottsServiceUrlEl, melottsCommandEl, melottsLanguageEl, melottsSpeakerEl, cosyvoiceServiceUrlEl, cosyvoiceSpeakerEl, cosyvoiceSampleRateEl, mlxAudioServiceUrlEl, mlxAudioModelEl, mlxAudioVoiceEl, qwen3TtsServiceUrlEl, qwen3TtsModelEl, qwen3TtsVoiceEl, qwen3TtsLanguageEl].forEach(el => {
     el.addEventListener("input", syncSummary);
     el.addEventListener("change", syncSummary);
   });
@@ -556,11 +623,13 @@ async function renderSettingsShell() {
   ttsProviderEl.addEventListener("change", () => {
     voiceEl.value = normalizeVoiceForProvider(ttsProviderEl.value, voiceEl.value);
     syncMlxVoiceField();
+    syncQwen3VoiceField();
     syncSummary();
   });
 
   voiceEl.addEventListener("change", () => {
     syncMlxVoiceField();
+    syncQwen3VoiceField();
     syncSummary();
   });
 

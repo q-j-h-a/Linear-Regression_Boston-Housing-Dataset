@@ -5,3 +5,4 @@ instance/
 .venv-cosyvoice/
 .cosyvoice/
 .venv-mlx-audio/
+.qwen3-tts/

@@ -2,6 +2,11 @@
 
 这个服务用于给 AI 助教增加 Apple Silicon 友好的本地中文语音。主项目不直接加载模型，而是调用本机 HTTP 服务。
 
+当前这个服务同时承载两类 MLX 语音：
+
+- Kokoro：固定音色，速度快，适合稳定朗读。
+- Qwen3-TTS：角色音色，更像真人讲解，模型文件放在 `.qwen3-tts/`。
+
 ## 服务位置
 
 服务代码：
@@ -79,6 +84,12 @@ tools/start_mlx_audio.sh
 ```bash
 curl http://127.0.0.1:50010/health
 curl http://127.0.0.1:50010/voices
+```
+
+Qwen3-TTS 的专门说明见：
+
+```text
+/Users/d1a0y1bb/Documents/TempProjects/Linear-Regression_Boston-Housing-Dataset/tools/README_qwen3_tts.md
 ```
 
 ## 直接测试
