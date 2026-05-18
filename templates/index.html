@@ -2281,7 +2281,7 @@
         </div>
       </section>
 
-      <section class="nav-section">
+      <section class="nav-section" hidden data-feature="theory-assistant">
         <div class="nav-section-title">系统设置</div>
         <div class="step-list">
           <button class="nav-btn" data-page="settings" type="button"><span class="dot"></span><span><strong>AI 助教设置</strong><span>模型、音色和语速</span></span></button>
@@ -2304,6 +2304,7 @@
 <script>
 const FEATURE_NAMES = {{ feature_names | tojson }};
 const DEFAULT_FEATURE = {{ default_feature | tojson }};
+window.THEORY_ASSISTANT_ENABLED = false;
 </script>
 <script src="/static/js/state_runtime.js"></script>
 <script src="/static/js/schema_registry.js"></script>

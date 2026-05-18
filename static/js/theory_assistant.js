@@ -1,6 +1,10 @@
 // Theory assistant floating panel.
 
 (function initTheoryAssistant() {
+  if (window.THEORY_ASSISTANT_ENABLED === false) {
+    return;
+  }
+
   const VOICE_KEY = "linearRegressionTheoryAssistantVoice";
   const RATE_KEY = "linearRegressionTheoryAssistantRate";
   const TTS_PROVIDER_KEY = "linearRegressionTheoryAssistantTtsProvider";
