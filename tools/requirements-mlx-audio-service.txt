@@ -1,0 +1,7 @@
+fastapi>=0.136,<1.0
+uvicorn[standard]>=0.47,<1.0
+mlx-audio>=0.4,<1.0
+misaki[en,zh]>=0.9,<1.0
+num2words>=0.5,<1.0
+webrtcvad>=2.0,<3.0
+setuptools<81

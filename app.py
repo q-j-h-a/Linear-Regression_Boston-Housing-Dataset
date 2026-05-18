@@ -38,7 +38,7 @@ FORM_ACTION_HANDLERS = {"student_upload": model_student_upload}
 ASSISTANT_CONFIG_LOCK = RLock()
 ASSISTANT_CONFIG_PATH = Path(app.instance_path) / "assistant_settings.json"
 ASSISTANT_PROVIDERS = {"ollama_first", "ollama", "external"}
-TTS_PROVIDERS = {"edge", "macos", "melotts", "cosyvoice"}
+TTS_PROVIDERS = {"edge", "macos", "melotts", "cosyvoice", "mlx_audio"}
 DEFAULT_OLLAMA_BASE_URL = os.getenv(
     "THEORY_ASSISTANT_OLLAMA_BASE_URL",
     os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:11434/v1"),
@@ -87,6 +87,12 @@ ASSISTANT_CONFIG = {
     ).strip(),
     "cosyvoice_speaker": os.getenv("THEORY_ASSISTANT_COSYVOICE_SPEAKER", "中文女"),
     "cosyvoice_sample_rate": int(_env_float("THEORY_ASSISTANT_COSYVOICE_SAMPLE_RATE", 22050)),
+    "mlx_audio_service_url": os.getenv(
+        "THEORY_ASSISTANT_MLX_AUDIO_SERVICE_URL",
+        "http://127.0.0.1:50010/v1/audio/speech",
+    ).strip(),
+    "mlx_audio_model": os.getenv("THEORY_ASSISTANT_MLX_AUDIO_MODEL", "mlx-community/Kokoro-82M-bf16"),
+    "mlx_audio_voice": os.getenv("THEORY_ASSISTANT_MLX_AUDIO_VOICE", "zf_xiaoxiao"),
 }
 LOCAL_TTS_VOICES = {
     "Tingting": "婷婷",
@@ -114,6 +120,16 @@ COSYVOICE_VOICES = {
     "cosyvoice:粤语女": "CosyVoice 粤语女",
     "cosyvoice:英文女": "CosyVoice 英文女",
     "cosyvoice:英文男": "CosyVoice 英文男",
+}
+MLX_AUDIO_VOICES = {
+    "mlx_audio:zf_xiaobei": "Kokoro 小北 · 中文女声",
+    "mlx_audio:zf_xiaoni": "Kokoro 小妮 · 中文女声",
+    "mlx_audio:zf_xiaoxiao": "Kokoro 晓晓 · 中文女声",
+    "mlx_audio:zf_xiaoyi": "Kokoro 小艺 · 中文女声",
+    "mlx_audio:zm_yunxi": "Kokoro 云希 · 中文男声",
+    "mlx_audio:zm_yunxia": "Kokoro 云夏 · 中文男声",
+    "mlx_audio:zm_yunyang": "Kokoro 云扬 · 中文男声",
+    "mlx_audio:zm_yunjian": "Kokoro 云健 · 中文男声",
 }
 THEORY_PAGE_TITLES = {
     "basic": "实验基本信息",
@@ -152,6 +168,9 @@ def _load_saved_assistant_config():
         "cosyvoice_service_url",
         "cosyvoice_speaker",
         "cosyvoice_sample_rate",
+        "mlx_audio_service_url",
+        "mlx_audio_model",
+        "mlx_audio_voice",
     }
     with ASSISTANT_CONFIG_LOCK:
         for key in allowed_keys:
@@ -195,6 +214,9 @@ def _save_assistant_config():
             "cosyvoice_service_url": ASSISTANT_CONFIG["cosyvoice_service_url"],
             "cosyvoice_speaker": ASSISTANT_CONFIG["cosyvoice_speaker"],
             "cosyvoice_sample_rate": ASSISTANT_CONFIG["cosyvoice_sample_rate"],
+            "mlx_audio_service_url": ASSISTANT_CONFIG["mlx_audio_service_url"],
+            "mlx_audio_model": ASSISTANT_CONFIG["mlx_audio_model"],
+            "mlx_audio_voice": ASSISTANT_CONFIG["mlx_audio_voice"],
         }
     ASSISTANT_CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
     ASSISTANT_CONFIG_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -227,6 +249,7 @@ def _public_assistant_config():
             "local_voices": LOCAL_TTS_VOICES,
             "melotts_voices": MELOTTS_VOICES,
             "cosyvoice_voices": COSYVOICE_VOICES,
+            "mlx_audio_voices": MLX_AUDIO_VOICES,
             "melotts": {
                 "service_url": config.get("melotts_service_url") or "",
                 "command": config.get("melotts_command") or "melo",
@@ -237,6 +260,11 @@ def _public_assistant_config():
                 "service_url": config.get("cosyvoice_service_url") or "",
                 "speaker": config.get("cosyvoice_speaker") or "中文女",
                 "sample_rate": config.get("cosyvoice_sample_rate") or 22050,
+            },
+            "mlx_audio": {
+                "service_url": config.get("mlx_audio_service_url") or "",
+                "model": config.get("mlx_audio_model") or "mlx-community/Kokoro-82M-bf16",
+                "voice": config.get("mlx_audio_voice") or "zf_xiaoxiao",
             },
         },
     }
@@ -269,6 +297,9 @@ def _update_assistant_config(payload):
     melotts_speaker = str(payload.get("melotts_speaker") if "melotts_speaker" in payload else ASSISTANT_CONFIG.get("melotts_speaker", "ZH")).strip()
     cosyvoice_service_url = str(payload.get("cosyvoice_service_url") if "cosyvoice_service_url" in payload else ASSISTANT_CONFIG.get("cosyvoice_service_url", "")).strip()
     cosyvoice_speaker = str(payload.get("cosyvoice_speaker") if "cosyvoice_speaker" in payload else ASSISTANT_CONFIG.get("cosyvoice_speaker", "中文女")).strip()
+    mlx_audio_service_url = str(payload.get("mlx_audio_service_url") if "mlx_audio_service_url" in payload else ASSISTANT_CONFIG.get("mlx_audio_service_url", "")).strip()
+    mlx_audio_model = str(payload.get("mlx_audio_model") or ASSISTANT_CONFIG.get("mlx_audio_model") or "mlx-community/Kokoro-82M-bf16").strip()
+    mlx_audio_voice = str(payload.get("mlx_audio_voice") or ASSISTANT_CONFIG.get("mlx_audio_voice") or "zf_xiaoxiao").strip()
     try:
         cosyvoice_sample_rate = int(float(payload.get("cosyvoice_sample_rate") if "cosyvoice_sample_rate" in payload else ASSISTANT_CONFIG.get("cosyvoice_sample_rate", 22050)))
     except (TypeError, ValueError):
@@ -279,6 +310,10 @@ def _update_assistant_config(payload):
         raise ValueError("缺少 MeloTTS 服务地址或本机命令")
     if tts_provider == "cosyvoice" and not cosyvoice_service_url:
         raise ValueError("缺少 CosyVoice 服务地址")
+    if tts_provider == "mlx_audio" and not mlx_audio_service_url:
+        raise ValueError("缺少 MLX-Audio 服务地址")
+    if tts_provider == "mlx_audio" and not mlx_audio_model:
+        raise ValueError("缺少 MLX-Audio 模型名")
     next_config.update({
         "tts_provider": tts_provider,
         "tts_voice": tts_voice,
@@ -290,6 +325,9 @@ def _update_assistant_config(payload):
         "cosyvoice_service_url": cosyvoice_service_url,
         "cosyvoice_speaker": cosyvoice_speaker or "中文女",
         "cosyvoice_sample_rate": cosyvoice_sample_rate or 22050,
+        "mlx_audio_service_url": mlx_audio_service_url,
+        "mlx_audio_model": mlx_audio_model,
+        "mlx_audio_voice": mlx_audio_voice or "zf_xiaoxiao",
     })
     if not next_config["ollama_base_url"]:
         raise ValueError("缺少 Ollama 接口地址")
@@ -740,6 +778,39 @@ def _cosyvoice_tts_audio(text, rate, config):
     return _pcm16_to_wav_bytes(audio, sample_rate), "audio/wav"
 
 
+def _mlx_audio_tts_audio(text, voice, rate, config):
+    service_url = str(config.get("mlx_audio_service_url") or "").strip()
+    model = str(config.get("mlx_audio_model") or "mlx-community/Kokoro-82M-bf16").strip()
+    selected_voice = str(voice or config.get("mlx_audio_voice") or "mlx_audio:zf_xiaoxiao").strip()
+    if selected_voice.startswith("mlx_audio:"):
+        selected_voice = selected_voice.split(":", 1)[1]
+    if not selected_voice:
+        selected_voice = str(config.get("mlx_audio_voice") or "zf_xiaoxiao").strip() or "zf_xiaoxiao"
+    clipped_text = text[:6000]
+    payload = {
+        "model": model,
+        "input": clipped_text,
+        "voice": selected_voice,
+        "speed": rate,
+        "response_format": "wav",
+    }
+    req = urllib.request.Request(
+        service_url,
+        data=json.dumps(payload, ensure_ascii=False).encode("utf-8"),
+        headers={
+            "Content-Type": "application/json",
+            "User-Agent": "LinearRegressionTeachingLab/1.0",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(req, timeout=300) as resp:
+        content_type = (resp.headers.get("Content-Type") or "audio/wav").split(";")[0].strip()
+        audio = resp.read()
+    if content_type in {"audio/wav", "audio/x-wav", "audio/mpeg", "audio/mp3", "audio/mp4"}:
+        return audio, content_type
+    return audio, "audio/wav"
+
+
 def _tts_audio(text, voice, rate, provider=None):
     config = _assistant_config_snapshot()
     selected_provider = str(provider or config.get("tts_provider") or "edge").strip()
@@ -753,6 +824,9 @@ def _tts_audio(text, voice, rate, provider=None):
     if selected_provider == "cosyvoice":
         audio, content_type = _cosyvoice_tts_audio(text, rate, config)
         return audio, content_type, "cosyvoice"
+    if selected_provider == "mlx_audio":
+        audio, content_type = _mlx_audio_tts_audio(text, selected_voice, rate, config)
+        return audio, content_type, "mlx_audio"
     audio, content_type = _melotts_tts_audio(text, rate, config)
     return audio, content_type, "melotts"
 

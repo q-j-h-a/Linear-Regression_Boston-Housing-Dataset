@@ -20,6 +20,14 @@
     { value: "cosyvoice:粤语女", label: "CosyVoice 粤语女 · 本地模型" },
     { value: "cosyvoice:英文女", label: "CosyVoice 英文女 · 本地模型" },
     { value: "cosyvoice:英文男", label: "CosyVoice 英文男 · 本地模型" },
+    { value: "mlx_audio:zf_xiaobei", label: "Kokoro 小北 · 中文女声 · MLX" },
+    { value: "mlx_audio:zf_xiaoni", label: "Kokoro 小妮 · 中文女声 · MLX" },
+    { value: "mlx_audio:zf_xiaoxiao", label: "Kokoro 晓晓 · 中文女声 · MLX" },
+    { value: "mlx_audio:zf_xiaoyi", label: "Kokoro 小艺 · 中文女声 · MLX" },
+    { value: "mlx_audio:zm_yunxi", label: "Kokoro 云希 · 中文男声 · MLX" },
+    { value: "mlx_audio:zm_yunxia", label: "Kokoro 云夏 · 中文男声 · MLX" },
+    { value: "mlx_audio:zm_yunyang", label: "Kokoro 云扬 · 中文男声 · MLX" },
+    { value: "mlx_audio:zm_yunjian", label: "Kokoro 云健 · 中文男声 · MLX" },
   ];
 
   function readStorage(key) {
@@ -61,6 +69,17 @@
     ]);
     const macosVoices = new Set(["Tingting", "Meijia", "Sinji"]);
     const cosyVoices = new Set(["cosyvoice:中文女", "cosyvoice:中文男", "cosyvoice:粤语女", "cosyvoice:英文女", "cosyvoice:英文男"]);
+    const mlxAudioVoices = new Set([
+      "mlx_audio:zf_xiaobei",
+      "mlx_audio:zf_xiaoni",
+      "mlx_audio:zf_xiaoxiao",
+      "mlx_audio:zf_xiaoyi",
+      "mlx_audio:zm_yunxi",
+      "mlx_audio:zm_yunxia",
+      "mlx_audio:zm_yunyang",
+      "mlx_audio:zm_yunjian",
+    ]);
+    if (provider === "mlx_audio") return mlxAudioVoices.has(voice) ? voice : "mlx_audio:zf_xiaoxiao";
     if (provider === "cosyvoice") return cosyVoices.has(voice) ? voice : "cosyvoice:中文女";
     if (provider === "melotts") return "melotts:ZH";
     if (provider === "macos") return macosVoices.has(voice) ? voice : "Tingting";
@@ -69,7 +88,7 @@
 
   function savedTtsProvider() {
     const value = readStorage(TTS_PROVIDER_KEY);
-    return ["edge", "macos", "melotts", "cosyvoice"].includes(value) ? value : "edge";
+    return ["edge", "macos", "melotts", "cosyvoice", "mlx_audio"].includes(value) ? value : "edge";
   }
 
   function savedVoice() {
@@ -1016,7 +1035,7 @@
       };
     },
     updateAudioSettings(settings = {}) {
-      if (settings.ttsProvider && ["edge", "macos", "melotts", "cosyvoice"].includes(settings.ttsProvider)) {
+      if (settings.ttsProvider && ["edge", "macos", "melotts", "cosyvoice", "mlx_audio"].includes(settings.ttsProvider)) {
         state.ttsProvider = settings.ttsProvider;
         writeStorage(TTS_PROVIDER_KEY, state.ttsProvider);
       }

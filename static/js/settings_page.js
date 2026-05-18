@@ -21,6 +21,14 @@ const ASSISTANT_VOICE_OPTIONS = [
   { value: "cosyvoice:粤语女", label: "CosyVoice 粤语女 · 本地模型" },
   { value: "cosyvoice:英文女", label: "CosyVoice 英文女 · 本地模型" },
   { value: "cosyvoice:英文男", label: "CosyVoice 英文男 · 本地模型" },
+  { value: "mlx_audio:zf_xiaobei", label: "Kokoro 小北 · 中文女声 · MLX" },
+  { value: "mlx_audio:zf_xiaoni", label: "Kokoro 小妮 · 中文女声 · MLX" },
+  { value: "mlx_audio:zf_xiaoxiao", label: "Kokoro 晓晓 · 中文女声 · MLX" },
+  { value: "mlx_audio:zf_xiaoyi", label: "Kokoro 小艺 · 中文女声 · MLX" },
+  { value: "mlx_audio:zm_yunxi", label: "Kokoro 云希 · 中文男声 · MLX" },
+  { value: "mlx_audio:zm_yunxia", label: "Kokoro 云夏 · 中文男声 · MLX" },
+  { value: "mlx_audio:zm_yunyang", label: "Kokoro 云扬 · 中文男声 · MLX" },
+  { value: "mlx_audio:zm_yunjian", label: "Kokoro 云健 · 中文男声 · MLX" },
 ];
 
 let settingsAudioUrl = "";
@@ -52,6 +60,7 @@ function assistantRuntimeLabel(provider, model) {
 }
 
 function assistantTtsProviderLabel(provider) {
+  if (provider === "mlx_audio") return "MLX-Audio Kokoro 本地语音";
   if (provider === "cosyvoice") return "CosyVoice 本地模型";
   if (provider === "melotts") return "MeloTTS 本地模型";
   if (provider === "macos") return "macOS 本机语音";
@@ -73,6 +82,17 @@ function normalizeVoiceForProvider(provider, voice) {
   ]);
   const macosVoices = new Set(["Tingting", "Meijia", "Sinji"]);
   const cosyVoices = new Set(["cosyvoice:中文女", "cosyvoice:中文男", "cosyvoice:粤语女", "cosyvoice:英文女", "cosyvoice:英文男"]);
+  const mlxAudioVoices = new Set([
+    "mlx_audio:zf_xiaobei",
+    "mlx_audio:zf_xiaoni",
+    "mlx_audio:zf_xiaoxiao",
+    "mlx_audio:zf_xiaoyi",
+    "mlx_audio:zm_yunxi",
+    "mlx_audio:zm_yunxia",
+    "mlx_audio:zm_yunyang",
+    "mlx_audio:zm_yunjian",
+  ]);
+  if (provider === "mlx_audio") return mlxAudioVoices.has(voice) ? voice : "mlx_audio:zf_xiaoxiao";
   if (provider === "cosyvoice") return cosyVoices.has(voice) ? voice : "cosyvoice:中文女";
   if (provider === "melotts") return "melotts:ZH";
   if (provider === "macos") return macosVoices.has(voice) ? voice : "Tingting";
@@ -81,7 +101,7 @@ function normalizeVoiceForProvider(provider, voice) {
 
 function currentAssistantAudioSettings(config = null) {
   const savedProvider = readAssistantSetting(ASSISTANT_TTS_PROVIDER_KEY);
-  const provider = ["edge", "macos", "melotts", "cosyvoice"].includes(savedProvider)
+  const provider = ["edge", "macos", "melotts", "cosyvoice", "mlx_audio"].includes(savedProvider)
     ? savedProvider
     : (config?.tts?.provider || "edge");
   const savedVoice = readAssistantSetting(ASSISTANT_VOICE_KEY);
@@ -140,6 +160,9 @@ function renderSettingsSide(config, audio, latestTest = null) {
       ${audio.provider === "melotts" ? `<p>命令：${escapeHtml(config?.tts?.melotts?.command || "melo")}</p>` : ""}
       ${audio.provider === "cosyvoice" ? `<p>服务：${escapeHtml(config?.tts?.cosyvoice?.service_url || "http://127.0.0.1:50000/inference_sft")}</p>` : ""}
       ${audio.provider === "cosyvoice" ? `<p>角色：${escapeHtml(config?.tts?.cosyvoice?.speaker || "中文女")}</p>` : ""}
+      ${audio.provider === "mlx_audio" ? `<p>服务：${escapeHtml(config?.tts?.mlx_audio?.service_url || "http://127.0.0.1:50010/v1/audio/speech")}</p>` : ""}
+      ${audio.provider === "mlx_audio" ? `<p>模型：${escapeHtml(config?.tts?.mlx_audio?.model || "mlx-community/Kokoro-82M-bf16")}</p>` : ""}
+      ${audio.provider === "mlx_audio" ? `<p>音色：${escapeHtml(config?.tts?.mlx_audio?.voice || "zf_xiaoxiao")}</p>` : ""}
     </div>
     <div class="helper-card">
       <h3>外部接口</h3>
@@ -235,6 +258,7 @@ async function renderSettingsShell() {
         default_rate: 1.15,
         melotts: { service_url: "http://127.0.0.1:8000/speech", command: "melo", language: "ZH", speaker: "ZH" },
         cosyvoice: { service_url: "http://127.0.0.1:50000/inference_sft", speaker: "中文女", sample_rate: 22050 },
+        mlx_audio: { service_url: "http://127.0.0.1:50010/v1/audio/speech", model: "mlx-community/Kokoro-82M-bf16", voice: "zf_xiaoxiao" },
       },
     };
   }
@@ -291,9 +315,10 @@ async function renderSettingsShell() {
                   <option value="edge">Edge TTS 在线语音</option>
                   <option value="melotts">MeloTTS 本地模型</option>
                   <option value="cosyvoice">CosyVoice 本地模型</option>
+                  <option value="mlx_audio">MLX-Audio Kokoro 本地语音</option>
                   <option value="macos">macOS 本机语音</option>
                 </select>
-                <p class="settings-hint">演示音质优先用 Edge TTS；离线演示可用 MeloTTS 或 CosyVoice；macOS 语音只作为备用。</p>
+                <p class="settings-hint">演示音质优先用 Edge TTS；离线演示可用 MeloTTS、CosyVoice 或 MLX-Audio；macOS 语音只作为备用。</p>
               </div>
               <div class="settings-field">
                 <label for="assistantVoice">音色</label>
@@ -341,6 +366,21 @@ async function renderSettingsShell() {
                 <input id="cosyvoiceSampleRate" type="number" min="8000" max="48000" step="1" autocomplete="off" placeholder="22050">
                 <p class="settings-hint">官方 FastAPI client 默认按 <code>22050</code> 保存音频。</p>
               </div>
+              <div class="settings-field">
+                <label for="mlxAudioServiceUrl">MLX-Audio 服务地址</label>
+                <input id="mlxAudioServiceUrl" type="url" autocomplete="off" placeholder="http://127.0.0.1:50010/v1/audio/speech">
+                <p class="settings-hint">本项目的 Kokoro 服务保持 OpenAI 兼容的 <code>/v1/audio/speech</code> 接口。</p>
+              </div>
+              <div class="settings-field">
+                <label for="mlxAudioModel">MLX-Audio 模型</label>
+                <input id="mlxAudioModel" type="text" autocomplete="off" placeholder="mlx-community/Kokoro-82M-bf16">
+                <p class="settings-hint">当前已配置 Kokoro 82M 的 MLX 版本。</p>
+              </div>
+              <div class="settings-field">
+                <label for="mlxAudioVoice">MLX-Audio 音色 ID</label>
+                <input id="mlxAudioVoice" type="text" autocomplete="off" placeholder="zf_xiaoxiao">
+                <p class="settings-hint">常用中文音色：<code>zf_xiaoxiao</code>、<code>zf_xiaobei</code>、<code>zm_yunxi</code>。</p>
+              </div>
             </div>
           </div>
 
@@ -386,6 +426,9 @@ async function renderSettingsShell() {
   const cosyvoiceServiceUrlEl = $("cosyvoiceServiceUrl");
   const cosyvoiceSpeakerEl = $("cosyvoiceSpeaker");
   const cosyvoiceSampleRateEl = $("cosyvoiceSampleRate");
+  const mlxAudioServiceUrlEl = $("mlxAudioServiceUrl");
+  const mlxAudioModelEl = $("mlxAudioModel");
+  const mlxAudioVoiceEl = $("mlxAudioVoice");
   const statusEl = $("assistantSettingsStatus");
   const modelListEl = $("ollamaModelList");
   const testBoxEl = $("assistantTestResult");
@@ -408,6 +451,9 @@ async function renderSettingsShell() {
   cosyvoiceServiceUrlEl.value = config.tts?.cosyvoice?.service_url || "http://127.0.0.1:50000/inference_sft";
   cosyvoiceSpeakerEl.value = config.tts?.cosyvoice?.speaker || "中文女";
   cosyvoiceSampleRateEl.value = String(config.tts?.cosyvoice?.sample_rate || 22050);
+  mlxAudioServiceUrlEl.value = config.tts?.mlx_audio?.service_url || "http://127.0.0.1:50010/v1/audio/speech";
+  mlxAudioModelEl.value = config.tts?.mlx_audio?.model || "mlx-community/Kokoro-82M-bf16";
+  mlxAudioVoiceEl.value = config.tts?.mlx_audio?.voice || "zf_xiaoxiao";
   renderSettingsSide(config, audio);
 
   const setStatus = (text, type = "") => {
@@ -424,6 +470,12 @@ async function renderSettingsShell() {
       },
       currentFormAudio(ttsProviderEl, voiceEl, rateEl)
     );
+  }
+
+  function syncMlxVoiceField() {
+    if (voiceEl.value.startsWith("mlx_audio:")) {
+      mlxAudioVoiceEl.value = voiceEl.value.split(":", 2)[1] || "zf_xiaoxiao";
+    }
   }
 
   function updateTestBox(html) {
@@ -466,6 +518,11 @@ async function renderSettingsShell() {
       cosyvoice_service_url: cosyvoiceServiceUrlEl.value.trim(),
       cosyvoice_speaker: cosyvoiceSpeakerEl.value.trim(),
       cosyvoice_sample_rate: Number(cosyvoiceSampleRateEl.value || 22050),
+      mlx_audio_service_url: mlxAudioServiceUrlEl.value.trim(),
+      mlx_audio_model: mlxAudioModelEl.value.trim(),
+      mlx_audio_voice: voiceEl.value.startsWith("mlx_audio:")
+        ? (voiceEl.value.split(":", 2)[1] || "zf_xiaoxiao")
+        : mlxAudioVoiceEl.value.trim(),
     };
     const apiKey = externalKeyEl.value.trim();
     if (apiKey) payload.external_api_key = apiKey;
@@ -491,13 +548,19 @@ async function renderSettingsShell() {
     return saved;
   }
 
-  [providerEl, ollamaBaseEl, ollamaModelEl, externalBaseEl, externalModelEl, ttsProviderEl, voiceEl, melottsServiceUrlEl, melottsCommandEl, melottsLanguageEl, melottsSpeakerEl, cosyvoiceServiceUrlEl, cosyvoiceSpeakerEl, cosyvoiceSampleRateEl].forEach(el => {
+  [providerEl, ollamaBaseEl, ollamaModelEl, externalBaseEl, externalModelEl, ttsProviderEl, voiceEl, melottsServiceUrlEl, melottsCommandEl, melottsLanguageEl, melottsSpeakerEl, cosyvoiceServiceUrlEl, cosyvoiceSpeakerEl, cosyvoiceSampleRateEl, mlxAudioServiceUrlEl, mlxAudioModelEl, mlxAudioVoiceEl].forEach(el => {
     el.addEventListener("input", syncSummary);
     el.addEventListener("change", syncSummary);
   });
 
   ttsProviderEl.addEventListener("change", () => {
     voiceEl.value = normalizeVoiceForProvider(ttsProviderEl.value, voiceEl.value);
+    syncMlxVoiceField();
+    syncSummary();
+  });
+
+  voiceEl.addEventListener("change", () => {
+    syncMlxVoiceField();
     syncSummary();
   });
 
