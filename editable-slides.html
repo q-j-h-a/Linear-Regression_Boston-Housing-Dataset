@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>内嵌式可编辑幻灯片组件</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+  <style>
+    :root {
+      --theme: #2f7df6;
+      --theme-soft: rgba(47, 125, 246, 0.14);
+      --ink: #172033;
+      --muted: #5d687c;
+      --panel: rgba(255, 255, 255, 0.58);
+      --panel-strong: rgba(255, 255, 255, 0.76);
+      --line: rgba(255, 255, 255, 0.62);
+      --shadow: 0 28px 70px rgba(21, 32, 55, 0.22);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      min-height: 100vh;
+      margin: 0;
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--ink);
+      background:
+        radial-gradient(circle at 18% 12%, rgba(47, 125, 246, 0.28), transparent 26rem),
+        radial-gradient(circle at 82% 18%, rgba(6, 182, 160, 0.22), transparent 24rem),
+        linear-gradient(135deg, #eef4ff 0%, #f7fbf9 45%, #eef1f7 100%);
+      padding: clamp(18px, 3vw, 42px);
+    }
+
+    .host-page {
+      width: min(1180px, 100%);
+      margin: 0 auto;
+    }
+
+    .page-context {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 16px;
+      align-items: end;
+      margin-bottom: 18px;
+      color: rgba(23, 32, 51, 0.74);
+    }
+
+    .page-context h1 {
+      margin: 0 0 8px;
+      font-size: clamp(22px, 3vw, 34px);
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .page-context p {
+      max-width: 680px;
+      margin: 0;
+      line-height: 1.7;
+      font-size: 15px;
+    }
+
+    .ambient-tag {
+      padding: 9px 12px;
+      border: 1px solid rgba(255, 255, 255, 0.64);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.36);
+      backdrop-filter: blur(18px);
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
+    .ppt-shell {
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.58);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.24);
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(24px) saturate(145%);
+    }
+
+    .ppt-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 14px;
+      min-height: 58px;
+      padding: 10px 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.52);
+      background: rgba(255, 255, 255, 0.34);
+      backdrop-filter: blur(18px);
+    }
+
+    .toolbar-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .icon-button,
+    .download-button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      min-height: 38px;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.5);
+      color: var(--ink);
+      font: inherit;
+      font-size: 14px;
+      cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease, border-color 160ms ease;
+    }
+
+    .icon-button {
+      width: 42px;
+    }
+
+    .download-button {
+      padding: 0 14px;
+      background: rgba(47, 125, 246, 0.92);
+      border-color: rgba(47, 125, 246, 0.2);
+      color: white;
+    }
+
+    .icon-button:hover,
+    .download-button:hover {
+      transform: translateY(-1px);
+      background: var(--panel-strong);
+    }
+
+    .download-button:hover {
+      background: #236fe0;
+    }
+
+    .icon-button:disabled {
+      opacity: 0.42;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .page-indicator {
+      min-width: 74px;
+      text-align: center;
+      font-size: 14px;
+      color: var(--muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .slide-viewport {
+      position: relative;
+      aspect-ratio: 16 / 9;
+      background: rgba(255, 255, 255, 0.2);
+    }
+
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      align-content: center;
+      gap: 22px;
+      padding: clamp(34px, 5vw, 70px);
+      overflow: hidden;
+      opacity: 0;
+      visibility: hidden;
+      pointer-events: none;
+      transform: translateX(18px) scale(0.992);
+      transition: opacity 260ms ease, visibility 260ms ease, transform 260ms ease;
+      background:
+        linear-gradient(135deg, rgba(255, 255, 255, 0.72), rgba(255, 255, 255, 0.38)),
+        radial-gradient(circle at right top, rgba(47, 125, 246, 0.16), transparent 34%);
+      backdrop-filter: blur(20px) saturate(130%);
+    }
+
+    .slide.active {
+      opacity: 1;
+      visibility: visible;
+      pointer-events: auto;
+      transform: translateX(0) scale(1);
+    }
+
+    .slide h1,
+    .slide h2,
+    .slide p {
+      width: fit-content;
+      max-width: 100%;
+      margin: 0;
+      border: 1px dashed transparent;
+      border-radius: 6px;
+      outline: none;
+      transition: background 150ms ease, border-color 150ms ease, box-shadow 150ms ease;
+    }
+
+    .slide h1 {
+      font-size: clamp(34px, 5.6vw, 68px);
+      line-height: 1.04;
+      font-weight: 790;
+      letter-spacing: 0;
+    }
+
+    .slide h2 {
+      font-size: clamp(25px, 3.2vw, 42px);
+      line-height: 1.15;
+      font-weight: 760;
+      letter-spacing: 0;
+    }
+
+    .slide p {
+      max-width: 780px;
+      color: var(--muted);
+      font-size: clamp(15px, 1.7vw, 22px);
+      line-height: 1.62;
+    }
+
+    [contenteditable="true"] {
+      padding: 4px 7px;
+      cursor: text;
+    }
+
+    [contenteditable="true"]:hover {
+      border-color: rgba(47, 125, 246, 0.38);
+      background: rgba(47, 125, 246, 0.08);
+    }
+
+    [contenteditable="true"]:focus {
+      border-color: var(--theme);
+      background: rgba(255, 255, 255, 0.68);
+      box-shadow: 0 0 0 3px var(--theme-soft);
+    }
+
+    .title-slide {
+      grid-template-columns: 1.12fr 0.88fr;
+      align-items: center;
+    }
+
+    .title-copy {
+      display: grid;
+      gap: 20px;
+    }
+
+    .glass-visual {
+      min-height: 72%;
+      border: 1px solid rgba(255, 255, 255, 0.72);
+      border-radius: 8px;
+      background:
+        linear-gradient(160deg, rgba(255, 255, 255, 0.58), rgba(255, 255, 255, 0.2)),
+        linear-gradient(45deg, rgba(47, 125, 246, 0.28), rgba(6, 182, 160, 0.2));
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.55), 0 18px 42px rgba(47, 125, 246, 0.15);
+      backdrop-filter: blur(22px);
+    }
+
+    .split-slide {
+      grid-template-columns: 0.9fr 1.1fr;
+      align-items: center;
+    }
+
+    .metric-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .metric {
+      min-height: 118px;
+      padding: 18px;
+      border: 1px solid rgba(255, 255, 255, 0.68);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.36);
+      backdrop-filter: blur(16px);
+    }
+
+    .metric strong {
+      display: block;
+      margin-bottom: 8px;
+      color: var(--theme);
+      font-size: clamp(22px, 3vw, 38px);
+      font-weight: 760;
+    }
+
+    .metric span {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
+    .summary-list {
+      display: grid;
+      gap: 14px;
+      max-width: 850px;
+      margin-top: 4px;
+    }
+
+    .summary-item {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr);
+      gap: 12px;
+      align-items: start;
+      padding: 14px 16px;
+      border: 1px solid rgba(255, 255, 255, 0.64);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.36);
+      backdrop-filter: blur(18px);
+    }
+
+    .summary-item b {
+      display: inline-flex;
+      width: 34px;
+      height: 34px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: rgba(47, 125, 246, 0.12);
+      color: var(--theme);
+    }
+
+    .summary-item p {
+      width: 100%;
+      font-size: clamp(14px, 1.35vw, 18px);
+    }
+
+    /* 导出 PDF 时由 JS 添加该类：展开所有页面并设置分页，且不改变原始 DOM 结构。 */
+    .exporting .slide-viewport {
+      height: auto;
+      aspect-ratio: auto;
+      background: transparent;
+    }
+
+    .exporting .slide {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 16 / 9;
+      margin: 0;
+      opacity: 1 !important;
+      visibility: visible !important;
+      pointer-events: auto;
+      transform: none !important;
+      page-break-after: always;
+      break-after: page;
+    }
+
+    .exporting .slide:last-child {
+      page-break-after: auto;
+      break-after: auto;
+    }
+
+    .exporting [contenteditable="true"] {
+      border-color: transparent !important;
+      box-shadow: none !important;
+      background: transparent !important;
+    }
+
+    @media (max-width: 760px) {
+      body {
+        padding: 14px;
+      }
+
+      .page-context {
+        grid-template-columns: 1fr;
+      }
+
+      .ambient-tag {
+        width: fit-content;
+      }
+
+      .ppt-toolbar {
+        flex-wrap: wrap;
+      }
+
+      .title-slide,
+      .split-slide {
+        grid-template-columns: 1fr;
+      }
+
+      .glass-visual {
+        display: none;
+      }
+
+      .metric-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+
+      .metric {
+        min-height: 86px;
+        padding: 12px;
+      }
+
+      .metric span {
+        font-size: 12px;
+      }
+
+      .slide {
+        padding: 24px;
+        gap: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="host-page">
+    <section class="page-context" aria-label="宿主网页背景内容">
+      <div>
+        <h1>宿主网页中的可编辑 PPT</h1>
+        <p>下方组件采用半透明毛玻璃样式，可直接嵌入任意业务页面。点击标题或正文即可编辑，导出时会自动展开全部页面并生成横向 PDF。</p>
+      </div>
+      <div class="ambient-tag">HTML + CSS + JavaScript</div>
+    </section>
+
+    <section class="ppt-shell" id="deck">
+      <nav class="ppt-toolbar" data-html2canvas-ignore="true" aria-label="幻灯片控制栏">
+        <div class="toolbar-group">
+          <button class="icon-button" id="prevBtn" type="button" aria-label="上一页" title="上一页">‹</button>
+          <span class="page-indicator" id="pageIndicator">1 / 3</span>
+          <button class="icon-button" id="nextBtn" type="button" aria-label="下一页" title="下一页">›</button>
+        </div>
+        <button class="download-button" id="downloadBtn" type="button">下载为 PDF</button>
+      </nav>
+
+      <div class="slide-viewport" id="slideViewport">
+        <article class="slide title-slide active" aria-label="第 1 页">
+          <div class="title-copy">
+            <h1 contenteditable="true" spellcheck="false">可编辑演示文稿</h1>
+            <p contenteditable="true" spellcheck="false">在网页内直接完成内容调整，保留 PPT 的清晰版式，同时与宿主页面背景自然融合。</p>
+          </div>
+          <div class="glass-visual" aria-hidden="true"></div>
+        </article>
+
+        <article class="slide split-slide" aria-label="第 2 页">
+          <div>
+            <h2 contenteditable="true" spellcheck="false">图文与指标排版</h2>
+            <p contenteditable="true" spellcheck="false">适合展示项目结论、数据看板摘要、产品方案重点，编辑后的内容会保留在当前 DOM 中并参与导出。</p>
+          </div>
+          <div class="metric-grid" aria-label="示例指标">
+            <div class="metric"><strong>16:9</strong><span>固定演示比例，适配常见投影与 PDF 横向页面。</span></div>
+            <div class="metric"><strong>3 页</strong><span>示例包含封面、内容页与总结页，可继续扩展。</span></div>
+            <div class="metric"><strong>Blur</strong><span>通过 backdrop-filter 呈现轻量毛玻璃层次。</span></div>
+            <div class="metric"><strong>PDF</strong><span>导出时自动展开所有幻灯片并添加分页。</span></div>
+          </div>
+        </article>
+
+        <article class="slide" aria-label="第 3 页">
+          <h2 contenteditable="true" spellcheck="false">总结与下一步</h2>
+          <div class="summary-list">
+            <div class="summary-item">
+              <b>1</b>
+              <p contenteditable="true" spellcheck="false">点击任意标题或正文即可直接修改内容，悬停与聚焦状态会给出明确提示。</p>
+            </div>
+            <div class="summary-item">
+              <b>2</b>
+              <p contenteditable="true" spellcheck="false">翻页只切换透明度与可见性，不移除 DOM，因此导出和编辑状态更稳定。</p>
+            </div>
+            <div class="summary-item">
+              <b>3</b>
+              <p contenteditable="true" spellcheck="false">点击下载后会生成横向 PDF，控制栏会被 html2canvas 忽略。</p>
+            </div>
+          </div>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    // 基础状态：用索引记录当前页，所有 slide 始终保留在 DOM 中。
+    const deck = document.getElementById("deck");
+    const viewport = document.getElementById("slideViewport");
+    const slides = Array.from(document.querySelectorAll(".slide"));
+    const prevBtn = document.getElementById("prevBtn");
+    const nextBtn = document.getElementById("nextBtn");
+    const downloadBtn = document.getElementById("downloadBtn");
+    const pageIndicator = document.getElementById("pageIndicator");
+    let currentIndex = 0;
+
+    function renderSlide(index) {
+      currentIndex = Math.max(0, Math.min(index, slides.length - 1));
+
+      slides.forEach((slide, slideIndex) => {
+        const isActive = slideIndex === currentIndex;
+        slide.classList.toggle("active", isActive);
+        slide.setAttribute("aria-hidden", String(!isActive));
+      });
+
+      pageIndicator.textContent = `${currentIndex + 1} / ${slides.length}`;
+      prevBtn.disabled = currentIndex === 0;
+      nextBtn.disabled = currentIndex === slides.length - 1;
+    }
+
+    prevBtn.addEventListener("click", () => renderSlide(currentIndex - 1));
+    nextBtn.addEventListener("click", () => renderSlide(currentIndex + 1));
+
+    // 键盘翻页：仅当用户没有正在编辑文本时触发，避免影响 contenteditable 输入。
+    document.addEventListener("keydown", (event) => {
+      const isEditing = event.target.closest("[contenteditable='true']");
+      if (isEditing) return;
+
+      if (event.key === "ArrowLeft") renderSlide(currentIndex - 1);
+      if (event.key === "ArrowRight") renderSlide(currentIndex + 1);
+    });
+
+    async function exportPdf() {
+      const activeBeforeExport = currentIndex;
+      downloadBtn.disabled = true;
+      downloadBtn.textContent = "生成中...";
+
+      // 导出前进入展开模式：所有页面可见，并由 CSS 设置 page-break-after。
+      deck.classList.add("exporting");
+      slides.forEach((slide) => {
+        slide.classList.add("active");
+        slide.setAttribute("aria-hidden", "false");
+      });
+
+      const options = {
+        margin: 0,
+        filename: "editable-slides.pdf",
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: null
+        },
+        jsPDF: {
+          unit: "in",
+          format: "a4",
+          orientation: "landscape"
+        },
+        pagebreak: {
+          mode: ["css", "legacy"],
+          after: ".slide"
+        }
+      };
+
+      try {
+        await html2pdf().set(options).from(viewport).save();
+      } finally {
+        // 无论导出成功或失败，都恢复为原来的单页展示状态。
+        deck.classList.remove("exporting");
+        downloadBtn.disabled = false;
+        downloadBtn.textContent = "下载为 PDF";
+        renderSlide(activeBeforeExport);
+      }
+    }
+
+    downloadBtn.addEventListener("click", exportPdf);
+    renderSlide(0);
+  </script>
+</body>
+</html>
