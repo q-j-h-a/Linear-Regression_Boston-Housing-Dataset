@@ -1,4 +1,5 @@
 PANEL = {
+    "schema_version": 1,
     "page": "predict",
     "title": "控制面板",
     "sections": [
@@ -15,16 +16,18 @@ PANEL = {
             "title": "预测输入",
             "controls": [
                 {
-                    "type": "select",
+                    "type": "feature_picker",
                     "name": "feature",
                     "label": "特征选择",
+                    "mode": "single",
                     "element_id": "predictFeature",
                     "source": "feature_columns",
-                    "default": "RM",
+                    "default_source": "default_feature",
                     "auto_run": True,
                 },
                 {
                     "type": "select",
+                    "semantic_type": "dataset_variant",
                     "name": "use_standardized",
                     "label": "数据版本",
                     "element_id": "predictStd",
@@ -43,7 +46,7 @@ PANEL = {
             "title": "显示内容",
             "controls": [
                 {
-                    "type": "chart_selector",
+                    "type": "view_picker",
                     "name": "predictViews",
                     "label": "显示模式",
                     "summary_id": "predictModeSummary",
@@ -59,7 +62,7 @@ PANEL = {
             "id": "actions",
             "title": "操作",
             "controls": [
-                {"type": "button", "name": "run", "label": "开始预测", "element_id": "predictRun", "style": "primary-btn"}
+                {"type": "action_button", "name": "run", "label": "开始预测", "element_id": "predictRun", "style": "primary-btn"}
             ],
         },
     ],

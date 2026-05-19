@@ -1,4 +1,5 @@
 PANEL = {
+    "schema_version": 1,
     "page": "preprocess",
     "title": "控制面板",
     "sections": [
@@ -9,12 +10,13 @@ PANEL = {
                 {"type": "stat", "name": "sample_count", "label": "样本总数", "value_id": "sampleCount"},
                 {"type": "stat", "name": "feature_count", "label": "特征数量", "value_id": "featureCount", "default": 13},
                 {
-                    "type": "select",
+                    "type": "feature_picker",
                     "name": "feature",
                     "label": "特征选择",
+                    "mode": "single",
                     "element_id": "dataFeature",
                     "source": "feature_columns",
-                    "default": "RM",
+                    "default_source": "default_feature",
                 },
             ],
         },
@@ -23,7 +25,7 @@ PANEL = {
             "title": "显示内容",
             "controls": [
                 {
-                    "type": "chart_selector",
+                    "type": "view_picker",
                     "name": "dataViews",
                     "label": "显示模式",
                     "summary_id": "dataModeSummary",

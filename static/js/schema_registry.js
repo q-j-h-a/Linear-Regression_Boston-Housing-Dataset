@@ -24,7 +24,7 @@ function trainChartMeta(view) {
 async function loadTrainChartRegistry() {
   if (trainChartRegistryLoaded) return trainChartRegistry;
   try {
-    const resp = await fetch("/api/chart_registry?page=train_eval", { cache: "no-store" });
+    const resp = await fetch(`/api/chart_registry?${experimentQueryParam()}&page=train_eval`, { cache: "no-store" });
     const data = await resp.json();
     trainChartRegistry = resp.ok && Array.isArray(data.charts) && data.charts.length ? data.charts : fallbackTrainCharts();
   } catch (err) {
@@ -37,7 +37,7 @@ async function loadTrainChartRegistry() {
 async function loadTrainPageSchema() {
   if (trainPageSchema) return trainPageSchema;
   try {
-    const resp = await fetch("/api/page_schema?page=train_eval", { cache: "no-store" });
+    const resp = await fetch(`/api/page_schema?${experimentQueryParam()}&page=train_eval`, { cache: "no-store" });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Failed to load page schema");
     trainPageSchema = data;
@@ -59,7 +59,7 @@ async function loadTrainPageSchema() {
 
 async function loadPanelSchema(page, fallbackPanel) {
   try {
-    const resp = await fetch(`/api/page_schema?page=${encodeURIComponent(page)}`, { cache: "no-store" });
+    const resp = await fetch(`/api/page_schema?${experimentQueryParam()}&page=${encodeURIComponent(page)}`, { cache: "no-store" });
     const data = await resp.json();
     if (!resp.ok) throw new Error(data.error || "Failed to load page schema");
     return data;
@@ -126,9 +126,6 @@ function preprocessChartMeta(view) {
   return preprocessPageSchema?.charts?.find(chart => chart.id === view) || null;
 }
 
-function studentChartMeta(view) {
-  return studentPageSchema?.charts?.find(chart => chart.id === view) || null;
-}
 
 function predictChartMeta(view) {
   return predictPageSchema?.charts?.find(chart => chart.id === view) || null;

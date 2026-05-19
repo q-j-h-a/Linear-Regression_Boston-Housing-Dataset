@@ -1,4 +1,5 @@
 PANEL = {
+    "schema_version": 1,
     "page": "train_eval",
     "title": "模型训练与评估",
     "sections": [
@@ -10,6 +11,7 @@ PANEL = {
                 {"type": "stat", "name": "feature_count", "label": "特征数量", "value_id": "featureCount", "default": 13},
                 {
                     "type": "select",
+                    "semantic_type": "dataset_variant",
                     "name": "use_standardized",
                     "label": "数据版本",
                     "element_id": "trainStd",
@@ -21,12 +23,13 @@ PANEL = {
                     ],
                 },
                 {
-                    "type": "select",
+                    "type": "feature_picker",
                     "name": "feature",
                     "label": "特征选择",
+                    "mode": "single",
                     "element_id": "trainFeature",
                     "source": "feature_columns",
-                    "default": "RM",
+                    "default_source": "default_feature",
                     "auto_prepare": True,
                 },
             ],
@@ -36,7 +39,7 @@ PANEL = {
             "title": "显示内容",
             "controls": [
                 {
-                    "type": "chart_selector",
+                    "type": "view_picker",
                     "name": "trainViews",
                     "label": "显示模式",
                     "summary_id": "trainModeSummary",
@@ -99,10 +102,10 @@ PANEL = {
             "id": "actions",
             "title": "操作",
             "controls": [
-                {"type": "button", "name": "step", "label": "训练一轮", "element_id": "stepBtn", "style": "primary"},
-                {"type": "button", "name": "auto", "label": "自动训练", "element_id": "autoBtn", "style": "green"},
-                {"type": "button", "name": "pause", "label": "暂停", "element_id": "pauseBtn", "style": "dark"},
-                {"type": "button", "name": "reset", "label": "重置", "element_id": "resetBtn", "style": "rose"},
+                {"type": "action_button", "name": "step", "label": "训练一轮", "element_id": "stepBtn", "style": "primary"},
+                {"type": "action_button", "name": "auto", "label": "自动训练", "element_id": "autoBtn", "style": "green"},
+                {"type": "action_button", "name": "pause", "label": "暂停", "element_id": "pauseBtn", "style": "dark"},
+                {"type": "action_button", "name": "reset", "label": "重置", "element_id": "resetBtn", "style": "rose"},
             ],
         },
         {

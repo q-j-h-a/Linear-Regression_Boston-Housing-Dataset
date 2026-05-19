@@ -30,33 +30,20 @@ let dataCache = null;
 
 let dataChartDataCache = {};
 
+let currentDatasetMeta = null;
+
 let trainData = null;
 
 let predictData = null;
 
 let predictChartDataCache = {};
 
-let studentMeta = null;
+let evaluatePageSchema = null;
 
-let studentData = null;
+let evaluateChartDataCache = {};
 
-let studentTrainData = null;
+let evaluateRenderViewsKey = "";
 
-let studentPredictData = null;
-
-let studentChartDataCache = {};
-
-let studentRenderViewsKey = "";
-
-let studentStage = "数据集";
-
-let studentStageKind = "dataset";
-
-let studentTrainDirty = false;
-
-let studentCurrentFrame = 0;
-
-let studentHasTrained = false;
 
 let currentFrame = 0;
 
@@ -78,7 +65,6 @@ let preprocessPageSchema = null;
 
 let predictPageSchema = null;
 
-let studentPageSchema = null;
 
 let activePrototypeChartId = null;
 
@@ -112,9 +98,9 @@ function saveDataGridLayout() {
 
 function gridLayoutStorageKey(mode) {
   if (mode === "train") return "trainGridLayoutV2";
+  if (mode === "evaluate") return "evaluateGridLayoutV1";
   if (mode === "predict") return "predictGridLayoutV3";
-  if (mode === "student") return "studentGridLayoutV2";
-  return "preprocessGridLayoutV4";
+  return "preprocessGridLayoutV7";
 }
 
 function destroyDataGrid() {
@@ -124,8 +110,8 @@ function destroyDataGrid() {
   dataGrid = null;
   dataGridMode = null;
   trainRenderViewsKey = "";
+  evaluateRenderViewsKey = "";
   predictRenderViewsKey = "";
-  studentRenderViewsKey = "";
 }
 
 function initChart(id) {
@@ -239,56 +225,9 @@ function persistActiveViewSelection() {
     persistPredictFormState();
     saveCheckedValues("predictViews", "predictSelectedViewsV2");
   }
-  if (currentPage === "student") {
-    persistStudentFormState();
-    if (document.querySelector('input[name="studentDataViews"]')) saveCheckedValues("studentDataViews", "studentDataSelectedViewsV1");
-    if (document.querySelector('input[name="studentTrainViews"]')) saveCheckedValues("studentTrainViews", "studentTrainSelectedViewsV1");
-    if (document.querySelector('input[name="studentPredictViews"]')) saveCheckedValues("studentPredictViews", "studentPredictSelectedViewsV2");
+  if (currentPage === "evaluate" && document.querySelector('input[name="evaluateViews"]')) {
+    saveCheckedValues("evaluateViews", "evaluateSelectedViewsV1");
   }
-}
-
-const studentFormStateIds = [
-  "studentSourceType", "studentTarget", "studentFeature",
-  "studentW0", "studentB0", "studentLr", "studentEpochs", "studentSpeed",
-  "studentPredictInput"
-];
-
-function persistStudentFormState() {
-  const state = {};
-  studentFormStateIds.forEach(id => {
-    const el = $(id);
-    if (el) state[id] = el.value;
-  });
-  if (document.querySelector('input[name="studentFeatures"]')) {
-    state.studentFeatures = selectedValues("studentFeatures");
-  }
-  viewStateStore.studentFormStateV1 = state;
-}
-
-function restoreStudentFormState() {
-  const state = viewStateStore.studentFormStateV1 || {};
-  if (Array.isArray(state.studentFeatures)) {
-    let matched = 0;
-    document.querySelectorAll('input[name="studentFeatures"]').forEach(el => {
-      const checked = state.studentFeatures.includes(el.value);
-      if (checked) matched += 1;
-      el.checked = checked;
-    });
-    if (!matched) {
-      document.querySelectorAll('input[name="studentFeatures"]').forEach(el => el.checked = true);
-    }
-  }
-  studentFormStateIds.forEach(id => {
-    const el = $(id);
-    if (!el || state[id] == null) return;
-    if (el.tagName === "SELECT" && ![...el.options].some(opt => opt.value === state[id])) return;
-    el.value = state[id];
-  });
-  updateStudentFeatureSelect();
-  if ($("studentFeature") && state.studentFeature && [...$("studentFeature").options].some(opt => opt.value === state.studentFeature)) {
-    $("studentFeature").value = state.studentFeature;
-  }
-  if ($("studentSpeed") && $("studentSpeedText")) $("studentSpeedText").textContent = `${$("studentSpeed").value}ms`;
 }
 
 function currentFeature() {
@@ -323,7 +262,7 @@ function saveCheckedValues(name, storageKey) {
 
 function updateDataGridCellHeight() {
   if (!dataGrid) return;
-  const grid = dataGrid.el || $("chartGrid") || $("studentChartGrid");
+  const grid = dataGrid.el || $("chartGrid");
   if (!grid) return;
   const columnWidth = grid.clientWidth / 4;
   dataGrid.cellHeight(Math.max(220, Math.round(columnWidth)));
@@ -343,7 +282,7 @@ function syncDataGridAttributes() {
 
 function loadDataGridLayout() {
   try {
-    return viewStateStore.preprocessGridLayoutV4 || {};
+    return viewStateStore.preprocessGridLayoutV7 || {};
   } catch (err) {
     return {};
   }
@@ -357,6 +296,14 @@ function loadTrainGridLayout() {
   }
 }
 
+function loadEvaluateGridLayout() {
+  try {
+    return viewStateStore.evaluateGridLayoutV1 || {};
+  } catch (err) {
+    return {};
+  }
+}
+
 function loadPredictGridLayout() {
   try {
     return viewStateStore.predictGridLayoutV3 || {};
@@ -365,10 +312,3 @@ function loadPredictGridLayout() {
   }
 }
 
-function loadStudentGridLayout() {
-  try {
-    return viewStateStore.studentGridLayoutV2 || {};
-  } catch (err) {
-    return {};
-  }
-}

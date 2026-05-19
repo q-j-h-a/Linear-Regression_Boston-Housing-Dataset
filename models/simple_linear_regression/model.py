@@ -7,10 +7,11 @@ import pandas as pd
 from core.context_store import create_context, get_context
 
 
-RAW_DATA_PATH = Path("boston_housing.csv")
-STD_DATA_PATH = Path("boston_housing_features_standardized.csv")
+DATASET_ROOT = Path("datasets")
+RAW_DATA_PATH = DATASET_ROOT / "raw" / "boston_housing.csv"
+STD_DATA_PATH = DATASET_ROOT / "preprocessed" / "boston_housing_preprocessed.csv"
 TARGET_COLUMN = "MEDV"
-STUDENT_DATASETS = {}
+CUSTOM_DATASETS = {}
 
 FEATURE_COLUMNS = [
     "CRIM", "ZN", "INDUS", "CHAS", "NOX", "RM", "AGE", "DIS",
@@ -33,6 +34,23 @@ FEATURE_DESCRIPTIONS = {
     "LSTAT": "低收入人口比例",
 }
 
+FIELD_MEANINGS = {
+    "CRIM": "城镇人均犯罪率",
+    "ZN": "大面积住宅用地比例",
+    "INDUS": "非零售商业用地比例",
+    "CHAS": "是否靠近查尔斯河",
+    "NOX": "一氧化氮浓度",
+    "RM": "住宅平均房间数",
+    "AGE": "1940年前建成的自住房比例",
+    "DIS": "到波士顿就业中心的加权距离",
+    "RAD": "到放射状高速公路的可达性指数",
+    "TAX": "每10000美元房产税率",
+    "PTRATIO": "城镇师生比例",
+    "B": "历史人口统计相关变量",
+    "LSTAT": "低收入人口比例",
+    "MEDV": "房价中位数",
+}
+
 
 def load_raw_df() -> pd.DataFrame:
     if not RAW_DATA_PATH.exists():
@@ -41,7 +59,7 @@ def load_raw_df() -> pd.DataFrame:
     missing = [c for c in FEATURE_COLUMNS + [TARGET_COLUMN] if c not in df.columns]
     if missing:
         raise ValueError(f"原始数据缺少字段：{missing}")
-    return df
+    return df.loc[:, FEATURE_COLUMNS + [TARGET_COLUMN]]
 
 
 def load_std_df() -> pd.DataFrame:
@@ -50,11 +68,11 @@ def load_std_df() -> pd.DataFrame:
             f"没有找到 {STD_DATA_PATH.name}，请先运行 03_preprocess_features_only_standardize.py 生成标准化数据集"
         )
     df = pd.read_csv(STD_DATA_PATH)
-    required = FEATURE_COLUMNS + [f"{c}_standardized" for c in FEATURE_COLUMNS] + [TARGET_COLUMN]
+    required = FEATURE_COLUMNS + [TARGET_COLUMN]
     missing = [c for c in required if c not in df.columns]
     if missing:
         raise ValueError(f"标准化数据缺少字段：{missing}")
-    return df
+    return df.loc[:, required]
 
 
 def series_summary(x: pd.Series, y: pd.Series) -> dict:
@@ -135,18 +153,180 @@ def preview_records(df: pd.DataFrame, columns: list[str], limit: int = 8) -> lis
     return df.loc[:, columns].head(limit).replace({np.nan: None}).to_dict(orient="records")
 
 
-def student_dataset(dataset_id: str) -> dict:
-    data = STUDENT_DATASETS.get(dataset_id)
+def dataset_quality(raw: pd.DataFrame) -> dict:
+    numeric = numeric_columns(raw)
+    return {
+        "missing_count": int(raw.isna().sum().sum()),
+        "duplicate_count": int(raw.duplicated().sum()),
+        "numeric_column_count": int(len(numeric)),
+        "non_numeric_column_count": int(len(raw.columns) - len(numeric)),
+    }
+
+
+def statistical_summary(raw: pd.DataFrame, columns: list[str]) -> list[dict]:
+    rows = []
+    for col in columns:
+        series = pd.to_numeric(raw[col], errors="coerce").dropna()
+        if series.empty:
+            continue
+        rows.append({
+            "feature": col,
+            "min": float(series.min()),
+            "max": float(series.max()),
+            "mean": float(series.mean()),
+            "std": float(series.std(ddof=0)),
+        })
+    return rows
+
+
+def data_dictionary(feature_columns: list[str], target_column: str) -> list[dict]:
+    rows = [
+        {
+            "field": feature,
+            "role": "特征",
+            "meaning": FIELD_MEANINGS.get(feature, FEATURE_DESCRIPTIONS.get(feature, "")),
+        }
+        for feature in feature_columns
+    ]
+    rows.append({
+        "field": target_column,
+        "role": "目标",
+        "meaning": FIELD_MEANINGS.get(target_column, "预测目标"),
+    })
+    return rows
+
+
+def custom_dataset(dataset_id: str) -> dict:
+    data = CUSTOM_DATASETS.get(dataset_id)
     if not data:
         raise ValueError("学生数据集不存在，请重新上传 CSV。")
     return data
 
 
-def student_std_col(feature: str) -> str:
-    return f"{feature}_standardized"
+def standardized_col(feature: str) -> str:
+    return feature
 
 
-def student_data_response(
+def standardize_feature_frame(raw: pd.DataFrame, features: list[str], target: str) -> tuple[pd.DataFrame, list[dict]]:
+    cleaned = clean_numeric_df(raw, features + [target])
+    if len(cleaned) < 2:
+        raise ValueError("Dataset needs at least two valid numeric rows.")
+    std = cleaned.copy()
+    table = []
+    for column in features + [target]:
+        mean = float(cleaned[column].mean())
+        sigma = float(cleaned[column].std(ddof=0))
+        if sigma == 0:
+            raise ValueError(f"Column {column} has zero standard deviation.")
+        std[column] = (cleaned[column] - mean) / sigma
+        table.append({
+            "feature": column,
+            "standardized_feature": column,
+            "role": "target" if column == target else "feature",
+            "mean": mean,
+            "std": sigma,
+            "min_before": float(cleaned[column].min()),
+            "max_before": float(cleaned[column].max()),
+            "min_after": float(std[column].min()),
+            "max_after": float(std[column].max()),
+        })
+    return std, table
+
+
+def infer_custom_dataset_columns(df: pd.DataFrame) -> tuple[list[str], str]:
+    nums = numeric_columns(df)
+    if len(nums) < 2:
+        raise ValueError("Dataset needs at least one numeric feature column and one numeric target column.")
+    target = df.columns[-1]
+    if target not in nums:
+        raise ValueError("The last CSV column must be a numeric target column.")
+    features = [col for col in nums if col != target]
+    return features, target
+
+
+def store_custom_dataset(df: pd.DataFrame, source_type: str = "raw", label: str = "Custom CSV") -> dict:
+    if df.empty:
+        raise ValueError("Dataset is empty.")
+    df = df.copy()
+    df.columns = [str(col).strip() for col in df.columns]
+    features, target = infer_custom_dataset_columns(df)
+    raw = clean_numeric_df(df, features + [target])
+    std = raw.copy() if source_type == "standardized" else None
+    table = []
+    if source_type != "standardized":
+        std, table = standardize_feature_frame(raw, features, target)
+    dataset_id = uuid4().hex
+    CUSTOM_DATASETS[dataset_id] = {
+        "raw": raw,
+        "std": std,
+        "source_type": source_type,
+        "features": features,
+        "target": target,
+        "label": label,
+        "standardize_table": table,
+    }
+    return dataset_metadata(dataset_id)
+
+
+def dataset_metadata(dataset_id: str = "boston_housing") -> dict:
+    if not dataset_id or dataset_id == "boston_housing":
+        raw = load_raw_df()
+        return {
+            "dataset_id": "boston_housing",
+            "dataset_kind": "builtin",
+            "label": "Boston Housing 原始数据集",
+            "source_type": "raw",
+            "standardized_ready": True,
+            "row_count": int(len(raw)),
+            "columns": raw.columns.tolist(),
+            "numeric_columns": FEATURE_COLUMNS + [TARGET_COLUMN],
+            "target": TARGET_COLUMN,
+            "features": FEATURE_COLUMNS,
+            "preview_columns": raw.columns.tolist(),
+            "preview": preview_records(raw, raw.columns.tolist()),
+        }
+    data = custom_dataset(dataset_id)
+    raw = data["raw"]
+    return {
+        "dataset_id": dataset_id,
+        "dataset_kind": "custom",
+        "label": data.get("label") or "Custom CSV",
+        "source_type": data.get("source_type", "raw"),
+        "standardized_ready": data.get("std") is not None,
+        "row_count": int(len(raw)),
+        "columns": raw.columns.tolist(),
+        "numeric_columns": numeric_columns(raw),
+        "target": data.get("target") or raw.columns[-1],
+        "features": data.get("features") or [col for col in numeric_columns(raw) if col != raw.columns[-1]],
+        "preview_columns": raw.columns.tolist(),
+        "preview": preview_records(raw, raw.columns.tolist()),
+    }
+
+
+def load_dataset(payload: dict) -> dict:
+    source = payload.get("source", "boston_housing")
+    if source == "boston_housing":
+        return dataset_metadata("boston_housing")
+    raise ValueError(f"Unknown dataset source: {source}")
+
+
+def dataset_frames(dataset_id: str | None) -> tuple[pd.DataFrame, pd.DataFrame | None, list[str], str, str, str]:
+    if not dataset_id or dataset_id == "boston_housing":
+        return load_raw_df(), load_std_df(), FEATURE_COLUMNS, TARGET_COLUMN, "boston_housing", "Boston Housing"
+    data = custom_dataset(dataset_id)
+    raw = data["raw"]
+    features = data.get("features")
+    target = data.get("target")
+    if not features or not target:
+        features, target = infer_custom_dataset_columns(raw)
+        data["features"] = features
+        data["target"] = target
+    if data.get("std") is None:
+        data["std"], data["standardize_table"] = standardize_feature_frame(raw, features, target)
+    return raw, data.get("std"), features, target, dataset_id, data.get("label") or "Custom CSV"
+
+
+def custom_data_response(
     raw: pd.DataFrame,
     std: pd.DataFrame,
     feature_columns: list[str],
@@ -155,11 +335,12 @@ def student_data_response(
 ) -> dict:
     y = raw[target_column].astype(float)
     x_raw = raw[feature].astype(float)
-    std_col = student_std_col(feature)
+    std_col = standardized_col(feature)
     if std is None or std_col not in std.columns:
         x_std = ((x_raw - x_raw.mean()) / x_raw.std(ddof=0)).astype(float)
     else:
         x_std = std[std_col].astype(float)
+    y_std = std[target_column].astype(float) if std is not None and target_column in std.columns else ((y - y.mean()) / y.std(ddof=0)).astype(float)
     return {
         "feature": feature,
         "target": target_column,
@@ -171,21 +352,21 @@ def student_data_response(
         },
         "standardized": {
             "feature_name": std_col,
-            "scatter": {"x": x_std.round(6).tolist(), "y": y.round(6).tolist()},
-            "trend_line": trend_line(x_std.to_numpy(), y.to_numpy()),
-            "summary": series_summary(x_std, y),
+            "scatter": {"x": x_std.round(6).tolist(), "y": y_std.round(6).tolist()},
+            "trend_line": trend_line(x_std.to_numpy(), y_std.to_numpy()),
+            "summary": series_summary(x_std, y_std),
         },
         "correlations": all_correlations_for(raw, feature_columns, target_column),
         "standardize_table": [
             {
                 "feature": col,
-                "standardized_feature": student_std_col(col),
+                "standardized_feature": standardized_col(col),
                 "mean": float(raw[col].mean()),
                 "std": float(raw[col].std(ddof=0)),
                 "min_before": float(raw[col].min()),
                 "max_before": float(raw[col].max()),
-                "min_after": float(std[student_std_col(col)].min()) if std is not None and student_std_col(col) in std.columns else None,
-                "max_after": float(std[student_std_col(col)].max()) if std is not None and student_std_col(col) in std.columns else None,
+                "min_after": float(std[standardized_col(col)].min()) if std is not None and standardized_col(col) in std.columns else None,
+                "max_after": float(std[standardized_col(col)].max()) if std is not None and standardized_col(col) in std.columns else None,
             }
             for col in feature_columns
         ],
@@ -346,8 +527,9 @@ def prepare_data_view(payload: dict) -> dict:
     raw = load_raw_df()
     std = load_std_df()
     y = raw[TARGET_COLUMN].astype(float)
+    y_std = std[TARGET_COLUMN].astype(float)
     x_raw = raw[feature].astype(float)
-    std_col = f"{feature}_standardized"
+    std_col = feature
     x_std = std[std_col].astype(float)
 
     response = {
@@ -361,23 +543,23 @@ def prepare_data_view(payload: dict) -> dict:
         },
         "standardized": {
             "feature_name": std_col,
-            "scatter": {"x": x_std.round(6).tolist(), "y": y.round(6).tolist()},
-            "trend_line": trend_line(x_std.to_numpy(), y.to_numpy()),
-            "summary": series_summary(x_std, y),
+            "scatter": {"x": x_std.round(6).tolist(), "y": y_std.round(6).tolist()},
+            "trend_line": trend_line(x_std.to_numpy(), y_std.to_numpy()),
+            "summary": series_summary(x_std, y_std),
         },
         "correlations": all_correlations(raw),
         "standardize_table": [
             {
                 "feature": col,
-                "standardized_feature": f"{col}_standardized",
+                "standardized_feature": col,
                 "mean": float(raw[col].mean()),
                 "std": float(raw[col].std(ddof=0)),
                 "min_before": float(raw[col].min()),
                 "max_before": float(raw[col].max()),
-                "min_after": float(std[f"{col}_standardized"].min()),
-                "max_after": float(std[f"{col}_standardized"].max()),
+                "min_after": float(std[col].min()),
+                "max_after": float(std[col].max()),
             }
-            for col in FEATURE_COLUMNS
+            for col in FEATURE_COLUMNS + [TARGET_COLUMN]
         ],
     }
     context_id = create_context({
@@ -403,7 +585,7 @@ def prepare_train(payload: dict) -> dict:
     b0 = safe_float(payload.get("b0"), 0.0)
 
     df = load_std_df() if use_standardized else load_raw_df()
-    x_col = f"{feature}_standardized" if use_standardized else feature
+    x_col = feature
     if x_col not in df.columns:
         raise ValueError(f"数据中不存在字段：{x_col}")
     x = df[x_col].astype(float).to_numpy()
@@ -548,7 +730,7 @@ def predict(payload: dict) -> dict:
     }
 
 
-def student_upload(file, source_type: str = "raw") -> dict:
+def upload_dataset(file, source_type: str = "raw") -> dict:
     if not file or not file.filename:
         raise ValueError("请上传 CSV 文件。")
     if not file.filename.lower().endswith(".csv"):
@@ -568,7 +750,7 @@ def student_upload(file, source_type: str = "raw") -> dict:
     features = [col for col in nums if col != target]
 
     dataset_id = uuid4().hex
-    STUDENT_DATASETS[dataset_id] = {
+    CUSTOM_DATASETS[dataset_id] = {
         "raw": df,
         "std": df.copy() if source_type == "standardized" else None,
         "source_type": source_type,
@@ -586,82 +768,72 @@ def student_upload(file, source_type: str = "raw") -> dict:
     }
 
 
-def student_preprocess(payload: dict) -> dict:
-    data = student_dataset(payload.get("dataset_id"))
-    raw = data["raw"]
-    target = raw.columns[-1]
-    numeric = numeric_columns(raw)
-    if target not in numeric:
-        raise ValueError("CSV 最后一列必须是数值目标列，目标列不参与预处理标准化。")
-    features = [col for col in numeric if col != target]
-    if not target or not features:
-        raise ValueError("请选择目标列和至少一个特征列。")
 
-    missing = [col for col in features + [target] if col not in raw.columns]
-    if missing:
-        raise ValueError(f"数据集中不存在字段：{missing}")
-    if target in features:
-        raise ValueError("目标列不能同时作为特征列。")
+def prepare_data_view(payload: dict) -> dict:
+    dataset_id = payload.get("dataset_id") or "boston_housing"
+    raw, std, features, target, resolved_dataset_id, dataset_label = dataset_frames(dataset_id)
+    feature = payload.get("feature") or (features[0] if features else "RM")
+    if feature not in features:
+        raise ValueError(f"Unknown feature: {feature}")
 
-    cleaned = clean_numeric_df(raw, features + [target])
-    if len(cleaned) < 2:
-        raise ValueError("清洗缺失值后样本不足，至少需要 2 行有效数据。")
-
-    std = cleaned.copy()
-    table = []
-    for feature in features:
-        mean = float(cleaned[feature].mean())
-        sigma = float(cleaned[feature].std(ddof=0))
-        if sigma == 0:
-            raise ValueError(f"特征 {feature} 的标准差为 0，无法标准化。")
-        std_col = student_std_col(feature)
-        std[std_col] = (cleaned[feature] - mean) / sigma
-        table.append({
+    if resolved_dataset_id == "boston_housing":
+        y = raw[target].astype(float)
+        x_raw = raw[feature].astype(float)
+        std_col = feature
+        x_std = std[std_col].astype(float)
+        y_std = std[target].astype(float)
+        response = {
             "feature": feature,
-            "standardized_feature": std_col,
-            "mean": mean,
-            "std": sigma,
-            "min_before": float(cleaned[feature].min()),
-            "max_before": float(cleaned[feature].max()),
-            "min_after": float(std[std_col].min()),
-            "max_after": float(std[std_col].max()),
-        })
+            "target": target,
+            "description": FEATURE_DESCRIPTIONS.get(feature, ""),
+            "raw": {
+                "scatter": {"x": x_raw.round(6).tolist(), "y": y.round(6).tolist()},
+                "trend_line": trend_line(x_raw.to_numpy(), y.to_numpy()),
+                "summary": series_summary(x_raw, y),
+            },
+            "standardized": {
+                "feature_name": std_col,
+                "scatter": {"x": x_std.round(6).tolist(), "y": y_std.round(6).tolist()},
+                "trend_line": trend_line(x_std.to_numpy(), y_std.to_numpy()),
+                "summary": series_summary(x_std, y_std),
+            },
+            "correlations": all_correlations(raw),
+            "standardize_table": [
+                {
+                    "feature": col,
+                    "standardized_feature": col,
+                    "mean": float(raw[col].mean()),
+                    "std": float(raw[col].std(ddof=0)),
+                    "min_before": float(raw[col].min()),
+                    "max_before": float(raw[col].max()),
+                    "min_after": float(std[col].min()),
+                    "max_after": float(std[col].max()),
+                }
+                for col in features + [target]
+            ],
+        }
+    else:
+        response = custom_data_response(raw, std, features, target, feature)
 
-    data["raw"] = cleaned
-    data["std"] = std
-    data["features"] = features
-    data["target"] = target
-    preview_columns = [student_std_col(feature) for feature in features] + [target]
-    return {
-        "dataset_id": payload.get("dataset_id"),
-        "row_count": int(len(cleaned)),
+    standard_preview_cols = []
+    for col in [feature, target]:
+        if std is not None and col in std.columns and col not in standard_preview_cols:
+            standard_preview_cols.append(col)
+    raw_preview_cols = [col for col in [feature, target] if col in raw.columns]
+    response.update({
+        "dataset_id": resolved_dataset_id,
+        "dataset_label": dataset_label,
         "features": features,
-        "target": target,
-        "standardize_table": table,
-        "preview_columns": preview_columns,
-        "preview": preview_records(std, preview_columns),
-    }
-
-
-def student_prepare_data_view(payload: dict) -> dict:
-    data = student_dataset(payload.get("dataset_id"))
-    target = payload.get("target")
-    features = payload.get("features") or []
-    feature = payload.get("feature")
-    if not target or not features or not feature:
-        raise ValueError("请选择目标列、特征列和当前观察特征。")
-    raw = clean_numeric_df(data["raw"], features + [target])
-    std = data.get("std")
-    if std is not None:
-        std = clean_numeric_df(
-            std,
-            [col for col in std.columns if col in features + [target] or col.endswith("_standardized")],
-        )
-    response = student_data_response(raw, std, features, target, feature)
+        "columns": raw.columns.tolist(),
+        "data_quality": dataset_quality(raw),
+        "statistical_summary": statistical_summary(raw, features + [target]),
+        "data_dictionary": data_dictionary(features, target),
+        "raw_preview": preview_records(raw, raw_preview_cols, limit=5) if raw_preview_cols else [],
+        "standardized_preview": preview_records(std, standard_preview_cols, limit=5) if std is not None and standard_preview_cols else [],
+    })
     context_id = create_context({
-        "model": "student_linear_regression",
-        "page": "student",
-        "stage": "data_view",
+        "model": "simple_linear_regression",
+        "page": "preprocess",
         **response,
     })
     return {
@@ -670,42 +842,40 @@ def student_prepare_data_view(payload: dict) -> dict:
     }
 
 
-def student_prepare_train(payload: dict) -> dict:
-    data = student_dataset(payload.get("dataset_id"))
-    target = payload.get("target")
-    feature = payload.get("feature")
-    features = payload.get("features") or [feature]
+def prepare_train(payload: dict) -> dict:
+    dataset_id = payload.get("dataset_id") or "boston_housing"
+    raw, std, features, target, resolved_dataset_id, dataset_label = dataset_frames(dataset_id)
+    feature = payload.get("feature") or (features[0] if features else "RM")
+    if feature not in features:
+        raise ValueError(f"Unknown feature: {feature}")
+
     use_standardized = bool(payload.get("use_standardized", True))
     lr = safe_float(payload.get("learning_rate"), 0.03)
     epochs = safe_int(payload.get("epochs"), 120, lo=1, hi=2000)
     w0 = safe_float(payload.get("w0"), 0.0)
     b0 = safe_float(payload.get("b0"), 0.0)
 
-    raw = clean_numeric_df(data["raw"], features + [target])
-    std = data.get("std")
-    x_col = student_std_col(feature) if use_standardized else feature
-    if use_standardized:
-        if std is None or x_col not in std.columns:
-            raise ValueError("请先执行预处理，或上传包含标准化列的预处理数据集。")
-        df_train = clean_numeric_df(std, [x_col, target])
-    else:
-        df_train = raw
+    x_col = feature
+    df_train = std if use_standardized else raw
+    if df_train is None or x_col not in df_train.columns:
+        raise ValueError(f"Missing training column: {x_col}")
+
     x = df_train[x_col].astype(float).to_numpy()
     y = df_train[target].astype(float).to_numpy()
-    if len(x) < 2:
-        raise ValueError("有效样本不足，至少需要 2 行数据。")
-
     w_ref, b_ref = np.polyfit(x, y, 1)
     line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
     history = build_training_history(x, y, w0, b0, lr, epochs)
     contour = build_contour(x, y, history, float(w_ref), float(b_ref))
+
     context = {
-        "stage": "train_prepare",
+        "dataset_id": resolved_dataset_id,
+        "dataset_label": dataset_label,
+        "feature_columns": features,
         "feature": feature,
         "x_column": x_col,
         "target": target,
         "use_standardized": use_standardized,
-        "description": "",
+        "description": FEATURE_DESCRIPTIONS.get(feature, "") if resolved_dataset_id == "boston_housing" else "",
         "learning_rate": lr,
         "epochs": epochs,
         "scatter": {"x": np.round(x, 6).tolist(), "y": np.round(y, 6).tolist()},
@@ -714,53 +884,56 @@ def student_prepare_train(payload: dict) -> dict:
         "best": {"w": float(w_ref), "b": float(b_ref)},
         "contour": contour,
     }
-    return create_training_context(context, model="student_linear_regression", page="student")
+    return create_training_context(context)
 
 
-def student_predict(payload: dict) -> dict:
-    data = student_dataset(payload.get("dataset_id"))
-    target = payload.get("target")
-    feature = payload.get("feature")
-    features = payload.get("features") or [feature]
-    value = safe_float(payload.get("value"), 0.0)
+def predict(payload: dict) -> dict:
+    train_context_id = payload.get("train_context_id")
+    if not train_context_id:
+        raise ValueError("Missing train_context_id.")
+    train_context = get_context(train_context_id)
+    history = train_context.get("history") or []
+    if not history:
+        raise ValueError("Training context has no history.")
+
+    frame_index = safe_int(payload.get("train_frame_index"), len(history) - 1, lo=0, hi=len(history) - 1)
+    frame = history[frame_index]
+    dataset_id = train_context.get("dataset_id") or "boston_housing"
+    raw, std, features, target, resolved_dataset_id, dataset_label = dataset_frames(dataset_id)
+    feature = train_context["feature"]
+    value = safe_float(payload.get("value"), 6.5)
     input_mode = payload.get("input_mode", "raw")
     if input_mode not in {"raw", "standardized"}:
-        raise ValueError("输入类型必须是 raw 或 standardized。")
-    use_standardized = bool(payload.get("use_standardized", True))
-    raw = clean_numeric_df(data["raw"], features + [target])
-    std = data.get("std")
-    x_col = student_std_col(feature) if use_standardized else feature
+        raise ValueError("input_mode must be raw or standardized.")
 
+    use_standardized = bool(train_context["use_standardized"])
     if input_mode == "standardized" and not use_standardized:
-        raise ValueError("当前模型使用原始特征训练，预测输入不能选择标准化特征。")
+        raise ValueError("The current model was trained with raw features.")
+
+    x_col = train_context["x_column"]
+    df_train = std if use_standardized else raw
+    if df_train is None or x_col not in df_train.columns:
+        raise ValueError(f"Missing prediction column: {x_col}")
 
     if use_standardized:
-        if std is None or x_col not in std.columns:
-            raise ValueError("请先执行预处理，或上传包含标准化列的预处理数据集。")
         mean = float(raw[feature].mean())
         sigma = float(raw[feature].std(ddof=0))
-        if sigma == 0:
-            raise ValueError(f"特征 {feature} 的标准差为 0，无法预测。")
         if input_mode == "standardized":
             model_x = value
             raw_value = value * sigma + mean
         else:
             raw_value = value
             model_x = (value - mean) / sigma
-        df_train = clean_numeric_df(std, [x_col, target])
     else:
         mean = None
         sigma = None
         raw_value = value
         model_x = value
-        df_train = raw
 
     x = df_train[x_col].astype(float).to_numpy()
     y = df_train[target].astype(float).to_numpy()
-    w = safe_float(payload.get("w"), None)
-    b = safe_float(payload.get("b"), None)
-    if w is None or b is None:
-        w, b = np.polyfit(x, y, 1)
+    w = float(frame["w"])
+    b = float(frame["b"])
     pred = float(w * model_x + b)
     line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
     line_y = w * line_x + b
@@ -774,9 +947,27 @@ def student_predict(payload: dict) -> dict:
         "y": float(y[idx]),
         "distance": float(distances[idx]),
     } for idx in nearest_idx]
-    response = {
+    model_state = {
+        "train_context_id": train_context_id,
+        "train_frame_index": frame_index,
+        "source": "train_eval_current",
+        "source_label": f"Current model epoch {frame['epoch']}",
         "feature": feature,
-        "description": "",
+        "target": target,
+        "x_column": x_col,
+        "use_standardized": use_standardized,
+        "w": w,
+        "b": b,
+        "epoch": int(frame["epoch"]),
+        "learning_rate": train_context.get("learning_rate"),
+        "dataset_id": resolved_dataset_id,
+        "dataset_label": dataset_label,
+    }
+    response = {
+        "dataset_id": resolved_dataset_id,
+        "dataset_label": dataset_label,
+        "feature": feature,
+        "description": train_context.get("description", ""),
         "target": target,
         "x_column": x_col,
         "raw_value": float(raw_value),
@@ -786,31 +977,22 @@ def student_predict(payload: dict) -> dict:
         "use_standardized": use_standardized,
         "mean": mean,
         "std": sigma,
-        "w": float(w),
-        "b": float(b),
+        "w": w,
+        "b": b,
+        "model_state": model_state,
+        "model_source": model_state["source_label"],
+        "train_context_id": train_context_id,
+        "train_frame_index": frame_index,
         "prediction": pred,
         "scatter": {"x": np.round(x, 6).tolist(), "y": np.round(y, 6).tolist()},
         "line": {"x": np.round(line_x, 6).tolist(), "y": np.round(line_y, 6).tolist()},
-        "model_state": {
-            "source": "student_current",
-            "source_label": f"自主实验 epoch {payload.get('epoch', '--')}",
-            "feature": feature,
-            "target": target,
-            "x_column": x_col,
-            "use_standardized": use_standardized,
-            "w": float(w),
-            "b": float(b),
-            "epoch": payload.get("epoch"),
-        },
-        "model_source": f"自主实验 epoch {payload.get('epoch', '--')}",
         "predict_point": {"x": float(model_x), "y": pred, "raw_x": float(raw_value)},
         "nearby": nearby,
         "summary": series_summary(pd.Series(x), pd.Series(y)),
     }
     context_id = create_context({
-        "model": "student_linear_regression",
-        "page": "student",
-        "stage": "predict",
+        "model": "simple_linear_regression",
+        "page": "predict",
         **response,
     })
     return {
@@ -820,13 +1002,9 @@ def student_predict(payload: dict) -> dict:
 
 
 JSON_ACTIONS = {
+    "load_dataset": load_dataset,
     "data_view": prepare_data_view,
     "prepare_train": prepare_train,
     "train_prepare": prepare_train,
     "predict": predict,
-    "student_preprocess": student_preprocess,
-    "student_data_view": student_prepare_data_view,
-    "student_prepare_train": student_prepare_train,
-    "student_train_prepare": student_prepare_train,
-    "student_predict": student_predict,
 }

@@ -1,5 +1,7 @@
 // App Shell.
 
+window.currentExperiment = window.currentExperiment || DEFAULT_EXPERIMENT_ID;
+
 const SHELL_LAYOUT_KEY = "linearRegressionShellLayoutV1";
 const SHELL_SPLITTER_WIDTH = 8;
 const SHELL_DEFAULT_LAYOUT = { leftRatio: 0.16, rightRatio: 0.20 };
@@ -15,17 +17,22 @@ let shellResizeDrag = null;
 
 let pageRenderToken = 0;
 
+function clearPageTopSlot() {
+  const slot = $("pageTopSlot");
+  if (!slot) return;
+  slot.innerHTML = "";
+  slot.classList.remove("has-content");
+}
+
 async function setPage(page) {
   const renderToken = ++pageRenderToken;
   persistActiveViewSelection();
   stopAuto();
   currentPage = page;
   setActive(page);
-  if (window.TheoryAssistant && ["preprocess", "train_eval", "predict", "student", "settings"].includes(page)) {
-    window.TheoryAssistant.hide();
-  }
   destroyDataGrid();
   disposeCharts();
+  if (page !== "preprocess") clearPageTopSlot();
   $("topFeature").textContent = `当前特征 ${currentFeature()}`;
   try {
     if (page === "preprocess") {
@@ -33,11 +40,15 @@ async function setPage(page) {
       if (renderToken !== pageRenderToken) return;
       if (dataCache) {
         restoreDataView();
+      } else if (!currentDatasetMeta) {
+        await renderPreprocessCurrentStep();
       } else {
         await loadDataView();
       }
     } else if (page === "train_eval") {
       await renderTrainShell();
+    } else if (page === "evaluate") {
+      await renderEvaluateShell();
     } else if (page === "predict") {
       await renderPredictShell();
       if (renderToken !== pageRenderToken) return;
@@ -46,10 +57,6 @@ async function setPage(page) {
       } else {
         await loadPrediction();
       }
-    } else if (page === "student") {
-      await renderStudentShell();
-    } else if (page === "settings") {
-      await renderSettingsShell();
     } else {
       await renderTheory(page);
     }
@@ -142,9 +149,15 @@ function applyShellLayoutPixels(left, right, persist = false) {
   const shell = document.querySelector(".shell");
   const widths = normalizedShellWidths(left, right, shell);
   if (!shell || !widths) return;
+  const app = document.querySelector(".app");
   shell.style.setProperty("--sidebar-width", `${widths.left}px`);
   shell.style.setProperty("--main-width", `${widths.main}px`);
   shell.style.setProperty("--assistant-width", `${widths.right}px`);
+  if (app) {
+    app.style.setProperty("--sidebar-width", `${widths.left}px`);
+    app.style.setProperty("--main-width", `${widths.main}px`);
+    app.style.setProperty("--assistant-width", `${widths.right}px`);
+  }
   if (persist) saveShellLayout(widths.left, widths.right);
   resizeActiveCharts();
 }

@@ -1,8 +1,8 @@
-// Predict Page.
+﻿// Predict Page.
 
 async function renderPredictShell() {
   predictPageSchema = predictPageSchema || await loadPanelSchema("predict", {
-    title: "控制面板",
+    title: "鎺у埗闈㈡澘",
     sections: []
   });
   document.querySelector(".shell").classList.remove("theory");
@@ -49,7 +49,7 @@ function restorePredictionView() {
   restorePredictFormState();
   if ($("predictValue")) $("predictValue").textContent = Number(predictData.prediction).toFixed(2);
   if ($("predictModelX")) $("predictModelX").textContent = Number(predictData.model_x).toFixed(3);
-  if (predictData?.feature) $("topFeature").textContent = `当前特征 ${predictData.feature}`;
+  if (predictData?.feature) $("topFeature").textContent = `褰撳墠鐗瑰緛 ${predictData.feature}`;
   renderPredictCharts();
 }
 
@@ -95,7 +95,7 @@ function syncPredictPanelWithTrainModel() {
     }
     if (statusEl) {
       statusEl.className = "model-status-empty";
-      statusEl.textContent = "暂无训练模型。请先进入“模型训练与评估”，准备训练并切换到希望用于预测的 epoch。";
+      statusEl.textContent = "暂无可用训练模型，请先完成模型训练后再进行预测。";
     }
     return;
   }
@@ -119,15 +119,15 @@ function syncPredictPanelWithTrainModel() {
     statusEl.className = "model-status-grid";
     statusEl.innerHTML = `
       <div class="model-status-main">
-        <span>来源</span>
-        <strong>训练页 epoch ${escapeHtml(state.frame.epoch)}</strong>
+        <span>鏉ユ簮</span>
+        <strong>璁粌椤?epoch ${escapeHtml(state.frame.epoch)}</strong>
       </div>
       <div class="model-status-pair">
-        <span>特征</span>
+        <span>鐗瑰緛</span>
         <strong>${escapeHtml(state.feature)}</strong>
       </div>
       <div class="model-status-pair">
-        <span>输入空间</span>
+        <span>杈撳叆绌洪棿</span>
         <strong>${escapeHtml(state.useStandardized ? "标准化特征" : "原始特征")}</strong>
       </div>
       <div class="model-param-row">
@@ -146,11 +146,11 @@ async function loadPrediction() {
     $("predictValue").textContent = "--";
     $("predictModelX").textContent = "--";
     const grid = $("chartGrid");
-    if (grid) grid.innerHTML = `<div class="empty-state">请先在“模型训练与评估”页完成一次训练，再回到这里使用当前模型预测。</div>`;
+    if (grid) grid.innerHTML = `<div class="empty-state">璇峰厛鍦ㄢ€滄ā鍨嬭缁冧笌璇勪及鈥濋〉瀹屾垚涓€娆¤缁冿紝鍐嶅洖鍒拌繖閲屼娇鐢ㄥ綋鍓嶆ā鍨嬮娴嬨€?/div>`;
     return;
   }
   const feature = trainState.feature;
-  $("topFeature").textContent = `当前特征 ${feature}`;
+  $("topFeature").textContent = `褰撳墠鐗瑰緛 ${feature}`;
   try {
     predictData = await runAction("predict", {
       value: Number($("predictInput").value || 0),
@@ -166,62 +166,55 @@ async function loadPrediction() {
   }
 }
 
-async function loadPredictChartData(views) {
-  if (!predictData?.context_id) return {};
-  return await postJson("/api/chart_data", {
-    context_id: predictData.context_id,
-    page: "predict",
-    charts: views,
-    state: {},
-  });
-}
-
 async function renderPredictCharts() {
   if (!predictData) return;
-  const views = selectedValues("predictViews");
-  const viewsKey = views.join("|");
-  saveCheckedValues("predictViews", "predictSelectedViewsV2");
-  let grid = $("chartGrid");
-  if (!grid) {
-    $("main").innerHTML = `
-      <div class="chart-grid" id="chartGrid"></div>`;
-    grid = $("chartGrid");
-  }
-  $("predictModeSummary").textContent = views.length ? `已选择 ${views.length} 项` : "请选择显示模式";
-  grid.classList.toggle("single", views.length === 1);
-  const canReusePredictGrid = dataGridMode === "predict" && dataGrid && predictRenderViewsKey === viewsKey;
-  if (!views.length) {
-    grid.innerHTML = `<div class="empty-state">请选择至少一个显示模式。</div>`;
-    return;
-  }
-  try {
-    predictChartDataCache = await loadPredictChartData(views);
-  } catch (err) {
-    predictChartDataCache = {};
-    console.warn("predict chart_data fallback:", err);
-  }
-
-  if (canReusePredictGrid) {
-    updatePredictInfoCards(views);
-  } else {
-    destroyDataGrid();
-    disposeCharts();
-    grid.classList.remove("dashboard-grid", "grid-stack");
-    if (window.GridStack) {
+  let canReusePredictGrid = false;
+  await experimentRefreshCharts({
+    viewName: "predictViews",
+    storageKey: "predictSelectedViewsV2",
+    summaryId: "predictModeSummary",
+    contextId: predictData?.context_id,
+    page: "predict",
+    state: {},
+    label: "predict chart_data",
+    beforeRender: ({ viewsKey }) => {
+      canReusePredictGrid = dataGridMode === "predict" && dataGrid && predictRenderViewsKey === viewsKey;
+    },
+    onChartData: chartData => {
+      predictChartDataCache = chartData;
+    },
+    renderDashboard: ({ grid, views, viewsKey }) => {
+      if (canReusePredictGrid) {
+        updatePredictInfoCards(views);
+        return;
+      }
+      destroyDataGrid();
+      disposeCharts();
+      grid.classList.remove("dashboard-grid", "grid-stack");
       renderPredictDashboard(grid, views);
-    } else {
+      predictRenderViewsKey = viewsKey;
+    },
+    renderFallback: ({ grid, views, viewsKey }) => {
+      if (canReusePredictGrid) {
+        updatePredictInfoCards(views);
+        return;
+      }
+      destroyDataGrid();
+      disposeCharts();
+      grid.classList.remove("dashboard-grid", "grid-stack");
       grid.innerHTML = views.map(view => predictViewHtml(view, predictChartDataCache[view])).join("");
-    }
-    predictRenderViewsKey = viewsKey;
-  }
-  views.forEach(view => {
-    const meta = predictChartMeta(view);
-    if (meta?.renderer !== "predict_chart") return;
-    const ch = initChart(`chart_${view}`);
-    ch.setOption(predictChartOption(predictChartDataCache[view]), true);
+      predictRenderViewsKey = viewsKey;
+    },
+    renderCharts: ({ views }) => {
+      views.forEach(view => {
+        const meta = predictChartMeta(view);
+        if (meta?.renderer !== "predict_chart") return;
+        const ch = initChart("chart_" + view);
+        ch.setOption(predictChartOption(predictChartDataCache[view]), true);
+      });
+    },
   });
 }
-
 function updatePredictInfoCards(views) {
   views.forEach(view => {
     const meta = predictChartMeta(view);

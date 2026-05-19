@@ -13,7 +13,6 @@
 - 预期成果：result.html
 - 思考拓展：thinking.html
 - 模型预测：predict.html
-- 学生训练：student.html
 
 例如：打开“数据集”理论页时，页面会尝试加载：
 

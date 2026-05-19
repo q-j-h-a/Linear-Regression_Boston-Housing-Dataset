@@ -75,6 +75,11 @@ async function renderTrainShell() {
   $("main").innerHTML = `
     <div class="chart-grid" id="chartGrid"></div>`;
   $("rightPanel").innerHTML = renderTrainControlPanel(schema);
+  if (currentDatasetMeta) {
+    updateFeatureSelectOptions("trainFeature", currentDatasetMeta.features || FEATURE_NAMES, trainData?.feature || currentDatasetMeta.features?.[0]);
+    if ($("featureCount")) $("featureCount").textContent = currentDatasetMeta.features?.length ?? FEATURE_NAMES.length;
+    if ($("sampleCount")) $("sampleCount").textContent = currentDatasetMeta.row_count ?? "--";
+  }
   bindTrainControlPanel();
   $("trainFeature").addEventListener("change", prepareTraining);
   $("trainStd").addEventListener("change", prepareTraining);
@@ -135,12 +140,17 @@ function restoreTrainView() {
 }
 
 async function prepareTraining() {
+  if (!currentDatasetMeta) {
+    renderError("请先在数据预处理页加载数据集。");
+    return;
+  }
   persistTrainFormState();
   const feature = $("trainFeature").value;
   $("topFeature").textContent = `当前特征 ${feature}`;
   try {
     trainData = await runAction("prepare_train", {
       feature,
+      dataset_id: currentDatasetMeta?.dataset_id || "boston_housing",
       use_standardized: $("trainStd").value === "1" || $("trainStd").value === "true",
       learning_rate: Number($("lr").value),
       epochs: Number($("epochs").value),
@@ -148,22 +158,12 @@ async function prepareTraining() {
       b0: Number($("b0").value)
     });
     $("sampleCount").textContent = trainData.scatter.x.length;
-  $("featureCount").textContent = FEATURE_NAMES.length;
+  $("featureCount").textContent = currentDatasetMeta?.features?.length ?? FEATURE_NAMES.length;
   currentFrame = 0;
   renderTrainFrame(0);
   } catch (err) {
     renderError(err.message);
   }
-}
-
-async function loadTrainChartData(views, frameIndex) {
-  if (!trainData?.context_id) return {};
-  return await postJson("/api/chart_data", {
-    context_id: trainData.context_id,
-    page: "train_eval",
-    charts: views,
-    state: { frame_index: frameIndex },
-  });
 }
 
 async function renderTrainFrame(index) {
@@ -173,52 +173,62 @@ async function renderTrainFrame(index) {
   $("epochNow").textContent = frame.epoch;
   $("lossNow").textContent = Number(frame.loss).toFixed(4);
 
-  const views = selectedValues("trainViews");
-  const viewsKey = views.join("|");
-  saveCheckedValues("trainViews", "trainSelectedViewsV1");
-  const grid = $("chartGrid");
-  $("trainModeSummary").textContent = views.length ? `已选择 ${views.length} 项` : "请选择显示模式";
-  grid.classList.toggle("single", views.length === 1);
-
-  const canReuseTrainGrid = dataGridMode === "train" && dataGrid && trainRenderViewsKey === viewsKey;
-  if (!views.length) {
-    destroyDataGrid();
-    disposeCharts();
-    grid.classList.remove("dashboard-grid", "grid-stack");
-    grid.innerHTML = `<div class="empty-state">请选择至少一个显示模式。</div>`;
-    return;
-  }
-
-  try {
-    trainChartDataCache = await loadTrainChartData(views, currentFrame);
-  } catch (err) {
-    trainChartDataCache = {};
-    console.warn("chart_data fallback:", err);
-  }
-
-  if (canReuseTrainGrid) {
-    updateTrainInfoCards(frame);
-  } else {
-    destroyDataGrid();
-    disposeCharts();
-    grid.classList.remove("dashboard-grid", "grid-stack");
-    if (window.GridStack) {
+  let canReuseTrainGrid = false;
+  await experimentRefreshCharts({
+    viewName: "trainViews",
+    storageKey: "trainSelectedViewsV1",
+    summaryId: "trainModeSummary",
+    contextId: trainData?.context_id,
+    page: "train_eval",
+    state: { frame_index: currentFrame },
+    label: "train chart_data",
+    beforeRender: ({ views, viewsKey, grid }) => {
+      canReuseTrainGrid = dataGridMode === "train" && dataGrid && trainRenderViewsKey === viewsKey;
+      if (!views.length) {
+        destroyDataGrid();
+        disposeCharts();
+        trainRenderViewsKey = "";
+        grid.classList.remove("dashboard-grid", "grid-stack");
+      }
+    },
+    onChartData: chartData => {
+      trainChartDataCache = chartData;
+    },
+    renderDashboard: ({ grid, views, viewsKey }) => {
+      if (canReuseTrainGrid) {
+        updateTrainInfoCards(frame);
+        return;
+      }
+      destroyDataGrid();
+      disposeCharts();
+      grid.classList.remove("dashboard-grid", "grid-stack");
       renderTrainDashboard(grid, views, frame);
-    } else {
+      trainRenderViewsKey = viewsKey;
+    },
+    renderFallback: ({ grid, views, viewsKey }) => {
+      if (canReuseTrainGrid) {
+        updateTrainInfoCards(frame);
+        return;
+      }
+      destroyDataGrid();
+      disposeCharts();
+      grid.classList.remove("dashboard-grid", "grid-stack");
       grid.innerHTML = views.map(view => trainViewHtml(view, frame, trainChartDataCache[view])).join("");
-    }
-    trainRenderViewsKey = viewsKey;
-  }
-  views.forEach(view => {
-    if (isTrainInfoView(view)) return;
-    const chartId = `chart_${view}`;
-    const ch = charts.get(chartId) || initChart(chartId);
-    const meta = trainChartMeta(view);
-    const option = trainChartOption(meta, currentFrame, trainChartDataCache[view]);
-    if (option) ch.setOption(option, meta?.renderer !== "loss_surface_3d");
+      trainRenderViewsKey = viewsKey;
+    },
+    renderCharts: ({ views }) => {
+      views.forEach(view => {
+        if (isTrainInfoView(view)) return;
+        const chartId = `chart_${view}`;
+        const ch = charts.get(chartId) || initChart(chartId);
+        const meta = trainChartMeta(view);
+        const option = trainChartOption(meta, currentFrame, trainChartDataCache[view]);
+        if (option) ch.setOption(option, meta?.renderer !== "loss_surface_3d");
+      });
+    },
   });
-}
 
+}
 function trainChartOption(meta, frameIndex, chartData = null) {
   if (!meta) return null;
   const metric = meta.metric || ({

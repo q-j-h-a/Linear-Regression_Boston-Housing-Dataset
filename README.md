@@ -1,18 +1,16 @@
 # 简单线性回归教学实验
 
-这是一个基于 Flask + ECharts + ECharts GL + GridStack 的简单线性回归教学实验项目。系统围绕 Boston Housing 房价预测和学生自定义 CSV 数据实验展开，支持理论学习、数据预处理、梯度下降训练、模型评估、模型预测、自主实验，以及面向理论页的 AI 语音助教。
+这是一个面向教学演示的 Web 实验项目，用 Flask 提供后端接口，用原生前端、ECharts 和 GridStack 构建可交互的实验页面。当前重点是让学生按流程理解简单线性回归中的数据加载、数据预处理、模型训练、模型评估和模型预测。
 
-## 主要功能
+## 当前功能
 
-- 理论学习：实验基本信息、实验目的、前置知识、数据集、训练模型、学习准则、参数优化、评价指标、预期成果和思考拓展。
-- AI 语音助教：理论页浮动助教支持当前页面讲解、朗读、追问、选中文本提问、对话记忆和语音播放控制。
-- 数据预处理：查看原始散点图、标准化散点图、单特征线性相关系数、全特征线性相关系数。
-- 模型训练与评估：训练简单线性回归模型，查看训练图、学习准则图、Loss 曲线、Loss 等高线图、Loss 三维曲面图、梯度下降图、w/b 参数轨迹、RMSE、MAE、R2、参数表和计算过程。
-- 模型预测：基于当前训练模型进行预测，支持原始特征输入和标准化特征输入，展示预测可视化和预测计算过程。
-- 自主实验：上传 CSV 或使用内置学生成绩数据，按 4 个阶段完成数据集、预处理、训练评估和预测。
-- AI 助教设置：配置本地 Ollama、外部 OpenAI-compatible API、Edge TTS、macOS 本地语音、MeloTTS 和 CosyVoice。
+- 理论学习：展示实验基本信息、实验目的、前置知识、模型介绍、预期效果和思考拓展。
+- 数据预处理：通过顶部流程条组织 `01 加载原始数据集 -> 02 数据详情 -> 03 原始数据可视化 -> 04 数据标准化 -> 05 标准数据可视化`。
+- 数据详情：加载数据集后，中间区域显示数据规模、字段中文含义、数据质量和统计摘要。
+- 数据标准化：后端直接提供预处理后的 CSV，列名和列顺序与原始数据保持一致，目标列也参与标准化。
+- 模型训练与预测：基于当前数据版本和特征完成训练、评估与预测展示。
 
-## 启动方式
+## 启动
 
 ```bash
 python -m pip install -r requirements.txt
@@ -33,197 +31,131 @@ echarts-gl
 gridstack
 ```
 
-如果本机 PowerShell 没有刷新 PATH，可以直接使用本机 Node 或 Git 路径运行检查命令，例如：
-
-```text
-C:\python\nodejs\node.exe
-C:\python\Git\cmd\git.exe
-```
-
-## 项目结构
+## 目录结构
 
 ```text
 simple_linear_regression/
 ├─ app.py
 ├─ core/
-│  ├─ chart_registry.py
-│  ├─ context_store.py
-│  ├─ control_registry.py
-│  ├─ data_utils.py
-│  ├─ registry.py
-│  └─ schemas.py
+├─ datasets/
+│  ├─ raw/
+│  │  └─ boston_housing.csv
+│  └─ preprocessed/
+│     └─ boston_housing_preprocessed.csv
 ├─ models/
 │  └─ simple_linear_regression/
+│     ├─ dataset.py
 │     ├─ model.py
 │     ├─ controls/
-│     │  ├─ preprocess.py
-│     │  ├─ train_eval.py
-│     │  ├─ predict.py
-│     │  └─ student.py
 │     └─ charts/
-│        ├─ preprocess/
-│        ├─ train_eval/
-│        ├─ predict/
-│        └─ student/
 ├─ static/
 │  ├─ assets/
-│  │  ├─ assistant-avatar.svg
-│  │  ├─ digital-lecturer.gif
-│  │  ├─ digital-lecturer-static.png
-│  │  └─ trainee-avatar.svg
-│  ├─ js/
-│  │  ├─ api.js
-│  │  ├─ app_shell.js
-│  │  ├─ chart_renderers.js
-│  │  ├─ control_renderers.js
-│  │  ├─ predict_page.js
-│  │  ├─ preprocess_page.js
-│  │  ├─ schema_registry.js
-│  │  ├─ settings_page.js
-│  │  ├─ state_runtime.js
-│  │  ├─ student_page.js
-│  │  ├─ theory_assistant.js
-│  │  ├─ theory_page.js
-│  │  ├─ train_page.js
-│  │  └─ view_renderers.js
-│  └─ theory-html/
+│  └─ js/
+│     ├─ api.js
+│     ├─ app_shell.js
+│     ├─ chart_renderers.js
+│     ├─ control_renderers.js
+│     ├─ experiment_runtime.js
+│     ├─ predict_page.js
+│     ├─ preprocess_page.js
+│     ├─ schema_registry.js
+│     ├─ state_runtime.js
+│     ├─ theory_page.js
+│     ├─ train_page.js
+│     └─ view_renderers.js
 ├─ templates/
 │  └─ index.html
 ├─ tools/
-│  ├─ melotts_service.py
-│  ├─ README_melotts.md
-│  ├─ README_cosyvoice.md
-│  ├─ requirements-melotts-service.txt
-│  └─ start_cosyvoice.sh
-├─ boston_housing.csv
-├─ boston_housing_features_standardized.csv
-├─ student_score_regression_100.csv
 ├─ requirements.txt
 └─ web_ui_structure_cn.md
 ```
+
+## 数据集约定
+
+数据集统一放在 `datasets/` 下，不再把 CSV 放在项目根目录。
+
+```text
+datasets/raw/           原始数据集
+datasets/preprocessed/  预处理后的数据集
+```
+
+当前 Boston Housing 数据集约定：
+
+```text
+原始数据集：
+datasets/raw/boston_housing.csv
+
+预处理后数据集：
+datasets/preprocessed/boston_housing_preprocessed.csv
+```
+
+CSV 格式规则：
+
+- 第一行是列名。
+- 最后一列是目标列，当前为 `MEDV`。
+- 其他数值列作为候选特征。
+- 预处理后的 CSV 与原始 CSV 保持相同列名和相同列顺序。
+- 预处理后的 CSV 通过文件名区分，不再给列名追加 `_standardized`。
+- 当前标准化会处理所有数值列，包括目标列 `MEDV`。
+
+## 数据预处理页面
+
+顶部流程条是数据预处理阶段的主线，节点可点击切换：
+
+```text
+01 加载原始数据集
+02 数据详情
+03 原始数据可视化
+04 数据标准化
+05 标准数据可视化
+```
+
+当前交互约定：
+
+- `01 加载原始数据集`：中间区域只提示“请先在右侧加载数据集”，右侧提供数据集选择框和加载按钮。
+- `02 数据详情`：加载后在中间区域显示数据规模、字段说明、数据质量和统计摘要，右侧不需要对应卡片。
+- `04 数据标准化`：中间区域展示标准化后的前 5 行，右侧不需要单独编号卡片。
+- 中间区域的数据卡片使用 GridStack，支持拖动和拉伸。
+- 右侧“加载数据集”卡片不显示编号、未加载状态、折叠箭头、数据状态或样本数量。
 
 ## API
 
 ```text
 GET  /
-GET  /api/page_schema?page=<page>
-GET  /api/chart_registry?page=<page>
+GET  /api/experiments
+GET  /api/dataset_profile?experiment=<experiment>
+GET  /api/page_schema?experiment=<experiment>&page=<page>
+GET  /api/chart_registry?experiment=<experiment>&page=<page>
 POST /api/run_action
 POST /api/chart_data
-
-POST /api/theory_explain
-POST /api/theory_chat
-GET  /api/assistant_config
-POST /api/assistant_config
-GET  /api/assistant_models
-POST /api/assistant_test
-POST /api/tts
-POST /api/local_tts
 ```
 
-`/api/run_action` 的典型请求：
-
-```json
-{
-  "action": "prepare_train",
-  "payload": {
-    "feature": "RM",
-    "use_standardized": true,
-    "learning_rate": 0.03,
-    "epochs": 120,
-    "w0": 0,
-    "b0": 0
-  }
-}
-```
-
-常用 action：
+当前实验 ID：
 
 ```text
+simple_linear_regression
+```
+
+常用动作：
+
+```text
+load_dataset
 data_view
+standardize_dataset
 prepare_train
 predict
-student_upload
-student_preprocess
-student_data_view
-student_prepare_train
-student_predict
 ```
 
-## 前端模块
+## 关键文件
 
-- `app_shell.js`：页面切换、导航状态、左右栏拖拽宽度、全局 resize。
-- `api.js`：封装 `/api/run_action`、`/api/chart_data` 等请求。
-- `state_runtime.js`：GridStack 布局、图表 resize、视图选择和布局本地存储。
-- `schema_registry.js`：加载后端 schema 和图表元数据。
-- `control_renderers.js`：右侧控制面板 HTML。
-- `chart_renderers.js`：ECharts / ECharts GL option 构造。
-- `view_renderers.js`：图表卡片、表格、计算过程等视图 HTML。
-- `theory_page.js`：理论页 iframe 加载，并把理论页正文同步给 AI 助教。
-- `theory_assistant.js`：理论页浮动 AI 助教、语音播放、追问、选中文本提问。
-- `settings_page.js`：AI 助教模型和语音配置页。
-- `preprocess_page.js`：数据预处理页面流程。
-- `train_page.js`：模型训练与评估页面流程。
-- `predict_page.js`：模型预测页面流程。
-- `student_page.js`：自主实验 4 阶段页面流程。
+- `models/simple_linear_regression/model.py`：实验后端动作、数据加载、标准化数据读取、字段说明和训练预测逻辑。
+- `models/simple_linear_regression/dataset.py`：数据集描述协议和预处理转换约定。
+- `static/js/preprocess_page.js`：数据预处理页面流程、加载数据集、数据详情、标准化展示和 GridStack 布局。
+- `static/js/control_renderers.js`：右侧控制面板渲染。
+- `static/js/state_runtime.js`：GridStack 初始化和布局保存。
+- `templates/index.html`：整体布局、样式、顶部流程条样式和 CDN 依赖。
 
-## AI 助教配置
-
-AI 助教配置会保存到 Flask instance 目录下的 `assistant_settings.json`。可以在页面左侧导航的 `AI 助教设置` 中修改，也可以通过环境变量提供默认值。
-
-常用环境变量：
-
-```text
-THEORY_ASSISTANT_PROVIDER
-THEORY_ASSISTANT_OLLAMA_BASE_URL
-THEORY_ASSISTANT_OLLAMA_MODEL
-THEORY_ASSISTANT_EXTERNAL_BASE_URL
-THEORY_ASSISTANT_EXTERNAL_MODEL
-THEORY_ASSISTANT_EXTERNAL_API_KEY
-THEORY_ASSISTANT_TTS_PROVIDER
-THEORY_ASSISTANT_TTS_VOICE
-THEORY_ASSISTANT_TTS_RATE
-THEORY_ASSISTANT_MELOTTS_SERVICE_URL
-THEORY_ASSISTANT_MELOTTS_COMMAND
-THEORY_ASSISTANT_MELOTTS_LANGUAGE
-THEORY_ASSISTANT_MELOTTS_SPEAKER
-THEORY_ASSISTANT_COSYVOICE_SERVICE_URL
-THEORY_ASSISTANT_COSYVOICE_SPEAKER
-THEORY_ASSISTANT_COSYVOICE_SAMPLE_RATE
-```
-
-语音提供方：
-
-```text
-edge      -> Edge TTS，项目 requirements.txt 已包含 edge-tts
-macos     -> macOS say 命令
-melotts   -> MeloTTS 本地服务或 melo 命令
-cosyvoice -> CosyVoice FastAPI 服务
-```
-
-MeloTTS 和 CosyVoice 的本地服务说明见：
-
-```text
-tools/README_melotts.md
-tools/README_cosyvoice.md
-```
-
-## 自主实验说明
-
-- CSV 第一行必须是列名，且至少包含 1 个数值特征列和 1 个数值目标列。
-- 系统固定把 CSV 最后一列作为目标列 `y`。
-- 目标列不参与标准化；其余数值列作为特征列参与预处理，并生成 `特征名_standardized` 列。
-- 自主实验右侧面板按 4 个阶段组织：`01 数据集`、`02 数据预处理`、`03 模型训练与评估`、`04 模型预测`。
-- `03 模型训练与评估` 的训练数据版本在标准化结果可用时默认选择 `标准化特征`。
-- `03 模型训练与评估` 的状态徽标只有 `未训练` 和 `已训练` 两种。训练一轮或自动训练后变为 `已训练`，点击重置后恢复为 `未训练`。
-- `评估标准图` 使用与模型训练与评估页一致的仪表盘样式，在同一张图中横向显示 RMSE、MAE、R2 三个仪表盘。
-- `04 模型预测` 默认展开，切换页面或重绘右侧面板后仍保持展开。
-- 自主实验预测区与模型预测页保持一致：右侧显示当前模型、输入类型、输入特征值、显示图表、准备预测和开始预测。
-- 自主实验预测默认只显示 `预测可视化` 和 `预测计算过程` 两张图；点击准备预测会先展示这两张图，如果前面没有完成训练，会提示先训练。
-- 点击开始预测后，会根据当前模型、输入类型和输入特征值进行预测；右侧状态徽标从 `待预测` 变为 `已预测`。
-- 自主实验预测计算过程与模型预测页使用同一套计算逻辑：原始特征输入会先换算为模型输入，标准化特征输入会反推对应原始特征值，再代入当前模型计算预测结果。
-
-## 检查命令
+## 验证命令
 
 ```bash
 python -m compileall app.py core models
@@ -233,12 +165,34 @@ node --check static/js/control_renderers.js
 node --check static/js/view_renderers.js
 node --check static/js/state_runtime.js
 node --check static/js/schema_registry.js
+node --check static/js/experiment_runtime.js
 node --check static/js/theory_page.js
-node --check static/js/theory_assistant.js
-node --check static/js/settings_page.js
 node --check static/js/preprocess_page.js
-node --check static/js/student_page.js
 node --check static/js/predict_page.js
 node --check static/js/train_page.js
 node --check static/js/app_shell.js
 ```
+
+## 当前数据预处理流程补充
+
+数据预处理页采用顶部 5 步流程条，深蓝色表示当前点击位置，浅蓝色表示已到达的进度位置。流程为：
+
+```text
+01 加载原始数据 -> 02 数据详情 -> 03 原始数据可视化 -> 04 数据标准化 -> 05 标准数据可视化
+```
+
+右侧控制面板按当前步骤显示对应卡片：
+
+- `01 加载原始数据`：显示 `加载数据集` 卡片，加载数据后不自动跳到第二步。
+- `02 数据详情`：右侧不显示操作卡片；中间展示 `数据规模` 和 `统计详情`。
+- `03 原始数据可视化`：显示 `原始数据可视化` 卡片，包含 `特征选择` 和 `显示模块`。显示模块包括 `原始散点图`、`全特征线性相关系数`。
+- `04 数据标准化`：显示 `数据标准化` 卡片，学生可切换不同特征，观察该特征的均值、标准差、标准化公式和前 5 行标准化结果。
+- `05 标准数据可视化`：显示 `标准数据可视化` 卡片，包含 `特征选择` 和 `显示模块`。显示模块包括 `标准化散点图`、`全特征线性相关系数`。
+
+原始数据可视化和标准数据可视化进入时默认显示提示：
+
+```text
+请在右侧选择特征和显示模块
+```
+
+只有选择显示模块后才渲染图表；再次进入对应步骤时会恢复已选择的模块和图表状态。

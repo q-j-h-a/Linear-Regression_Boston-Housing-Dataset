@@ -69,21 +69,12 @@ const theoryPages = {
     sub: "输入特征值，查看线性模型给出的预测结果。",
     body: ["预测页会按当前选择的数据版本完成输入转换，并展示预测值、计算过程和相近样本。"],
     helper: ["如果已完成训练，预测应使用同一组 w 和 b。"]
-  },
-  student: {
-    title: "学生训练",
-    sub: "上传 CSV 后完成数据预处理、训练评估和预测。",
-    body: ["自主实验区支持选择目标列、特征列、数据版本和训练参数，适合完整走一次线性回归流程。"],
-    helper: ["上传原始 CSV 时先使用原始特征；完成预处理后再选择标准化特征。"]
   }
 };
 
 function renderTheory(page) {
   document.querySelector(".shell").classList.add("theory");
   const pageId = theoryPages[page] ? page : "dataset";
-  if (window.TheoryAssistant) {
-    window.TheoryAssistant.show(pageId, theoryPages[pageId]?.title || "当前理论页");
-  }
   $("main").innerHTML = `
     ${renderTheoryHtmlSlot(pageId)}
   `;
@@ -108,7 +99,6 @@ async function loadTheoryHtml(page) {
     iframe.setAttribute("scrolling", "no");
     iframe.onload = () => {
       fitTheoryIframe(iframe);
-      syncTheoryAssistant(page, iframe);
     };
     iframe.srcdoc = html;
     wrap.classList.remove("hidden");
@@ -147,24 +137,3 @@ function fitTheoryIframe(iframe) {
   } catch (err) {}
 }
 
-function syncTheoryAssistant(page, iframe) {
-  if (!window.TheoryAssistant) return;
-  try {
-    const doc = iframe.contentDocument || iframe.contentWindow.document;
-    const title = theoryPages[page]?.title || doc.querySelector("h1, h2")?.textContent?.trim() || "当前理论页";
-    const text = doc.body?.innerText?.replace(/\s+/g, " ").trim() || "";
-    window.TheoryAssistant.setPage({
-      id: page,
-      title,
-      text,
-    });
-    window.TheoryAssistant.attachSelectionTarget?.(iframe);
-  } catch (err) {
-    window.TheoryAssistant.setPage({
-      id: page,
-      title: theoryPages[page]?.title || "当前理论页",
-      text: "",
-    });
-    window.TheoryAssistant.attachSelectionTarget?.(iframe);
-  }
-}

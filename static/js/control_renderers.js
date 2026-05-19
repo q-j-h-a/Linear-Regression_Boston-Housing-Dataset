@@ -18,15 +18,37 @@ function trainViewChoicesHtml() {
   return trainChartRegistry.map(chart => checkboxRowHtml("trainViews", chart.id, chart.title, Boolean(chart.default))).join("");
 }
 
+function controlType(control) {
+  if (!control) return "";
+  if (control.type === "feature_picker") return "select";
+  if (control.type === "target_picker") return "select";
+  if (control.type === "dataset_variant") return "select";
+  if (control.type === "view_picker") return "chart_selector";
+  if (control.type === "action_button") return "button";
+  return control.type;
+}
+
+function isControlType(control, type) {
+  return controlType(control) === type;
+}
+
 function trainSourceOptions(source, schema) {
   if (source === "feature_columns") return (schema.sources?.feature_columns || FEATURE_NAMES).map(item => ({ label: item, value: item }));
+  if (source === "target_columns") return (schema.sources?.target_columns || []).map(item => ({ label: item, value: item }));
+  if (source === "numeric_columns") return (schema.sources?.numeric_columns || []).map(item => ({ label: item, value: item }));
+  if (source === "dataset_variants") return (schema.sources?.dataset_variants || []).map(item => ({ label: item.label || item.id, value: item.id }));
   return [];
 }
 
 function trainControlDefault(control, schema) {
   if (control.name === "feature") return currentFeature();
   if (control.name === "feature_count") return schema.sources?.feature_count || FEATURE_NAMES.length;
-  if (control.name && schema.defaults && Object.prototype.hasOwnProperty.call(schema.defaults, control.name)) return schema.defaults[control.name];
+  if (control.default_source && schema.sources && Object.prototype.hasOwnProperty.call(schema.sources, control.default_source)) return schema.sources[control.default_source];
+  if (control.name && schema.defaults && Object.prototype.hasOwnProperty.call(schema.defaults, control.name)) {
+    const value = schema.defaults[control.name];
+    if (value && typeof value === "object" && value.source && schema.sources) return schema.sources[value.source];
+    return value;
+  }
   return control.default;
 }
 
@@ -105,23 +127,40 @@ function findTrainControl(name) {
   return null;
 }
 
-function renderPreprocessPanel(schema) {
+function renderPreprocessPanelLegacy(schema) {
   const dataset = schema.panel.sections.find(section => section.id === "dataset") || { controls: [] };
   const display = schema.panel.sections.find(section => section.id === "display") || { controls: [] };
-  const stats = dataset.controls.filter(control => control.type === "stat");
+  const stats = dataset.controls.filter(control => isControlType(control, "stat"));
   const feature = dataset.controls.find(control => control.name === "feature");
-  const selector = display.controls.find(control => control.type === "chart_selector");
+  const selector = display.controls.find(control => isControlType(control, "chart_selector"));
+  const datasetLoaded = Boolean(currentDatasetMeta);
   const selectorOptions = schema.charts?.length
     ? schema.charts.map(chart => ({ label: chart.title, value: chart.id, default: Boolean(chart.default) }))
     : selector.options;
-  const featureOptionsHtml = trainSourceOptions(feature?.source, schema)
-    .map(opt => optionHtml(opt.value, currentFeature(), opt.label))
+  const featureOptions = datasetLoaded ? (currentDatasetMeta?.features || []) : [];
+  const selectedFeature = dataCache?.feature || featureOptions[0] || "";
+  const featureOptionsHtml = featureOptions
+    .map(opt => optionHtml(opt, selectedFeature, opt))
     .join("");
+  const datasetStatus = datasetLoaded ? "已加载" : "未加载";
+  const sampleCount = datasetLoaded ? (currentDatasetMeta?.row_count ?? "--") : "--";
   return `
     <div class="right-title">${escapeHtml(schema.panel.title || "控制面板")}</div>
     <div class="control-card">
+      <div class="control-group" aria-label="Dataset source">
+        <label class="control-label" for="datasetSource">数据集来源</label>
+        <select id="datasetSource">
+          <option value="boston_housing">Boston Housing</option>
+          <option value="upload_csv">上传 CSV</option>
+        </select>
+        <input id="datasetFile" type="file" accept=".csv,text/csv" style="display:none">
+        <div class="btn-row">
+          <button class="primary-btn" id="loadDatasetBtn" type="button">加载数据集</button>
+        </div>
+        <div class="status-line hidden" id="datasetLoadMessage"></div>
+      </div>
       <div class="mini-stats">
-        ${stats.map(control => `<div class="mini-stat"><span>${escapeHtml(control.label)}</span><strong id="${escapeHtml(control.value_id)}">${escapeHtml(control.default ?? "--")}</strong></div>`).join("")}
+        ${stats.map(control => `<div class="mini-stat"><span>${escapeHtml(control.label)}</span><strong id="${escapeHtml(control.value_id)}">${escapeHtml(statValue(control))}</strong></div>`).join("")}
       </div>
       <div class="control-group" aria-label="${escapeHtml(feature.label)}">
         <label class="control-label" for="${escapeHtml(feature.element_id)}">${escapeHtml(feature.label)}</label>
@@ -137,21 +176,80 @@ function renderPreprocessPanel(schema) {
     </div>`;
 }
 
+function renderPreprocessPanel(schema) {
+  const dataset = schema.panel.sections.find(section => section.id === "dataset") || { controls: [] };
+  const display = schema.panel.sections.find(section => section.id === "display") || { controls: [] };
+  const stats = dataset.controls.filter(control => isControlType(control, "stat"));
+  const feature = dataset.controls.find(control => control.name === "feature");
+  const selector = display.controls.find(control => isControlType(control, "chart_selector"));
+  const datasetLoaded = Boolean(currentDatasetMeta);
+  const selectorOptions = schema.charts?.length
+    ? schema.charts.map(chart => ({ label: chart.title, value: chart.id, default: Boolean(chart.default) }))
+    : selector.options;
+  const featureOptions = datasetLoaded ? (currentDatasetMeta?.features || []) : [];
+  const selectedFeature = dataCache?.feature || featureOptions[0] || "";
+  const featureOptionsHtml = featureOptions
+    .map(opt => optionHtml(opt, selectedFeature, opt))
+    .join("");
+  const datasetStatus = datasetLoaded ? "已加载" : "未加载";
+  const sampleCount = datasetLoaded ? (currentDatasetMeta?.row_count ?? "--") : "--";
+  const featureLabel = feature?.label || "特征选择";
+  const featureId = feature?.element_id || "dataFeature";
+  const selectorLabel = selector?.label || "显示模式";
+  const selectorName = selector?.name || "dataViews";
+  const selectorSummary = selector?.summary_id || "dataModeSummary";
+  const statValue = control => {
+    if (!datasetLoaded) return "--";
+    if (control.value_id === "sampleCount") return currentDatasetMeta?.row_count ?? "--";
+    if (control.value_id === "featureCount") return currentDatasetMeta?.features?.length ?? "--";
+    return control.default ?? "--";
+  };
+  return `
+    <div class="right-title">${escapeHtml(schema.panel.title || "控制面板")}</div>
+    <div class="control-card dataset-load-card">
+      <h3>加载数据集</h3>
+      <select id="datasetSource" aria-label="选择数据集">
+        <option value="boston_housing">Boston 原始数据集</option>
+      </select>
+      <div class="btn-row">
+        <button class="primary-btn" id="loadDatasetBtn" type="button">加载数据集</button>
+      </div>
+      <div class="status-line hidden" id="datasetLoadMessage"></div>
+    </div>
+    <details class="control-card stage-card" ${datasetLoaded ? "open" : ""}>
+      <summary><strong>预处理设置</strong><span class="stage-badge">${datasetLoaded ? "可用" : "待加载"}</span></summary>
+      <div class="mini-stats">
+        ${stats.map(control => `<div class="mini-stat"><span>${escapeHtml(control.label)}</span><strong id="${escapeHtml(control.value_id)}">${escapeHtml(control.default ?? "--")}</strong></div>`).join("")}
+      </div>
+      <div class="control-group" aria-label="${escapeHtml(featureLabel)}">
+        <label class="control-label" for="${escapeHtml(featureId)}">${escapeHtml(featureLabel)}</label>
+        <select id="${escapeHtml(featureId)}" ${datasetLoaded ? "" : "disabled"}>${featureOptionsHtml}</select>
+      </div>
+      <div class="control-group" aria-label="${escapeHtml(selectorLabel)}">
+        <label class="control-label">${escapeHtml(selectorLabel)}</label>
+        <details class="mode-menu">
+          <summary id="${escapeHtml(selectorSummary)}">已选择 1 项</summary>
+          <div class="check-list">${checkboxOptionsHtml(selectorName, selectorOptions)}</div>
+        </details>
+      </div>
+    </details>`;
+}
+
 function renderPredictPanel(schema) {
   const result = schema.panel.sections.find(section => section.id === "result") || { controls: [] };
   const input = schema.panel.sections.find(section => section.id === "input") || { controls: [] };
   const display = schema.panel.sections.find(section => section.id === "display") || { controls: [] };
   const actions = schema.panel.sections.find(section => section.id === "actions") || { controls: [] };
-  const stats = result.controls.filter(control => control.type === "stat");
+  const stats = result.controls.filter(control => isControlType(control, "stat"));
   const controls = input.controls || [];
   const feature = controls.find(control => control.name === "feature");
   const std = controls.find(control => control.name === "use_standardized");
   const inputValue = controls.find(control => control.name === "input_value");
-  const selector = display.controls.find(control => control.type === "chart_selector");
+  const selector = display.controls.find(control => isControlType(control, "chart_selector"));
   const selectorOptions = schema.charts?.length
     ? schema.charts.map(chart => ({ label: chart.title, value: chart.id, default: Boolean(chart.default) }))
     : selector.options;
-  const run = actions.controls.find(control => control.type === "button");
+  const run = actions.controls.find(control => isControlType(control, "button"));
   const featureOptionsHtml = trainSourceOptions(feature?.source, schema)
     .map(opt => optionHtml(opt.value, currentFeature(), opt.label))
     .join("");
@@ -206,9 +304,9 @@ function renderTrainControlPanel(schema) {
   const paramsSection = sections.find(section => section.id === "params");
   const actionSection = sections.find(section => section.id === "actions");
   const runtimeSection = sections.find(section => section.id === "runtime");
-  const statControls = (datasetSection?.controls || []).filter(control => control.type === "stat");
-  const datasetControls = (datasetSection?.controls || []).filter(control => control.type !== "stat");
-  const renderControl = control => trainControlRenderers[control.type]?.(control, schema) || "";
+  const statControls = (datasetSection?.controls || []).filter(control => isControlType(control, "stat"));
+  const datasetControls = (datasetSection?.controls || []).filter(control => !isControlType(control, "stat"));
+  const renderControl = control => trainControlRenderers[controlType(control)]?.(control, schema) || "";
   const renderControlGroup = controls => {
     const html = [];
     for (let i = 0; i < controls.length; i += 1) {
@@ -274,208 +372,3 @@ function bindRangeStepperButtons() {
   });
 }
 
-function studentPanelSection(id) {
-  return studentPageSchema?.panel?.sections?.find(section => section.id === id) || null;
-}
-
-function studentSelectorOptions(id) {
-  return studentPanelSection(id)?.controls?.find(control => control.type === "chart_selector")?.options || [];
-}
-
-function studentViewChoicesHtml(sectionId, name, standardizedReady = true) {
-  return checkboxOptionsHtml(name, studentSelectorOptions(sectionId), standardizedReady);
-}
-
-function studentPanelTitle() {
-  return studentPageSchema?.panel?.title || "自主实验";
-}
-
-function applyStudentSchemaPanelParts(standardizedReady) {
-  const title = document.querySelector("#rightPanel .right-title");
-  if (title) title.textContent = studentPanelTitle();
-
-  const replaceChoices = (name, sectionId, ready = true) => {
-    const first = document.querySelector(`input[name="${name}"]`);
-    const list = first?.closest(".check-list");
-    const html = studentViewChoicesHtml(sectionId, name, ready);
-    if (list && html) list.innerHTML = html;
-  };
-
-  replaceChoices("studentDataViews", "data_views", standardizedReady);
-  replaceChoices("studentTrainViews", "train_views", true);
-  replaceChoices("studentPredictViews", "predict_views", true);
-}
-
-function studentPanelHtml() {
-  const columns = studentMeta?.numeric_columns || [];
-  const target = studentTargetValue(columns);
-  const features = columns.filter(col => col !== target);
-  const selectedFeatureSet = studentFeatureSet(features, target);
-  const selectedFeatureCount = selectedFeatureSet.size;
-  const standardizedReady = studentStandardizedReady();
-  const stdValue = standardizedReady ? "1" : "0";
-  const stdOptionLabel = standardizedReady ? "标准化特征" : "标准化特征（先完成预处理）";
-  const datasetStatus = studentMeta ? "已加载" : "未加载";
-  const preprocessStatus = standardizedReady ? (studentData ? "已预处理" : "标准化可用") : (studentData ? "已查看原始" : (studentMeta ? "待执行" : "未就绪"));
-  const trainStatus = studentHasTrained ? "\u5df2\u8bad\u7ec3" : "\u672a\u8bad\u7ec3";
-  const predictFrame = studentTrainData?.history?.[studentCurrentFrame] || studentTrainData?.history?.[studentTrainData.history.length - 1] || null;
-  const predictModelReady = Boolean(studentTrainData && !studentTrainDirty && predictFrame);
-  const predictInputSpace = studentTrainData?.use_standardized ? "标准化特征" : "原始特征";
-  const predictModelStatusHtml = predictModelReady ? `
-        <div class="model-status-grid">
-          <div class="model-status-main"><span>来源</span><strong>自主实验 epoch ${escapeHtml(predictFrame.epoch)}</strong></div>
-          <div class="model-status-pair"><span>特征</span><strong>${escapeHtml(studentTrainData.feature || studentCurrentFeatureValue())}</strong></div>
-          <div class="model-status-pair"><span>输入空间</span><strong>${escapeHtml(predictInputSpace)}</strong></div>
-          <div class="model-param-row">
-            <div><span>w</span><strong>${Number(predictFrame.w).toFixed(6)}</strong></div>
-            <div><span>b</span><strong>${Number(predictFrame.b).toFixed(6)}</strong></div>
-          </div>
-        </div>` : `<div class="model-status-empty">暂无训练模型。请先在“03 模型训练与评估”中准备训练，再切换到希望用于预测的 epoch。</div>`;
-  const predictStatus = studentPredictData ? "已预测" : "待预测";
-  return `
-    <div class="right-title">${escapeHtml(studentPanelTitle())}</div>
-    <details class="control-card student-stage-card" open>
-      <summary><h3>01 数据集</h3><span class="section-status ${studentMeta ? "ready" : ""}">${datasetStatus}</span></summary>
-      <div class="control-group" aria-label="上传 CSV 数据集">
-        <label class="control-label" for="studentFile">上传 CSV 数据集</label>
-        <input id="studentFile" type="file" accept=".csv,text/csv">
-      </div>
-      <div class="control-group" aria-label="数据类型">
-        <label class="control-label" for="studentSourceType">数据类型</label>
-        <select id="studentSourceType">
-          <option value="raw">原始数据集</option>
-          <option value="standardized">已预处理数据集</option>
-        </select>
-        <div class="btn-row">
-          <button class="primary-btn" id="studentUploadBtn" type="button">加载数据集</button>
-        </div>
-      </div>
-      <div class="runtime">
-        <div><span>数据状态</span><strong id="studentStatus">${studentMeta ? "已加载" : "未加载"}</strong></div>
-        <div><span>样本数量</span><strong>${escapeHtml(studentMeta?.row_count ?? "--")}</strong></div>
-      </div>
-      <div class="status-line hidden" id="studentUploadMessage"></div>
-    </details>
-    ${studentMeta ? `
-    <details class="control-card student-stage-card" open>
-      <summary><h3>02 数据预处理</h3><span class="section-status ${studentData ? "ready" : ""}">${preprocessStatus}</span></summary>
-      <div class="control-group" aria-label="特征选择">
-        <label class="control-label" for="studentDataFeature">特征选择</label>
-        <select id="studentDataFeature">
-          ${features.map(col => optionHtml(col, studentMeta?.feature || features[0])).join("")}
-        </select>
-      </div>
-      <div class="control-group" aria-label="显示模式">
-        <label class="control-label">显示模式</label>
-        <details class="mode-menu">
-          <summary id="studentDataModeSummary">${standardizedReady ? "已选择 1 项" : "已选择 1 项"}</summary>
-          <div class="check-list">
-            ${studentViewChoicesHtml("data_views", "studentDataViews", standardizedReady)}
-          </div>
-        </details>
-      </div>
-      <div class="button-grid">
-        <button class="btn green" id="studentPreprocessBtn" type="button">预处理</button>
-        <button class="btn primary" id="studentDataBtn" type="button">看图</button>
-      </div>
-    </details>
-    <details class="control-card student-stage-card" open>
-      <summary><h3>03 &#x6A21;&#x578B;&#x8BAD;&#x7EC3;&#x4E0E;&#x8BC4;&#x4F30;</h3><span id="studentTrainStatus" class="section-status ${studentHasTrained ? "ready" : ""}">${trainStatus}</span></summary>
-      <div class="control-group" aria-label="训练数据版本">
-        <label class="control-label" for="studentStd">训练数据版本</label>
-        <select id="studentStd">
-          ${optionHtml("0", stdValue, "原始特征")}
-          ${optionHtml("1", stdValue, stdOptionLabel, !standardizedReady)}
-        </select>
-      </div>
-      <div class="control-group" aria-label="训练图表">
-        <label class="control-label">训练图表</label>
-        <details class="mode-menu">
-          <summary id="studentTrainModeSummary">已选择 2 项</summary>
-          <div class="check-list">
-            ${studentViewChoicesHtml("train_views", "studentTrainViews")}
-          </div>
-        </details>
-      </div>
-      <div class="control-group" aria-label="初始参数">
-        <div class="field-grid">
-          <label class="control-label">初始 w<input id="studentW0" type="number" value="0" step="0.1"></label>
-          <label class="control-label">初始 b<input id="studentB0" type="number" value="0" step="0.1"></label>
-        </div>
-      </div>
-      <div class="control-group" aria-label="训练控制">
-        <label class="control-label" for="studentLr">学习率</label>
-        <div class="range-control">
-          <input id="studentLr" type="range" min="0.001" max="0.2" step="0.001" value="0.03">
-          <div class="range-stepper" aria-label="学习率微调">
-            <button class="range-step-btn" type="button" data-step-target="studentLr" data-step-dir="1" aria-label="增加学习率">▲</button>
-            <button class="range-step-btn" type="button" data-step-target="studentLr" data-step-dir="-1" aria-label="减少学习率">▼</button>
-          </div>
-        </div>
-        <div class="range-line"><span>0.001</span><strong id="studentLrText">0.030</strong><span>0.200</span></div>
-        <label class="control-label" for="studentEpochs">训练轮数</label>
-        <div class="range-control">
-          <input id="studentEpochs" type="range" min="1" max="500" step="1" value="120">
-          <div class="range-stepper" aria-label="训练轮数微调">
-            <button class="range-step-btn" type="button" data-step-target="studentEpochs" data-step-dir="1" aria-label="增加训练轮数">▲</button>
-            <button class="range-step-btn" type="button" data-step-target="studentEpochs" data-step-dir="-1" aria-label="减少训练轮数">▼</button>
-          </div>
-        </div>
-        <div class="range-line"><span>1</span><strong id="studentEpochsText">120</strong><span>500</span></div>
-        <label class="control-label" for="studentSpeed">动画速度</label>
-        <div class="range-control">
-          <input id="studentSpeed" type="range" min="30" max="600" step="10" value="90">
-          <div class="range-stepper" aria-label="动画速度微调">
-            <button class="range-step-btn" type="button" data-step-target="studentSpeed" data-step-dir="1" aria-label="增加动画速度">▲</button>
-            <button class="range-step-btn" type="button" data-step-target="studentSpeed" data-step-dir="-1" aria-label="减少动画速度">▼</button>
-          </div>
-        </div>
-        <div class="range-line"><span>快</span><strong id="studentSpeedText">90ms</strong><span>慢</span></div>
-      </div>
-      <div class="button-grid">
-        <button class="btn primary" id="studentTrainBtn" type="button">准备训练</button>
-        <button class="btn rose" id="studentResetBtn" type="button">重置</button>
-        <button class="btn green" id="studentStepBtn" type="button">训练一轮</button>
-        <button class="btn dark" id="studentAutoBtn" type="button">自动训练</button>
-        <button class="btn dark" id="studentPauseBtn" type="button">暂停</button>
-      </div>
-      <div class="runtime">
-        <div><span>当前 epoch</span><strong id="studentEpochNow">--</strong></div>
-        <div><span>当前 Loss</span><strong id="studentLossNow">--</strong></div>
-      </div>
-    </details>
-    <details class="control-card student-stage-card" open>
-      <summary><h3>04 模型预测</h3><span id="studentPredictStatus" class="section-status ${studentPredictData ? "ready" : ""}">${predictStatus}</span></summary>
-      <div class="control-group" aria-label="预测输入值">
-        <label class="control-label">当前模型</label>
-        <div id="studentPredictModelStatus">${predictModelStatusHtml}</div>
-      </div>
-      <div class="control-group" aria-label="预测输入">
-        <div class="field-grid">
-          <label class="control-label" for="studentPredictInputMode">输入类型
-            <select id="studentPredictInputMode" ${predictModelReady ? "" : "disabled"}>
-              <option value="raw">原始特征</option>
-              <option value="standardized" ${studentTrainData?.use_standardized ? "" : "disabled"}>标准化特征</option>
-            </select>
-          </label>
-          <label class="control-label" for="studentPredictInput">输入特征值
-            <input id="studentPredictInput" type="number" value="0" step="0.1" ${predictModelReady ? "" : "disabled"}>
-          </label>
-        </div>
-      </div>
-      <div class="control-group" aria-label="显示图表">
-        <label class="control-label">显示图表</label>
-        <details class="mode-menu">
-          <summary id="studentPredictModeSummary">已选择 2 项</summary>
-          <div class="check-list">
-            ${studentViewChoicesHtml("predict_views", "studentPredictViews")}
-          </div>
-        </details>
-      </div>
-      <div class="btn-row">
-        <button class="btn dark" id="studentPreparePredictBtn" type="button">准备预测</button>
-        <button class="primary-btn" id="studentPredictBtn" type="button">开始预测</button>
-      </div>
-    </details>` : ""}
-  `;
-}
