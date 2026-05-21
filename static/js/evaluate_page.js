@@ -1,199 +1,261 @@
 // Evaluate Page.
 
-function evaluateChartMeta(view) {
-  return experimentChartMeta(evaluatePageSchema, view);
+const EVALUATE_METRICS = [
+  { id: "rmse", label: "RMSE" },
+  { id: "mae", label: "MAE" },
+  { id: "r2", label: "R²" },
+];
+
+function evaluateMetricMode() {
+  const saved = viewStateStore.evaluateMetricModeV1;
+  return EVALUATE_METRICS.some(item => item.id === saved) ? saved : "rmse";
 }
 
-function evaluateDefaultViews() {
-  return experimentDefaultViews(evaluatePageSchema);
-}
-
-function renderEvaluateDashboard(grid, views) {
-  experimentRenderGridStack({
-    grid,
-    mode: "evaluate",
-    views,
-    loadLayout: loadEvaluateGridLayout,
-    defaultLayout: defaultEvaluateGridLayout,
-    normalizeLayout: normalizeEvaluateGridLayout,
-    htmlForView: view => evaluateViewHtml(view, evaluateChartDataCache[view]),
-  });
+function evaluatePanelHtml() {
+  return `<div class="right-title">\u63a7\u5236\u9762\u677f</div>`;
 }
 
 function defaultEvaluateGridLayout(view) {
   return ({
-    model_fit: { x: 0, y: 0, w: 2, h: 2 },
-    rmse: { x: 2, y: 0, w: 1, h: 2 },
-    mae: { x: 3, y: 0, w: 1, h: 2 },
-    r2: { x: 0, y: 2, w: 1, h: 2 },
-    explanation: { x: 1, y: 2, w: 3, h: 2 },
-  })[view] || { x: 0, y: 0, w: 1, h: 1 };
+    evaluate_fit: { x: 0, y: 0, w: 2, h: 2 },
+    evaluate_metric: { x: 2, y: 0, w: 2, h: 2 },
+  })[view] || { x: 0, y: 0, w: 2, h: 2 };
 }
 
 function normalizeEvaluateGridLayout(view, layout) {
   const next = { ...defaultEvaluateGridLayout(view), ...layout };
-  next.w = Math.max(1, Math.min(4, Number(next.w) || 1));
-  next.h = Math.max(1, Number(next.h) || 1);
+  next.w = Math.max(1, Math.min(4, Number(next.w) || 2));
+  next.h = Math.max(1, Number(next.h) || 2);
   next.x = Math.max(0, Math.min(4 - next.w, Number(next.x) || 0));
   next.y = Math.max(0, Number(next.y) || 0);
   return next;
 }
 
-function evaluatePanelHtml(schema) {
-  const charts = experimentCharts(schema);
-  const options = charts.map(chart => ({
-    label: chart.title || chart.id,
-    value: chart.id,
-    default: Boolean(chart.default),
-  }));
-  return `
-    <div class="right-title">${escapeHtml(schema.panel?.title || "模型评估")}</div>
-    <div class="control-card">
-      <div class="mini-stats">
-        <div class="mini-stat"><span>数据集</span><strong id="evaluateDataset">--</strong></div>
-        <div class="mini-stat"><span>特征</span><strong id="evaluateFeature">--</strong></div>
-        <div class="mini-stat"><span>评估轮次</span><strong id="evaluateEpoch">--</strong></div>
-      </div>
-      <div class="control-group" aria-label="评估状态">
-        <label class="control-label">当前模型</label>
-        <div class="formula-box" id="evaluateModelStatus">请先在“模型训练”页完成一次训练。</div>
-      </div>
-      <div class="control-group" aria-label="评估视图">
-        <label class="control-label">评估视图</label>
-        <details class="mode-menu">
-          <summary id="evaluateModeSummary">已选择 1 项</summary>
-          <div class="check-list">${checkboxOptionsHtml("evaluateViews", options)}</div>
-        </details>
-      </div>
-    </div>`;
-}
-
 function evaluateEmptyState() {
+  destroyDataGrid();
+  disposeCharts();
   $("main").innerHTML = `
     <div class="empty-state">
-      请先在“数据预处理”页加载数据集，并在“模型训练”页完成一次训练。
+      \u8bf7\u5148\u5728\u201c\u6a21\u578b\u8bad\u7ec3\u201d\u9875\u5b8c\u6210\u4e00\u6b21\u8bad\u7ec3\uff0c\u8bc4\u4f30\u9875\u4f1a\u590d\u7528\u6700\u8fd1\u4e00\u6b21\u8bad\u7ec3\u5f97\u5230\u7684\u6a21\u578b\u53c2\u6570\u548c\u8bad\u7ec3\u4e0a\u4e0b\u6587\u3002
     </div>`;
-  if ($("evaluateModelStatus")) {
-    $("evaluateModelStatus").textContent = "评估页会复用最近一次训练得到的模型参数和训练上下文。";
-  }
-}
-
-function updateEvaluateSummary() {
-  const frame = trainData?.history?.[currentFrame] || trainData?.history?.[trainData.history.length - 1] || null;
-  if ($("evaluateDataset")) $("evaluateDataset").textContent = trainData?.dataset_label || currentDatasetMeta?.label || "--";
-  if ($("evaluateFeature")) $("evaluateFeature").textContent = trainData?.feature || "--";
-  if ($("evaluateEpoch")) $("evaluateEpoch").textContent = frame?.epoch ?? "--";
-  if ($("evaluateModelStatus")) {
-    if (!trainData || !frame) {
-      $("evaluateModelStatus").textContent = "请先在“模型训练”页完成一次训练。";
-      return;
-    }
-    $("evaluateModelStatus").textContent = `w = ${num(frame.w, 6)}, b = ${num(frame.b, 6)}
-RMSE = ${num(frame.rmse, 4)}, MAE = ${num(frame.mae, 4)}, R² = ${num(frame.r2, 4)}`;
-  }
 }
 
 async function renderEvaluateShell() {
   evaluatePageSchema = evaluatePageSchema || await loadPanelSchema("evaluate", {
-    title: "模型评估",
+    title: "\u6a21\u578b\u8bc4\u4f30",
     sections: [],
   });
   document.querySelector(".shell").classList.remove("theory");
-  $("main").innerHTML = `<div class="chart-grid" id="chartGrid"></div>`;
-  $("rightPanel").innerHTML = evaluatePanelHtml(evaluatePageSchema);
-  restoreCheckedValues("evaluateViews", "evaluateSelectedViewsV1");
-  document.querySelectorAll('input[name="evaluateViews"]').forEach(el => {
-    el.addEventListener("change", () => {
-      saveCheckedValues("evaluateViews", "evaluateSelectedViewsV1");
+  $("rightPanel").innerHTML = evaluatePanelHtml();
+  if (!trainData) {
+    evaluateEmptyState();
+    return;
+  }
+  renderEvaluation();
+}
+
+function renderEvaluation() {
+  if (!trainData) {
+    evaluateEmptyState();
+    return;
+  }
+  const grid = ensureEvaluateGrid();
+  const viewsKey = evaluateMetricMode();
+  if (evaluateRenderViewsKey !== viewsKey || !charts.get("chart_evaluate_fit") || !charts.get("chart_evaluate_metric")) {
+    destroyDataGrid();
+    disposeCharts();
+    dataGridMode = "evaluate";
+    grid.innerHTML = evaluateGridHtml();
+    if (window.GridStack) {
+      dataGrid = GridStack.init({
+        column: 4,
+        cellHeight: 260,
+        margin: 8,
+        float: true,
+        animate: true,
+        draggable: { handle: ".chart-head" },
+        resizable: { handles: "e, s, se" }
+      }, grid);
+      grid.setAttribute("gs-column", "4");
+      updateDataGridCellHeight();
+      dataGrid.on("change dragstop resizestop", () => {
+        syncDataGridAttributes();
+        saveDataGridLayout();
+        requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+      });
+      syncDataGridAttributes();
+    }
+    bindEvaluateMetricControls();
+    evaluateRenderViewsKey = viewsKey;
+  }
+
+  const frameIndex = evaluateFrameIndex();
+  const fit = charts.get("chart_evaluate_fit") || initChart("chart_evaluate_fit");
+  fit.setOption(evaluateFitOption(frameIndex), true);
+
+  const metric = charts.get("chart_evaluate_metric") || initChart("chart_evaluate_metric");
+  metric.setOption(evaluateGaugeOnlyOption(evaluateMetricMode(), frameIndex), true);
+  updateEvaluateExplanation();
+  requestAnimationFrame(() => charts.forEach(ch => ch.resize()));
+}
+
+function ensureEvaluateGrid() {
+  if (!$("evaluateWrap")) {
+    destroyDataGrid();
+    disposeCharts();
+    dataGridMode = "";
+    $("main").innerHTML = `<div class="dashboard-grid grid-stack" id="evaluateWrap"></div>`;
+    evaluateRenderViewsKey = "";
+  }
+  return $("evaluateWrap");
+}
+
+function evaluateGridHtml() {
+  const saved = loadEvaluateGridLayout();
+  const items = [
+    { id: "evaluate_fit", layout: { x: 0, y: 0, w: 2, h: 2 }, html: evaluateFitCardHtml() },
+    { id: "evaluate_metric", layout: { x: 2, y: 0, w: 2, h: 2 }, html: evaluateMetricCardHtml() },
+  ];
+  return items.map(item => {
+    const layout = normalizeEvaluateGridLayout(item.id, saved[item.id] || item.layout);
+    return `<div class="grid-stack-item" data-view="${escapeHtml(item.id)}" gs-x="${layout.x}" gs-y="${layout.y}" gs-w="${layout.w}" gs-h="${layout.h}" gs-min-w="1" gs-min-h="1"><div class="grid-stack-item-content">${item.html}</div></div>`;
+  }).join("");
+}
+
+function evaluateFitCardHtml() {
+  return `<section class="chart-card chart-interaction-prototype" data-chart-card="evaluate_fit">
+    <div class="chart-head">
+      <div><div class="chart-title">\u6807\u51c6\u5316\u6563\u70b9\u56fe</div><div class="chart-sub">\u540c\u6b65\u81ea\u5b9a\u4e49\u53c2\u6570\u8bad\u7ec3\u4e2d\u7684\u5f53\u524d\u6a21\u578b\u62df\u5408\u6548\u679c</div></div>
+    </div>
+    <div class="chart" id="chart_evaluate_fit"></div>
+  </section>`;
+}
+
+function evaluateMetricCardHtml() {
+  const mode = evaluateMetricMode();
+  return `<section class="chart-card chart-interaction-prototype evaluation-metric-card" data-chart-card="evaluate_metric">
+    <div class="chart-head">
+      <div><div class="chart-title">\u8bc4\u4f30\u6307\u6807\u56fe</div><div class="chart-sub">\u5207\u6362 RMSE\u3001MAE \u548c R²\uff0c\u89c2\u5bdf\u5f53\u524d\u6a21\u578b\u7684\u8bc4\u4f30\u7ed3\u679c</div></div>
+    </div>
+    <div class="chart-toolbar">
+      <div class="segmented-control" role="group" aria-label="\u8bc4\u4f30\u6307\u6807\u9009\u62e9">
+        ${EVALUATE_METRICS.map(item => `<button class="seg-btn${item.id === mode ? " active" : ""}" type="button" data-evaluate-metric="${escapeHtml(item.id)}">${escapeHtml(item.label)}</button>`).join("")}
+      </div>
+    </div>
+    <div class="chart" id="chart_evaluate_metric"></div>
+    <div class="loss-formula-note evaluate-explanation-note" id="evaluateExplanationNote"></div>
+  </section>`;
+}
+
+function bindEvaluateMetricControls() {
+  document.querySelectorAll("[data-evaluate-metric]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      viewStateStore.evaluateMetricModeV1 = btn.dataset.evaluateMetric;
+      evaluateRenderViewsKey = "";
       renderEvaluation();
     });
   });
-  if (!trainData) {
-    evaluateEmptyState();
-    updateEvaluateSummary();
-    return;
-  }
-  updateEvaluateSummary();
-  await renderEvaluation();
 }
 
-function evaluateViewHtml(view, chartData = null) {
-  const meta = evaluateChartMeta(view);
-  const title = meta?.title || view;
-  const sub = meta?.subtitle || "";
-  if (meta?.renderer === "evaluation_explanation") {
-    return `<section class="chart-card wide">
-      <div class="chart-head"><div><div class="chart-title">${escapeHtml(title)}</div><div class="chart-sub">${escapeHtml(sub)}</div></div></div>
-      <div style="padding:18px">${evaluateExplanationHtml(chartData)}</div>
-    </section>`;
-  }
-  return chartCardHtml(view, title, sub, meta?.size || "");
+function evaluateFrameIndex() {
+  if (!trainData?.history?.length) return 0;
+  return Math.max(0, Math.min(currentFrame, trainData.history.length - 1));
 }
 
-function evaluateExplanationHtml(data = null) {
-  if (!data) return `<div class="formula-box">暂无评估解释。</div>`;
-  const notes = (data.notes || []).map(item => `<li>${escapeHtml(item)}</li>`).join("");
-  return `<div class="best-param-grid">
-    <div class="best-param"><span>判断</span><strong>${escapeHtml(data.quality || "--")}</strong></div>
-    <div class="best-param"><span>RMSE</span><strong>${num(data.rmse, 4)}</strong></div>
-    <div class="best-param"><span>MAE</span><strong>${num(data.mae, 4)}</strong></div>
-    <div class="best-param"><span>R²</span><strong>${num(data.r2, 4)}</strong></div>
-  </div>
-  <div class="formula-box"><ul>${notes}</ul></div>`;
-}
-
-async function renderEvaluation() {
-  if (!trainData) {
-    evaluateEmptyState();
-    return;
-  }
-  const frameIndex = Math.max(0, Math.min(currentFrame, trainData.history.length - 1));
+function evaluateFitOption(frameIndex) {
   const frame = trainData.history[frameIndex];
-  updateEvaluateSummary();
-  await experimentRefreshCharts({
-    viewName: "evaluateViews",
-    storageKey: "evaluateSelectedViewsV1",
-    summaryId: "evaluateModeSummary",
-    contextId: trainData.context_id,
-    page: "evaluate",
-    state: { frame_index: frameIndex },
-    fallbackViews: evaluateDefaultViews(),
-    label: "evaluate chart_data",
-    beforeRender: ({ views, grid }) => {
-      if (!views.length) {
-        destroyDataGrid();
-        disposeCharts();
-        evaluateRenderViewsKey = "";
-        grid.classList.remove("dashboard-grid", "grid-stack");
+  const points = trainData.scatter.x.map((x, i) => [x, trainData.scatter.y[i]]);
+  return {
+    tooltip: { trigger: "item" },
+    legend: { top: 12 },
+    grid: { left: 58, right: 24, top: 56, bottom: 48 },
+    xAxis: { type: "value", name: trainData.x_column, nameLocation: "middle", nameGap: 28 },
+    yAxis: { type: "value", name: trainData.target || "MEDV", nameLocation: "middle", nameGap: 38 },
+    dataZoom: [
+      { type: "inside", xAxisIndex: 0, filterMode: "none" },
+      { type: "inside", yAxisIndex: 0, filterMode: "none" }
+    ],
+    series: [
+      { name: "\u6837\u672c\u70b9", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(15,159,120,.62)" } },
+      { name: "\u5f53\u524d\u56de\u5f52\u7ebf", type: "line", data: lineForParams(frame.w, frame.b), showSymbol: false, lineStyle: { color: "#d9354f", width: 3 } },
+      { name: "\u6700\u4f18\u53c2\u8003\u7ebf", type: "line", data: lineForParams(trainData.best.w, trainData.best.b), showSymbol: false, lineStyle: { color: "#0f9f78", width: 2.6, type: "dashed" } }
+    ]
+  };
+}
+
+function evaluateGaugeOnlyOption(key, frameIndex) {
+  const rows = trainData.history.slice(0, frameIndex + 1);
+  const current = rows[rows.length - 1]?.[key] ?? 0;
+  const config = metricGaugeConfig(key, rows);
+  return {
+    tooltip: {
+      formatter: () => `${escapeHtml(config.label)}<br>${num(current, 4)}`
+    },
+    series: [
+      {
+        name: config.label,
+        type: "gauge",
+        center: ["50%", "54%"],
+        radius: "82%",
+        startAngle: 205,
+        endAngle: -25,
+        min: config.min,
+        max: config.max,
+        splitNumber: 5,
+        progress: {
+          show: true,
+          width: 14,
+          itemStyle: { color: config.color }
+        },
+        axisLine: {
+          lineStyle: {
+            width: 14,
+            color: [[1, "#e8ecf4"]]
+          }
+        },
+        axisTick: { distance: -20, length: 5, lineStyle: { color: "#8b95a5", width: 1 } },
+        splitLine: { distance: -22, length: 10, lineStyle: { color: "#8b95a5", width: 1.2 } },
+        axisLabel: { distance: -6, color: "#6b7280", fontSize: 10 },
+        pointer: { length: "58%", width: 5, itemStyle: { color: "#172033" } },
+        anchor: { show: true, size: 8, itemStyle: { color: "#172033" } },
+        detail: {
+          valueAnimation: true,
+          offsetCenter: [0, "28%"],
+          fontSize: 24,
+          fontWeight: 900,
+          color: "#172033",
+          formatter: () => Number(current).toFixed(2)
+        },
+        title: {
+          offsetCenter: [0, "46%"],
+          fontSize: 12,
+          fontWeight: 800,
+          color: "#6b7280"
+        },
+        data: [{ value: config.gaugeValue(current), name: config.label }]
       }
-    },
-    onChartData: chartData => {
-      evaluateChartDataCache = chartData;
-    },
-    renderDashboard: ({ grid, views, viewsKey }) => {
-      destroyDataGrid();
-      disposeCharts();
-      grid.classList.remove("dashboard-grid", "grid-stack");
-      renderEvaluateDashboard(grid, views);
-      evaluateRenderViewsKey = viewsKey;
-    },
-    renderFallback: ({ grid, views, viewsKey }) => {
-      destroyDataGrid();
-      disposeCharts();
-      grid.classList.remove("dashboard-grid", "grid-stack");
-      grid.innerHTML = views.map(view => evaluateViewHtml(view, evaluateChartDataCache[view])).join("");
-      evaluateRenderViewsKey = viewsKey;
-    },
-    renderCharts: ({ views }) => {
-      views.forEach(view => {
-        const meta = evaluateChartMeta(view);
-        if (!meta || meta.kind === "info" || meta.renderer === "evaluation_explanation") return;
-        const chartId = `chart_${view}`;
-        const ch = charts.get(chartId) || initChart(chartId);
-        const option = trainChartOption(meta, frameIndex, evaluateChartDataCache[view]);
-        if (option) setChartOptionWhenReady(ch, option, meta.renderer !== "loss_surface_3d");
-      });
-    },
-  });
-  if ($("evaluateEpoch")) $("evaluateEpoch").textContent = frame?.epoch ?? "--";
+    ]
+  };
+}
+
+function updateEvaluateExplanation() {
+  const el = $("evaluateExplanationNote");
+  if (!el || !trainData?.history?.length) return;
+  const frame = trainData.history[evaluateFrameIndex()];
+  const mode = evaluateMetricMode();
+  const quality = evaluateQuality(frame);
+  const value = mode === "rmse" ? frame.rmse : mode === "mae" ? frame.mae : frame.r2;
+  const text = ({
+    rmse: `RMSE = ${num(value, 4)}，越小表示整体预测偏差越小；它会放大较大的误差，所以能提醒模型是否存在明显偏离点。`,
+    mae: `MAE = ${num(value, 4)}，越小表示平均绝对误差越小；它比 RMSE 更直观，表示一次预测通常会偏离多少。`,
+    r2: `R² = ${num(value, 4)}，越接近 1 表示模型解释能力越强；接近 0 说明当前特征和直线对目标值解释有限。`,
+  })[mode];
+  el.innerHTML = `<span>\u5224\u65ad</span><strong>${escapeHtml(quality)}</strong><span>${escapeHtml(text)}</span>`;
+}
+
+function evaluateQuality(frame) {
+  const r2 = Number(frame?.r2 ?? 0);
+  if (r2 >= 0.7) return "\u62df\u5408\u8f83\u597d";
+  if (r2 >= 0.3) return "\u62df\u5408\u4e00\u822c";
+  return "\u62df\u5408\u8f83\u5f31";
 }

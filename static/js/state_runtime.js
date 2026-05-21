@@ -85,11 +85,18 @@ function disposeCharts() {
 }
 
 function saveDataGridLayout() {
-  if (!dataGrid) return;
+  if (!dataGrid || !dataGrid.el || !document.body.contains(dataGrid.el)) return;
   const layout = {};
-  dataGrid.getGridItems().forEach(item => {
+  let items = [];
+  try {
+    items = dataGrid.getGridItems ? dataGrid.getGridItems() : [];
+  } catch (err) {
+    return;
+  }
+  items.forEach(item => {
+    if (!item || !document.body.contains(item)) return;
     const node = item.gridstackNode;
-    const view = item.dataset.view;
+    const view = item.dataset?.view;
     if (!node || !view) return;
     layout[view] = { x: node.x, y: node.y, w: node.w, h: node.h };
   });
@@ -98,6 +105,10 @@ function saveDataGridLayout() {
 
 function gridLayoutStorageKey(mode) {
   if (mode === "train") return "trainGridLayoutV2";
+  if (mode === "train_process") return "trainProcessGridLayoutV1";
+  if (mode === "train_loss") return "trainLossGridLayoutV1";
+  if (mode === "train_optimization") return "trainOptimizationGridLayoutV1";
+  if (mode === "train_custom") return "trainCustomGridLayoutV1";
   if (mode === "evaluate") return "evaluateGridLayoutV1";
   if (mode === "predict") return "predictGridLayoutV3";
   return "preprocessGridLayoutV7";
@@ -105,8 +116,15 @@ function gridLayoutStorageKey(mode) {
 
 function destroyDataGrid() {
   if (!dataGrid) return;
+  const grid = dataGrid;
   saveDataGridLayout();
-  dataGrid.destroy(false);
+  try {
+    if (grid.el && document.body.contains(grid.el)) {
+      grid.destroy(false);
+    }
+  } catch (err) {
+    console.warn("Grid cleanup skipped:", err);
+  }
   dataGrid = null;
   dataGridMode = null;
   trainRenderViewsKey = "";
@@ -261,7 +279,7 @@ function saveCheckedValues(name, storageKey) {
 }
 
 function updateDataGridCellHeight() {
-  if (!dataGrid) return;
+  if (!dataGrid || !dataGrid.el || !document.body.contains(dataGrid.el)) return;
   const grid = dataGrid.el || $("chartGrid");
   if (!grid) return;
   const columnWidth = grid.clientWidth / 4;
@@ -269,8 +287,15 @@ function updateDataGridCellHeight() {
 }
 
 function syncDataGridAttributes() {
-  if (!dataGrid) return;
-  dataGrid.getGridItems().forEach(item => {
+  if (!dataGrid || !dataGrid.el || !document.body.contains(dataGrid.el)) return;
+  let items = [];
+  try {
+    items = dataGrid.getGridItems ? dataGrid.getGridItems() : [];
+  } catch (err) {
+    return;
+  }
+  items.forEach(item => {
+    if (!item || !document.body.contains(item)) return;
     const node = item.gridstackNode;
     if (!node) return;
     item.setAttribute("gs-x", node.x);

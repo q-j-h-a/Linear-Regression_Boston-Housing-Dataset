@@ -365,9 +365,11 @@ function lossSurface3DOption(frameIndex, chartData = null) {
     yAxis3D: { type: "value", name: "b" },
     zAxis3D: { type: "value", name: "MSE" },
     grid3D: {
-      boxWidth: 120,
-      boxDepth: 90,
-      boxHeight: 72,
+      left: "center",
+      top: "middle",
+      boxWidth: 105,
+      boxDepth: 82,
+      boxHeight: 62,
       axisLine: { lineStyle: { color: "#9aa3b2" } },
       axisPointer: { lineStyle: { color: "#5b35f5" } },
       light: {
@@ -423,9 +425,9 @@ function lossSurface3DOption(frameIndex, chartData = null) {
   if (!hasExistingChart) {
     option.grid3D.viewControl = {
       projection: "perspective",
-      alpha: 34,
-      beta: 38,
-      distance: 170,
+      alpha: 30,
+      beta: 32,
+      distance: 185,
       rotateSensitivity: 1,
       zoomSensitivity: 1.25,
       panSensitivity: 1.6

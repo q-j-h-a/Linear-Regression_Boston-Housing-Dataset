@@ -10,7 +10,7 @@
   <script src="https://cdn.jsdelivr.net/npm/gridstack@10.3.1/dist/gridstack-all.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <script src="/static/js/api.js"></script>
-  <script src="/static/js/chart_renderers.js"></script>
+  <script src="/static/js/chart_renderers.js?v=20260521_chart05"></script>
   <script src="/static/js/control_renderers.js"></script>
   <script src="/static/js/view_renderers.js"></script>
   <style>
@@ -463,6 +463,30 @@
       font-weight: 900;
       white-space: nowrap;
       box-shadow: 0 12px 22px rgba(37, 99, 235, .22);
+      cursor: pointer;
+      transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+      user-select: none;
+    }
+    .primary-btn:hover {
+      filter: brightness(1.06);
+      box-shadow: 0 15px 26px rgba(37, 99, 235, .30);
+      transform: translateY(-1px);
+    }
+    .primary-btn:active {
+      filter: brightness(.96);
+      box-shadow: 0 6px 12px rgba(37, 99, 235, .24);
+      transform: translateY(1px) scale(.985);
+    }
+    .primary-btn:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .22);
+      outline-offset: 2px;
+    }
+    .primary-btn:disabled {
+      cursor: not-allowed;
+      opacity: .62;
+      box-shadow: none;
+      transform: none;
+      filter: none;
     }
     .stat-cards {
       display: grid;
@@ -1317,6 +1341,105 @@
       height: 100%;
       min-height: 0;
     }
+    .chart-toolbar {
+      padding: 10px 18px 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .segmented-control {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .seg-btn,
+    .mini-action {
+      border: 1px solid #d8e1f0;
+      background: #fff;
+      color: #334155;
+      border-radius: 8px;
+      min-height: 32px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease, transform .08s ease;
+    }
+    .seg-btn:hover,
+    .mini-action:hover {
+      background: #f4f7fb;
+      border-color: #b9c9e4;
+    }
+    .seg-btn:active,
+    .mini-action:active {
+      transform: translateY(1px);
+    }
+    .seg-btn.active {
+      background: #2563eb;
+      border-color: #2563eb;
+      color: #fff;
+      box-shadow: 0 8px 18px rgba(37, 99, 235, .18);
+    }
+    .sample-nav {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .legend-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px 14px;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 800;
+    }
+    .legend-strip span {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+    }
+    .legend-strip i {
+      width: 18px;
+      height: 3px;
+      border-radius: 999px;
+      display: inline-block;
+    }
+    .loss-sample-note,
+    .loss-formula-note {
+      margin: 0 18px 14px;
+      padding: 10px 12px;
+      border: 1px solid #dbe7ff;
+      border-radius: 8px;
+      background: #f7fbff;
+      color: #334155;
+      font-size: 12px;
+      font-weight: 700;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .loss-sample-note strong,
+    .loss-formula-note strong {
+      color: #dc2626;
+    }
+    .chart-card[data-chart-card="loss_residual_main"],
+    .chart-card[data-chart-card="loss_overall"],
+    .chart-card[data-chart-card="opt_contour"],
+    .chart-card[data-chart-card="opt_slice"],
+    .chart-card[data-chart-card="evaluate_metric"] {
+      grid-template-rows: auto auto minmax(0, 1fr) auto;
+    }
+    .evaluate-explanation-note strong {
+      color: #172033;
+    }
+    .evaluate-explanation-note span:last-child {
+      flex: 1 1 280px;
+      line-height: 1.55;
+    }
     .chart-grid.single .chart-card {
       min-height: 540px;
       height: clamp(540px, 66vh, 740px);
@@ -1409,21 +1532,11 @@
     .right-title {
       display: flex;
       align-items: center;
-      gap: 10px;
       margin: 0 0 18px;
       color: #111827;
       font-size: 18px;
       font-weight: 950;
       line-height: 1.25;
-    }
-    .right-title::before {
-      content: "";
-      width: 10px;
-      height: 10px;
-      border-radius: 999px;
-      background: var(--purple);
-      box-shadow: 0 0 0 5px rgba(37, 99, 235, .12);
-      flex: 0 0 auto;
     }
     .control-card {
       border: 1px solid #dfe5ef;
@@ -1672,12 +1785,30 @@
       display: grid;
       grid-template-columns: repeat(2, minmax(0, 1fr));
       gap: 10px;
+      align-items: start;
+    }
+    .field-grid .control-label + .control-label {
+      margin-top: 0;
+    }
+    .field-grid .train-param-input {
+      align-content: start;
+      padding-left: 2px;
+    }
+    .field-grid .train-param-input input {
+      margin-top: 0;
+      margin-left: -2px;
     }
     .range-control {
       display: grid;
       grid-template-columns: minmax(0, 1fr) 28px;
       align-items: center;
       gap: 8px;
+    }
+    .control-label + .range-control {
+      margin-top: 0;
+    }
+    .range-label {
+      transform: translateY(4px);
     }
     .range-stepper {
       display: grid;
@@ -1737,11 +1868,36 @@
       color: #fff;
       height: 38px;
       font-weight: 900;
+      cursor: pointer;
+      box-shadow: 0 8px 16px rgba(15, 23, 42, .10);
+      transition: transform .12s ease, box-shadow .12s ease, filter .12s ease;
+      user-select: none;
     }
     .btn.primary { background: var(--purple); }
     .btn.green { background: var(--green); }
     .btn.dark { background: #4b5563; }
     .btn.rose { background: var(--rose); }
+    .btn:hover {
+      filter: brightness(1.06);
+      box-shadow: 0 11px 20px rgba(15, 23, 42, .16);
+      transform: translateY(-1px);
+    }
+    .btn:active {
+      filter: brightness(.96);
+      box-shadow: 0 4px 9px rgba(15, 23, 42, .16);
+      transform: translateY(1px) scale(.985);
+    }
+    .btn:focus-visible {
+      outline: 3px solid rgba(37, 99, 235, .22);
+      outline-offset: 2px;
+    }
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: .62;
+      box-shadow: none;
+      transform: none;
+      filter: none;
+    }
     .runtime {
       display: grid;
       gap: 8px;
@@ -2081,6 +2237,40 @@
       min-height: 0;
       max-height: none;
     }
+    .standardize-overview-card {
+      overflow: hidden;
+    }
+    .standardize-overview-body {
+      padding: 0;
+      gap: 0;
+    }
+    .standardize-overview-body .content-card {
+      border-left: 0;
+      border-right: 0;
+      border-radius: 0;
+      box-shadow: none;
+      margin: 0;
+    }
+    .standardize-overview-body .content-card:first-child {
+      border-top: 0;
+    }
+    .standardize-overview-body .content-card:last-child {
+      border-bottom: 0;
+    }
+    .standardize-overview-body .preprocess-info-card {
+      border-left: 0;
+      border-right: 0;
+      border-radius: 0;
+      box-shadow: none;
+      min-height: 0;
+      height: auto;
+    }
+    .standardize-overview-body .preprocess-info-card:first-child {
+      border-top: 0;
+    }
+    .standardize-overview-body .preprocess-info-card:last-child {
+      border-bottom: 0;
+    }
     .load-dataset-card {
       min-height: 116px;
       height: 100%;
@@ -2248,14 +2438,14 @@
 const FEATURE_NAMES = {{ feature_names | tojson }};
 const DEFAULT_FEATURE = {{ default_feature | tojson }};
 </script>
-<script src="/static/js/state_runtime.js"></script>
+<script src="/static/js/state_runtime.js?v=20260521_gridfix05"></script>
 <script src="/static/js/schema_registry.js"></script>
 <script src="/static/js/experiment_runtime.js"></script>
 <script src="/static/js/theory_page.js"></script>
-<script src="/static/js/preprocess_page.js"></script>
-<script src="/static/js/predict_page.js"></script>
-<script src="/static/js/train_page.js"></script>
-<script src="/static/js/evaluate_page.js"></script>
+<script src="/static/js/preprocess_page.js?v=20260520_preprocess08"></script>
+<script src="/static/js/predict_page.js?v=20260521_predict02"></script>
+<script src="/static/js/train_page.js?v=20260521_train24"></script>
+<script src="/static/js/evaluate_page.js?v=20260521_eval03"></script>
 <script src="/static/js/app_shell.js"></script>
 </body>
 </html>

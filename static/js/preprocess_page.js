@@ -136,23 +136,11 @@ function renderStandardizePanel() {
 
 function bindPreprocessControls() {
   restoreDataFormState();
-  restoreCheckedValues("dataViews", preprocessDataViewsStorageKey());
-  if (activePreprocessStep === "raw_viz") {
-    setPreprocessSelectedViews(rawVizSelectedViews(), "rawVizSelectedViewsV1");
-  }
-  if (activePreprocessStep === "standard_viz") {
-    setPreprocessSelectedViews(standardVizSelectedViews(), "standardVizSelectedViewsV1");
-  }
   if ($("dataFeature")) {
     $("dataFeature").addEventListener("change", async () => {
       if (activePreprocessStep === "raw_viz" || activePreprocessStep === "standard_viz") {
         await loadDataView({ deferRender: true });
-        if (selectedValues("dataViews").length) {
-          await renderDataCharts();
-        } else {
-          renderChartGridShell();
-          renderRawVizPrompt();
-        }
+        await renderDataCharts();
       } else {
         await loadDataView();
       }
@@ -182,19 +170,11 @@ function preprocessDataViewsStorageKey() {
 }
 
 function rawVizSelectedViews() {
-  const saved = viewStateStore.rawVizSelectedViewsV1;
-  if (Array.isArray(saved) && saved.length) {
-    return saved.filter(view => ["raw", "all_corr"].includes(view));
-  }
-  return [];
+  return ["raw", "all_corr"];
 }
 
 function standardVizSelectedViews() {
-  const saved = viewStateStore.standardVizSelectedViewsV1;
-  if (Array.isArray(saved) && saved.length) {
-    return saved.filter(view => ["standardized", "all_corr"].includes(view));
-  }
-  return [];
+  return ["standardized", "all_corr"];
 }
 
 function renderRawDataVizPanel() {
@@ -495,35 +475,24 @@ async function renderPreprocessCurrentStep() {
     return;
   }
   if (activePreprocessStep === "standardize") {
-    destroyDataGrid();
-    disposeCharts();
-    $("preprocessContent").innerHTML = preprocessStandardizeHtml();
+    renderChartGridShell();
+    renderPreprocessStandardizeGrid();
     return;
   }
   if (activePreprocessStep === "raw_viz") {
     renderChartGridShell();
-    if (rawVizSelectedViews().length) {
-      if (!dataCache && !loadingDataView) {
-        await loadDataView({ deferRender: true });
-      }
-      setPreprocessSelectedViews(rawVizSelectedViews(), "rawVizSelectedViewsV1");
-      await renderDataCharts();
-    } else {
-      renderRawVizPrompt();
+    if (!dataCache && !loadingDataView) {
+      await loadDataView({ deferRender: true });
     }
+    await renderDataCharts();
     return;
   }
   if (activePreprocessStep === "standard_viz") {
     renderChartGridShell();
-    if (standardVizSelectedViews().length) {
-      if (!dataCache && !loadingDataView) {
-        await loadDataView({ deferRender: true });
-      }
-      setPreprocessSelectedViews(standardVizSelectedViews(), "standardVizSelectedViewsV1");
-      await renderDataCharts();
-    } else {
-      renderRawVizPrompt();
+    if (!dataCache && !loadingDataView) {
+      await loadDataView({ deferRender: true });
     }
+    await renderDataCharts();
   }
 }
 
@@ -671,6 +640,9 @@ async function renderDataCharts() {
   if (!dataCache) return;
   destroyDataGrid();
   disposeCharts();
+  const fixedViews = activePreprocessStep === "raw_viz"
+    ? rawVizSelectedViews()
+    : (activePreprocessStep === "standard_viz" ? standardVizSelectedViews() : []);
   await experimentRefreshCharts({
     viewName: "dataViews",
     storageKey: preprocessDataViewsStorageKey(),
@@ -678,6 +650,7 @@ async function renderDataCharts() {
     contextId: dataCache?.context_id,
     page: "preprocess",
     state: {},
+    fallbackViews: fixedViews,
     label: "preprocess chart_data",
     beforeRender: ({ grid }) => {
       grid.classList.remove("dashboard-grid", "grid-stack");
@@ -708,10 +681,17 @@ async function renderDataCharts() {
 function renderDataOverview() {
   const grid = $("chartGrid");
   if (!grid) return;
-  destroyDataGrid();
-  disposeCharts();
-  grid.classList.remove("dashboard-grid", "grid-stack");
-  grid.innerHTML = preprocessLoadedDatasetHtml();
+  experimentRenderGridStack({
+    grid,
+    mode: "preprocess",
+    views: ["loaded_dataset"],
+    loadLayout: loadDataGridLayout,
+    defaultLayout: () => ({ x: 0, y: 0, w: 4, h: 2 }),
+    normalizeLayout: (_view, layout) => normalizeDataGridLayout("loaded_dataset", layout),
+    htmlForView: () => preprocessLoadedDatasetHtml(),
+    minWidthForView: () => 2,
+    minHeightForView: () => 1,
+  });
 }
 
 function metricBlockHtml(items, extraClass = "") {
@@ -766,22 +746,13 @@ function renderPreprocessDetailGrid() {
   experimentRenderGridStack({
     grid,
     mode: "preprocess",
-    views: ["detail_scale", "detail_stats"],
-    loadLayout: () => {
-      const saved = loadDataGridLayout();
-      return {
-        ...saved,
-        detail_scale: { ...(saved.detail_scale || {}), x: 0, y: 0, w: 4, h: 2 },
-        detail_stats: { ...(saved.detail_stats || {}), x: 0, y: 2, w: 4 },
-      };
-    },
-    defaultLayout: view => ({
-      detail_scale: { x: 0, y: 0, w: 4, h: 2 },
-      detail_stats: { x: 0, y: 2, w: 4, h: 3 },
-    })[view] || { x: 0, y: 0, w: 2, h: 2 },
-    normalizeLayout: (_view, layout) => normalizeDataGridLayout("detail_scale", layout),
+    views: ["detail_overview"],
+    loadLayout: loadDataGridLayout,
+    defaultLayout: () => ({ x: 0, y: 0, w: 4, h: 4 }),
+    normalizeLayout: (_view, layout) => normalizeDataGridLayout("detail_overview", layout),
     htmlForView: view => preprocessDetailCardHtml(view),
     minWidthForView: () => 2,
+    minHeightForView: () => 2,
   });
 }
 
@@ -796,6 +767,15 @@ function preprocessDetailCardHtml(view) {
   const meta = currentDatasetMeta || {};
   const quality = dataCache?.data_quality || {};
   const features = dataCache?.features || meta.features || [];
+  if (view === "detail_overview") {
+    return `<section class="chart-card wide preprocess-info-card standardize-overview-card">
+      <div class="chart-head" aria-label="拖动卡片"></div>
+      <div class="info-card-body preprocess-step-body standardize-overview-body">
+        ${preprocessDetailCardHtml("detail_scale")}
+        ${preprocessDetailCardHtml("detail_stats")}
+      </div>
+    </section>`;
+  }
   if (view === "detail_scale") {
     return preprocessInfoCardHtml("数据规模", `
       ${metricBlockHtml([
@@ -909,6 +889,65 @@ std  = ${row ? num(row.std, 6) : "--"}</div>
       ${standardizeTableHtml(row ? [row] : dataCache?.standardize_table || [])}
     </section>
   </div>`;
+}
+
+function renderPreprocessStandardizeGrid() {
+  const grid = $("chartGrid");
+  if (!grid) return;
+  const feature = dataCache?.feature || $("dataFeature")?.value || "";
+  const row = (dataCache?.standardize_table || []).find(item => item.feature === feature);
+  const views = ["standardize_overview"];
+  experimentRenderGridStack({
+    grid,
+    mode: "preprocess",
+    views,
+    loadLayout: loadDataGridLayout,
+    defaultLayout: () => ({ x: 0, y: 0, w: 4, h: 4 }),
+    normalizeLayout: (view, layout) => normalizeDataGridLayout(view, layout),
+    htmlForView: () => preprocessStandardizeCardHtml("overview", feature, row),
+    minWidthForView: () => 2,
+    minHeightForView: () => 2,
+  });
+}
+
+function preprocessStandardizeCardHtml(kind, feature, row) {
+  if (kind === "overview") {
+    return `<section class="chart-card wide preprocess-info-card standardize-overview-card">
+      <div class="chart-head" aria-label="拖动卡片"></div>
+      <div class="info-card-body preprocess-step-body standardize-overview-body">
+        ${preprocessStandardizeSectionHtml("formula", feature, row)}
+        ${preprocessStandardizeSectionHtml("preview", feature, row)}
+        ${preprocessStandardizeSectionHtml("range", feature, row)}
+      </div>
+    </section>`;
+  }
+  return preprocessStandardizeSectionHtml(kind, feature, row);
+}
+
+function preprocessStandardizeSectionHtml(kind, feature, row) {
+  if (kind === "formula") {
+    return `<section class="content-card preprocess-lesson">
+        <h2>数据标准化</h2>
+        <p>标准化把不同量纲的特征转换到更容易比较和训练的尺度上。</p>
+        <div class="formula">z = (x - mean) / std
+
+当前特征：${escapeHtml(feature)}
+mean = ${row ? num(row.mean, 6) : "--"}
+std  = ${row ? num(row.std, 6) : "--"}</div>
+        <div class="teaching-note">标准化后，特征均值会接近 0，标准差会接近 1。后续训练可以选择使用标准化特征。</div>
+      </section>`;
+  }
+  if (kind === "preview") {
+    return `<section class="content-card preprocess-lesson">
+        <h2>标准化后前 5 行</h2>
+        <p>直接观察原始特征与标准化特征的数值变化。</p>
+        ${previewTableHtml(dataCache?.standardized_preview || [])}
+      </section>`;
+  }
+  return `<section class="content-card preprocess-lesson">
+      <h2>标准化范围对比</h2>
+      ${standardizeTableHtml(row ? [row] : dataCache?.standardize_table || [])}
+    </section>`;
 }
 
 function renderDatasetEmptyState() {
@@ -1118,15 +1157,12 @@ function renderRawDataVizPanel() {
       </div>
     </div>`;
 }
-function visualizationPanelHtml({ title, views, modules }) {
+function visualizationPanelHtml({ title }) {
   const datasetLoaded = Boolean(currentDatasetMeta);
   const featureOptions = datasetLoaded ? (currentDatasetMeta?.features || []) : [];
   const selectedFeature = dataCache?.feature || viewStateStore.preprocessFormStateV1?.feature || featureOptions[0] || "";
   const featureOptionsHtml = featureOptions
     .map(opt => optionHtml(opt, selectedFeature, opt))
-    .join("");
-  const moduleOptionsHtml = modules
-    .map(opt => checkboxRowHtml("dataViews", opt.value, opt.label, views.includes(opt.value), !datasetLoaded))
     .join("");
   return `
     <div class="right-title">控制面板</div>
@@ -1164,3 +1200,23 @@ function renderStandardDataVizPanel() {
     ],
   });
 }
+
+function visualizationPanelHtmlClean({ title }) {
+  const datasetLoaded = Boolean(currentDatasetMeta);
+  const featureOptions = datasetLoaded ? (currentDatasetMeta?.features || []) : [];
+  const selectedFeature = dataCache?.feature || viewStateStore.preprocessFormStateV1?.feature || featureOptions[0] || "";
+  const featureOptionsHtml = featureOptions
+    .map(opt => optionHtml(opt, selectedFeature, opt))
+    .join("");
+  return `
+    <div class="right-title">控制面板</div>
+    <div class="control-card dataset-load-card">
+      <h3>${escapeHtml(title)}</h3>
+      <div class="control-group" aria-label="特征选择">
+        <label class="control-label" for="dataFeature">特征选择</label>
+        <select id="dataFeature" ${datasetLoaded ? "" : "disabled"}>${featureOptionsHtml}</select>
+      </div>
+    </div>`;
+}
+
+visualizationPanelHtml = visualizationPanelHtmlClean;

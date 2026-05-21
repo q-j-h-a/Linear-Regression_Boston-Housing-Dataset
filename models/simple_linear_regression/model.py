@@ -419,6 +419,8 @@ def build_training_history(x: np.ndarray, y: np.ndarray, w0: float, b0: float, l
     history = []
     w = float(w0)
     b = float(b0)
+    previous_loss = None
+    stable_steps = 0
 
     for epoch in range(epochs + 1):
         m = compute_metrics(x, y, w, b)
@@ -442,11 +444,24 @@ def build_training_history(x: np.ndarray, y: np.ndarray, w0: float, b0: float, l
             "x_first5": np.round(x[:5], 4).tolist(),
             "y_first5": np.round(y[:5], 4).tolist(),
         })
+        if not np.isfinite(w) or not np.isfinite(b) or not np.isfinite(m["mse"]) or m["mse"] > 1e14:
+            history[-1]["stop_reason"] = "diverged"
+            break
+        if previous_loss is not None:
+            scale = max(1.0, abs(previous_loss))
+            if abs(previous_loss - m["mse"]) / scale < 1e-8:
+                stable_steps += 1
+            else:
+                stable_steps = 0
+            if stable_steps >= 8:
+                history[-1]["stop_reason"] = "converged"
+                break
+        previous_loss = m["mse"]
         if epoch < epochs:
             w = new_w
             b = new_b
-            if not np.isfinite(w) or not np.isfinite(b) or not np.isfinite(m["mse"]) or m["mse"] > 1e14:
-                break
+    if history and len(history) >= epochs + 1:
+        history[-1]["stop_reason"] = "max_epochs"
     return history
 
 
@@ -677,9 +692,12 @@ def predict(payload: dict) -> dict:
 
     x = df_train[x_col].astype(float).to_numpy()
     y = df_train[TARGET_COLUMN].astype(float).to_numpy()
+    target_mean = float(df_raw[TARGET_COLUMN].mean()) if use_standardized else None
+    target_std = float(df_raw[TARGET_COLUMN].std(ddof=0)) if use_standardized else None
     w = model_state["w"]
     b = model_state["b"]
     pred = float(w * model_x + b)
+    pred_raw = float(pred * target_std + target_mean) if use_standardized else pred
     line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
     line_y = w * line_x + b
     raw_x = df_raw[feature].astype(float).to_numpy()
@@ -713,9 +731,13 @@ def predict(payload: dict) -> dict:
         "train_context_id": model_state["train_context_id"],
         "train_frame_index": model_state["train_frame_index"],
         "prediction": pred,
+        "prediction_std": pred if use_standardized else None,
+        "prediction_raw": pred_raw,
+        "target_mean": target_mean,
+        "target_std": target_std,
         "scatter": {"x": np.round(x, 6).tolist(), "y": np.round(y, 6).tolist()},
         "line": {"x": np.round(line_x, 6).tolist(), "y": np.round(line_y, 6).tolist()},
-        "predict_point": {"x": float(model_x), "y": pred, "raw_x": float(raw_value)},
+        "predict_point": {"x": float(model_x), "y": pred, "raw_x": float(raw_value), "raw_y": pred_raw},
         "nearby": nearby,
         "summary": series_summary(pd.Series(x), pd.Series(y)),
     }
@@ -932,9 +954,12 @@ def predict(payload: dict) -> dict:
 
     x = df_train[x_col].astype(float).to_numpy()
     y = df_train[target].astype(float).to_numpy()
+    target_mean = float(raw[target].mean()) if use_standardized else None
+    target_std = float(raw[target].std(ddof=0)) if use_standardized else None
     w = float(frame["w"])
     b = float(frame["b"])
     pred = float(w * model_x + b)
+    pred_raw = float(pred * target_std + target_mean) if use_standardized else pred
     line_x = np.linspace(float(np.min(x)), float(np.max(x)), 160)
     line_y = w * line_x + b
     raw_x = raw[feature].astype(float).to_numpy()
@@ -984,9 +1009,13 @@ def predict(payload: dict) -> dict:
         "train_context_id": train_context_id,
         "train_frame_index": frame_index,
         "prediction": pred,
+        "prediction_std": pred if use_standardized else None,
+        "prediction_raw": pred_raw,
+        "target_mean": target_mean,
+        "target_std": target_std,
         "scatter": {"x": np.round(x, 6).tolist(), "y": np.round(y, 6).tolist()},
         "line": {"x": np.round(line_x, 6).tolist(), "y": np.round(line_y, 6).tolist()},
-        "predict_point": {"x": float(model_x), "y": pred, "raw_x": float(raw_value)},
+        "predict_point": {"x": float(model_x), "y": pred, "raw_x": float(raw_value), "raw_y": pred_raw},
         "nearby": nearby,
         "summary": series_summary(pd.Series(x), pd.Series(y)),
     }

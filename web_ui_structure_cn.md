@@ -511,3 +511,146 @@ static/assets/trainee-avatar.svg
 ```
 
 因此 `app.py` 不需要合并 `111` 中的理论助手、TTS、大模型配置或设置页相关后端逻辑。
+
+## 12. 当前实验界面更新约定
+
+本节记录当前正在实现的实验主线，优先级高于前文中已经过时的卡片拆分描述。
+
+### 12.1 数据预处理卡片结构
+
+数据预处理顶部流程仍使用公共顶部区域 `#pageTopSlot`：
+
+```text
+01 加载原始数据
+02 数据详情
+03 原始数据可视化
+04 数据标准化
+05 标准数据可视化
+```
+
+当前中间内容区约定：
+
+```text
+01 加载原始数据
+└── GridStack: loaded_dataset
+    └── 原始数据集已加载 / 数据概览 / 原始数据表格
+
+02 数据详情
+└── GridStack: detail_overview
+    └── 一个大卡片
+        ├── 数据规模与字段说明
+        ├── 数据质量
+        └── 统计摘要
+
+03 原始数据可视化
+├── 未选择显示模块：浅蓝色提示卡片
+└── 已选择显示模块：原始散点图 / 全特征线性相关系数
+
+04 数据标准化
+└── GridStack: standardize_overview
+    └── 一个大卡片
+        ├── 标准化公式
+        ├── 当前特征 mean / std
+        ├── 标准化后前 5 行
+        └── 特征标准化明细
+
+05 标准数据可视化
+├── 未选择显示模块：浅蓝色提示卡片
+└── 已选择显示模块：标准化散点图 / 全特征线性相关系数
+```
+
+视觉与交互约定：
+
+- 中间结果卡片统一使用 GridStack，支持拖拽和拉伸。
+- `数据详情` 与 `数据标准化` 采用“外层一个可拖拽卡片，内部多块信息区”的结构。
+- 合并卡片中，内部内容要与外层卡片视觉贴合，避免出现明显的双层卡片割裂感。
+- 右侧控制面板标题不显示蓝色圆点。
+- `加载数据集` 按钮与训练页按钮一样具备 hover 和 active 点击反馈。
+
+### 12.2 模型训练顶部流程
+
+模型训练页使用独立的顶部 5 步流程：
+
+```text
+#pageTopSlot
+└── .preprocess-flow#trainFlow
+    ├── button[data-train-step="process"]            01 熟悉回归过程
+    ├── button[data-train-step="preprocess_effect"]  02 熟悉预处理影响
+    ├── button[data-train-step="loss"]               03 熟悉损失函数
+    ├── button[data-train-step="optimization"]       04 熟悉优化准则
+    └── button[data-train-step="custom"]             05 自定义参数训练
+```
+
+状态规则与预处理流程一致：
+
+- `.active` 表示当前查看步骤。
+- `.done` 表示已到达过的进度步骤。
+- 切换步骤时保留必要表单状态和显示模块状态。
+
+### 12.3 熟悉预处理影响
+
+`02 熟悉预处理影响` 是当前模型训练页的重点模块。
+
+右侧控制面板结构：
+
+```text
+#rightPanel
+└── .control-card.dataset-load-card
+    ├── h3 熟悉预处理的影响
+    ├── select#trainFeature                 默认 RM
+    ├── .check-list[name="trainCompareViews"]
+    │   ├── 原始散点图
+    │   └── 标准化散点图
+    ├── input#w0                            文本输入，默认 0
+    ├── input#b0                            文本输入，默认 0
+    ├── range#lr                            默认 0.030，带上下微调按钮
+    ├── range#epochs                        默认 100，带上下微调按钮
+    ├── range#speed                         默认 90ms，带上下微调按钮
+    ├── button#stepBtn                      单步训练
+    ├── button#autoBtn                      自动演示
+    ├── button#pauseBtn                     暂停
+    ├── button#resetBtn                     重置
+    └── .runtime
+        ├── 当前周期
+        ├── 原始 Loss
+        └── 标准化 Loss
+```
+
+中间内容区结构：
+
+```text
+未选择图表
+└── section.load-dataset-card
+    └── 请在右侧同时选择原始散点图和标准化散点图，选择特征，观察在其它参数相同的情况下，训练模型时回归的区别
+
+已选择图表
+└── .dashboard-grid.grid-stack#trainCompareWrap
+    ├── .grid-stack-item[data-view="raw_scatter"]
+    │   └── 原始散点图
+    └── .grid-stack-item[data-view="standard_scatter"]
+        └── 标准化散点图
+```
+
+交互约定：
+
+- 初次进入步骤 02 时不默认勾选图表，只显示提示卡片。
+- 勾选任意图表后，提示卡片移除，图表进入两列 GridStack 布局。
+- `原始散点图` 与 `标准化散点图` 默认宽度均为 2 列、高度为 2 行。
+- 图表卡片支持拖拽和拉伸。
+- 图表卡片只在卡片头部显示标题和副标题，图表内部不重复显示标题。
+- 切到其它训练步骤或数据预处理页后再返回，保留已勾选图表、特征和参数。
+- GridStack 在页面切换时需要先安全销毁旧实例；若旧 DOM 已不存在，应跳过布局保存和属性同步，避免空节点错误。
+
+### 12.4 运行时状态键
+
+当前新增或重点使用的状态键：
+
+```text
+activeTrainStepV1          当前训练步骤
+trainProgressStepV1        训练页已到达进度
+trainFormStateV1           训练页表单参数
+trainCompareViewsV1        熟悉预处理影响已选图表
+trainGridLayoutV2          普通训练图表布局
+preprocessGridLayoutV7     数据预处理图表/卡片布局
+currentDatasetMetaV1       当前数据集元信息
+```
