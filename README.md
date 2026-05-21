@@ -1,29 +1,33 @@
 # 简单线性回归教学实验
 
-这是一个面向教学演示的 Web 实验项目，用 Flask 提供后端接口，用原生前端、ECharts 和 GridStack 构建可交互的实验页面。当前重点是让学生按流程理解简单线性回归中的数据加载、数据预处理、模型训练、模型评估和模型预测。
+这是一个面向初学者的简单线性回归 Web 教学实验。项目用 Flask 提供后端接口，用原生 JavaScript、ECharts 和 GridStack 构建前端交互，让学生在同一个页面里完成数据预处理、模型训练、模型评估和模型预测，并能按步骤查看对应的核心机器学习代码。
 
-## 当前功能
+项目定位不是“展示一整份工程源码”，而是“先看实验现象，再展开当前步骤代码”。因此每个关键操作旁边都提供“查看代码”入口，代码以 Python / NumPy 风格呈现，重点解释线性回归逻辑，而不是前端实现细节。
 
-- 理论学习：展示实验基本信息、实验目的、前置知识、模型介绍、预期效果和思考拓展。
-- 数据预处理：通过顶部流程条组织 `01 加载原始数据集 -> 02 数据详情 -> 03 原始数据可视化 -> 04 数据标准化 -> 05 标准数据可视化`。
-- 数据详情：加载数据集后，中间区域显示数据规模、字段中文含义、数据质量和统计摘要。
-- 数据标准化：后端直接提供预处理后的 CSV，列名和列顺序与原始数据保持一致，目标列也参与标准化。
-- 模型训练与预测：基于当前数据版本和特征完成训练、评估与预测展示。
+## 当前能力
 
-## 启动
+- 理论部分：展示实验基本信息、实验目的、前置知识、模型介绍、数据集、训练模型、学习准则、参数优化、评价指标、预测结果和思考拓展。
+- 数据预处理：加载 Boston Housing 数据集，查看数据详情，观察原始数据可视化，执行 z-score 标准化，观察标准化后的数据。
+- 模型训练：支持回归过程、预处理影响、损失函数、优化准则和自定义参数训练等教学步骤。
+- 模型评估：展示当前训练模型的拟合效果，并提供 RMSE、MAE、R² 指标解释。
+- 模型预测：基于当前训练帧的 w、b 和特征列输入新样本，展示预测可视化、原始散点图和预测计算过程。
+- 代码解释层：预处理、训练、评估、预测页面均提供“查看代码”按钮，右侧抽屉显示当前步骤的核心代码、操作说明、逐行解释和复制按钮。
+- 交互状态：训练参数、预测输入、评估指标模式、图表布局等状态在前端内存中维护，页面切换时尽量保持教学上下文。
+
+## 运行方式
 
 ```bash
 python -m pip install -r requirements.txt
 python app.py
 ```
 
-浏览器访问：
+启动后访问：
 
 ```text
 http://127.0.0.1:5000/
 ```
 
-前端依赖通过 CDN 在 `templates/index.html` 中加载：
+前端依赖通过 CDN 引入，主要包括：
 
 ```text
 echarts
@@ -31,92 +35,188 @@ echarts-gl
 gridstack
 ```
 
-## 目录结构
+## 项目结构
 
 ```text
 simple_linear_regression/
-├─ app.py
-├─ core/
-├─ datasets/
-│  ├─ raw/
-│  │  └─ boston_housing.csv
-│  └─ preprocessed/
-│     └─ boston_housing_preprocessed.csv
-├─ models/
-│  └─ simple_linear_regression/
-│     ├─ dataset.py
-│     ├─ model.py
-│     ├─ controls/
-│     └─ charts/
-├─ static/
-│  ├─ assets/
-│  └─ js/
-│     ├─ api.js
-│     ├─ app_shell.js
-│     ├─ chart_renderers.js
-│     ├─ control_renderers.js
-│     ├─ experiment_runtime.js
-│     ├─ predict_page.js
-│     ├─ preprocess_page.js
-│     ├─ schema_registry.js
-│     ├─ state_runtime.js
-│     ├─ theory_page.js
-│     ├─ train_page.js
-│     └─ view_renderers.js
-├─ templates/
-│  └─ index.html
-├─ tools/
-├─ requirements.txt
-└─ web_ui_structure_cn.md
+├── app.py
+├── requirements.txt
+├── README.md
+├── web_ui_structure_cn.md
+├── core/
+│   ├── chart_registry.py
+│   ├── context_store.py
+│   ├── control_registry.py
+│   ├── data_utils.py
+│   ├── dataset_profile.py
+│   ├── experiment_registry.py
+│   ├── registry.py
+│   └── schemas.py
+├── datasets/
+│   ├── raw/
+│   │   └── boston_housing.csv
+│   └── preprocessed/
+│       └── boston_housing_preprocessed.csv
+├── models/
+│   └── simple_linear_regression/
+│       ├── dataset.py
+│       ├── model.py
+│       ├── controls/
+│       │   ├── evaluate.py
+│       │   ├── predict.py
+│       │   ├── preprocess.py
+│       │   └── train_eval.py
+│       └── charts/
+│           ├── evaluate/
+│           ├── predict/
+│           ├── preprocess/
+│           └── train_eval/
+├── static/
+│   ├── assets/
+│   ├── theory-html/
+│   └── js/
+│       ├── api.js
+│       ├── app_shell.js
+│       ├── chart_renderers.js
+│       ├── control_renderers.js
+│       ├── evaluate_page.js
+│       ├── experiment_runtime.js
+│       ├── predict_page.js
+│       ├── preprocess_page.js
+│       ├── schema_registry.js
+│       ├── state_runtime.js
+│       ├── theory_page.js
+│       ├── train_page.js
+│       └── view_renderers.js
+└── templates/
+    └── index.html
 ```
 
 ## 数据集约定
 
-数据集统一放在 `datasets/` 下，不再把 CSV 放在项目根目录。
+默认数据集为 Boston Housing：
 
 ```text
-datasets/raw/           原始数据集
-datasets/preprocessed/  预处理后的数据集
-```
-
-当前 Boston Housing 数据集约定：
-
-```text
-原始数据集：
 datasets/raw/boston_housing.csv
-
-预处理后数据集：
 datasets/preprocessed/boston_housing_preprocessed.csv
 ```
 
-CSV 格式规则：
-
-- 第一行是列名。
-- 最后一列是目标列，当前为 `MEDV`。
-- 其他数值列作为候选特征。
-- 预处理后的 CSV 与原始 CSV 保持相同列名和相同列顺序。
-- 预处理后的 CSV 通过文件名区分，不再给列名追加 `_standardized`。
-- 当前标准化会处理所有数值列，包括目标列 `MEDV`。
-
-## 数据预处理页面
-
-顶部流程条是数据预处理阶段的主线，节点可点击切换：
+字段包含：
 
 ```text
-01 加载原始数据集
+CRIM, ZN, INDUS, CHAS, NOX, RM, AGE, DIS, RAD, TAX, PTRATIO, B, LSTAT, MEDV
+```
+
+当前实验默认将 `MEDV` 作为目标值 y，其余数值列作为输入特征 X。标准化实验中，特征列和目标列都会进入 z-score 标准化流程：
+
+```python
+z = (x - mean) / std
+```
+
+预测页会根据训练时的标准化信息处理新输入：
+
+```python
+x_std = (x_raw - feature_mean) / feature_std
+y_std_pred = w * x_std + b
+y_raw_pred = y_std_pred * target_std + target_mean
+```
+
+## 主要页面
+
+### 数据预处理
+
+数据预处理页按 5 个步骤组织：
+
+```text
+01 加载原始数据
 02 数据详情
 03 原始数据可视化
 04 数据标准化
 05 标准数据可视化
 ```
 
-当前交互约定：
+适合展示的核心代码包括：
 
-- `01 加载原始数据集`：中间区域只提示“请先在右侧加载数据集”，右侧提供数据集选择框和加载按钮。
-- `02 数据详情`：加载后在中间区域显示数据规模、字段说明、数据质量和统计摘要，右侧不需要对应卡片。
-- `04 数据标准化`：中间区域展示标准化后的前 5 行，右侧不需要单独编号卡片。
-- 中间区域的数据卡片使用 GridStack，支持拖动和拉伸。
-- 右侧“加载数据集”卡片不显示编号、未加载状态、折叠箭头、数据状态或样本数量。
+- 加载数据：读取 CSV，拆分 X/y。
+- 数据统计：样本数量、特征数量、缺失值、重复值、describe 统计。
+- 原始可视化：选择当前特征和目标列绘制散点图。
+- 数据标准化：计算 mean/std 并进行 z-score 转换。
+- 标准化可视化：使用标准化后的特征和目标值绘制图表。
+
+### 模型训练
+
+模型训练页按教学目标分为：
+
+```text
+01 熟悉回归过程
+02 熟悉预处理影响
+03 熟悉损失函数
+04 熟悉优化准则
+05 自定义参数训练
+```
+
+核心概念包括：
+
+- 预测函数：`y_pred = w * x + b`
+- 损失函数：`MSE = mean((y - y_pred) ** 2)`
+- 梯度下降：沿负梯度方向更新 `w` 和 `b`
+- 参数轨迹：观察 w、b、loss 随 epoch 的变化
+- 预处理影响：对比原始特征训练和标准化特征训练
+
+自定义参数训练会把当前特征、初始 w、初始 b、学习率、训练轮数等配置联动到代码面板中，让学生看到“当前操作对应的代码”。
+
+### 模型评估
+
+模型评估页复用当前训练得到的模型参数，展示：
+
+- 拟合效果图
+- RMSE
+- MAE
+- R²
+
+指标代码示例：
+
+```python
+mse = np.mean((y - y_pred) ** 2)
+rmse = np.sqrt(mse)
+mae = np.mean(np.abs(y - y_pred))
+ss_res = np.sum((y - y_pred) ** 2)
+ss_tot = np.sum((y - np.mean(y)) ** 2)
+r2 = 1 - ss_res / ss_tot
+```
+
+### 模型预测
+
+模型预测页使用当前训练页的模型状态。右侧控制面板包含：
+
+- 当前模型：来源、特征、w、b。
+- 特征选择：跟随训练页当前特征，只读展示。
+- 输入类型：原始特征值或标准特征值。
+- 输入特征值：普通文本输入框，不使用数字步进箭头。
+- 开始预测：只有点击按钮或在输入框按 Enter 时才更新预测结果。
+- 查看预测代码：打开预测代码抽屉。
+
+预测页有一个重要交互规则：修改输入框内容时，中间图表和计算过程保持不变，不自动恢复默认，也不自动展示新结果。只有触发“开始预测”后，才更新预测点、预测值和计算过程。
+
+## 代码解释层设计
+
+代码展示使用右侧抽屉，而不是占用主图表区域。抽屉结构固定为：
+
+```text
+当前步骤代码
+├── 当前操作
+├── 核心代码
+├── 代码解释
+└── 复制代码
+```
+
+交互规则：
+
+- 点击“查看代码”打开抽屉。
+- 代码抽屉只通过右上角 `x` 关闭。
+- 点击页面其他区域不会关闭抽屉，避免学生阅读代码时误触导致面板消失。
+- 代码片段控制在教学友好的长度，优先展示机器学习逻辑。
+- 默认展示 Python / NumPy 风格代码，不展示 React、ECharts 或 GridStack 配置。
 
 ## API
 
@@ -136,7 +236,7 @@ POST /api/chart_data
 simple_linear_regression
 ```
 
-常用动作：
+主要 action：
 
 ```text
 load_dataset
@@ -146,175 +246,42 @@ prepare_train
 predict
 ```
 
-## 关键文件
+## 前后端职责
 
-- `models/simple_linear_regression/model.py`：实验后端动作、数据加载、标准化数据读取、字段说明和训练预测逻辑。
-- `models/simple_linear_regression/dataset.py`：数据集描述协议和预处理转换约定。
-- `static/js/preprocess_page.js`：数据预处理页面流程、加载数据集、数据详情、标准化展示和 GridStack 布局。
-- `static/js/control_renderers.js`：右侧控制面板渲染。
-- `static/js/state_runtime.js`：GridStack 初始化和布局保存。
-- `templates/index.html`：整体布局、样式、顶部流程条样式和 CDN 依赖。
+- `app.py`：Flask 路由入口，提供页面、实验配置、图表数据和动作执行接口。
+- `core/`：实验注册、页面 schema、图表注册、控制面板注册、上下文存储等通用能力。
+- `models/simple_linear_regression/model.py`：数据加载、标准化、训练、预测等核心实验逻辑。
+- `models/simple_linear_regression/charts/`：各页面图表数据构造器。
+- `models/simple_linear_regression/controls/`：各页面右侧控制面板 schema。
+- `static/js/preprocess_page.js`：数据预处理页流程、图表和代码面板。
+- `static/js/train_page.js`：训练页步骤、动画、对比、损失、优化和代码面板。
+- `static/js/evaluate_page.js`：评估页图表、指标切换和代码面板。
+- `static/js/predict_page.js`：预测页基础图表、预测状态、输入交互和代码面板。
+- `templates/index.html`：整体布局、样式、侧边栏、右侧面板和脚本引入。
 
 ## 验证命令
 
 ```bash
 python -m compileall app.py core models
 node --check static/js/api.js
+node --check static/js/app_shell.js
 node --check static/js/chart_renderers.js
 node --check static/js/control_renderers.js
-node --check static/js/view_renderers.js
-node --check static/js/state_runtime.js
-node --check static/js/schema_registry.js
+node --check static/js/evaluate_page.js
 node --check static/js/experiment_runtime.js
-node --check static/js/theory_page.js
-node --check static/js/preprocess_page.js
 node --check static/js/predict_page.js
+node --check static/js/preprocess_page.js
+node --check static/js/schema_registry.js
+node --check static/js/state_runtime.js
+node --check static/js/theory_page.js
 node --check static/js/train_page.js
-node --check static/js/app_shell.js
+node --check static/js/view_renderers.js
 ```
 
-## 当前数据预处理流程补充
+## 维护建议
 
-数据预处理页采用顶部 5 步流程条，深蓝色表示当前点击位置，浅蓝色表示已到达的进度位置。流程为：
-
-```text
-01 加载原始数据 -> 02 数据详情 -> 03 原始数据可视化 -> 04 数据标准化 -> 05 标准数据可视化
-```
-
-右侧控制面板按当前步骤显示对应卡片：
-
-- `01 加载原始数据`：显示 `加载数据集` 卡片，加载数据后不自动跳到第二步。
-- `02 数据详情`：右侧不显示操作卡片；中间展示 `数据规模` 和 `统计详情`。
-- `03 原始数据可视化`：显示 `原始数据可视化` 卡片，包含 `特征选择` 和 `显示模块`。显示模块包括 `原始散点图`、`全特征线性相关系数`。
-- `04 数据标准化`：显示 `数据标准化` 卡片，学生可切换不同特征，观察该特征的均值、标准差、标准化公式和前 5 行标准化结果。
-- `05 标准数据可视化`：显示 `标准数据可视化` 卡片，包含 `特征选择` 和 `显示模块`。显示模块包括 `标准化散点图`、`全特征线性相关系数`。
-
-原始数据可视化和标准数据可视化进入时默认显示提示：
-
-```text
-请在右侧选择特征和显示模块
-```
-
-只有选择显示模块后才渲染图表；再次进入对应步骤时会恢复已选择的模块和图表状态。
-
-## 当前理论部分合并约定
-
-理论部分已以当前项目为主框架，合并来自 `111` 项目的课件化展示能力，但不再保留 `111` 文件夹。
-
-当前理论页由 `static/js/theory_page.js` 渲染，支持：
-
-- 理论主题课件式幻灯片展示。
-- 查看对应的静态理论详情 HTML。
-- 课件编辑、组件拖拽、文字样式调整和本地保存。
-- 通过 `html2pdf` 导出课件 PDF。
-
-理论静态正文仍放在：
-
-```text
-static/theory-html/
-```
-
-本次合并明确不包含已废弃的理论助手功能，因此项目中不需要接入以下内容：
-
-```text
-theory_assistant.js
-settings_page.js
-student_page.js
-/api/theory_chat
-/api/theory_explain
-/api/assistant_config
-/api/tts
-/api/local_tts
-```
-
-后端 `app.py` 仍只保留实验框架所需 API，理论课件功能主要在前端完成。
-
-## 当前实验页面补充约定
-
-### 数据预处理
-
-数据预处理仍按顶部 5 步组织：
-
-```text
-01 加载原始数据 -> 02 数据详情 -> 03 原始数据可视化 -> 04 数据标准化 -> 05 标准数据可视化
-```
-
-当前界面约定如下：
-
-- 右侧控制面板标题不再显示额外蓝色圆点。
-- `01 加载原始数据` 的中间“原始数据集已加载”卡片使用 GridStack，支持拖拽和拉伸。
-- `02 数据详情` 的中间内容合并为一个可拖拽、可拉伸的大卡片，内部包含数据规模、字段说明、数据质量和统计摘要。
-- `04 数据标准化` 的公式说明、标准化后前 5 行和标准化明细合并到一个可拖拽、可拉伸的大卡片中；外层标题只保留卡片内部主标题，避免重复标题。
-- `03 原始数据可视化` 和 `05 标准数据可视化` 默认显示提示卡片，只有勾选右侧显示模块后才渲染图表；再次进入时恢复已选模块。
-
-### 模型训练
-
-模型训练页当前按顶部 5 步组织：
-
-```text
-01 熟悉回归过程 -> 02 熟悉预处理影响 -> 03 熟悉损失函数 -> 04 熟悉优化准则 -> 05 自定义参数训练
-```
-
-当前已重点实现 `02 熟悉预处理影响`：
-
-- 点击步骤 02 后，右侧默认特征为 `RM`。
-- 中间未选择图表时显示浅蓝色提示卡片：提示学生同时选择原始散点图和标准化散点图，比较其它参数相同时的训练差异。
-- 右侧显示模块只保留两个直接勾选项：`原始散点图`、`标准化散点图`。
-- 勾选图表后，中间提示卡片自动移除，两张图默认以两列布局展示，并支持 GridStack 拖拽和拉伸。
-- 图表卡片只保留外层标题和副标题，不再在图表区域内重复显示标题。
-- 右侧参数包含 `w`、`b` 输入框，学习率、周期数、动画速度滑条及上下微调按钮。
-- `单步训练`、`自动演示`、`暂停`、`重置` 为按钮式交互，带 hover / active 点击反馈。
-- 当前周期、原始 Loss、标准化 Loss 在右侧底部实时展示。
-- 切换到其它模块后再回到步骤 02，会保留已选择的显示模块和训练参数。
-
-训练过程后端支持自动停止：默认训练在达到最大轮数、Loss 收敛或发散时结束。
-
-## 当前实现更新（2026-05-21）
-
-本节记录当前教学实验页面的最新交互约定，优先级高于下方旧版阶段性说明。
-
-### 数据预处理
-
-- `03 原始数据可视化` 默认直接显示两张图：原始散点图、全特征线性相关系数图。
-- `05 标准数据可视化` 默认直接显示两张图：标准化散点图、全特征线性相关系数图。
-- 右侧控制面板删除“显示模块”，只保留页面标题和特征选择。
-- 标准化会同时作用于特征列和目标列 `MEDV`，后续训练、评估、预测都以标准化目标值作为模型空间输出。
-
-### 模型训练
-
-模型训练页按顶部 5 步组织：
-
-```text
-01 熟悉回归过程 -> 02 熟悉预处理影响 -> 03 熟悉损失函数 -> 04 熟悉优化准则 -> 05 自定义参数训练
-```
-
-- `01 熟悉回归过程`：中间只显示标准化散点图；右侧沿用训练控制面板样式，底部只显示当前周期和标准 Loss。
-- `02 熟悉预处理影响`：中间固定显示原始散点图和标准化散点图；右侧删除显示模块，保留特征、参数、学习率、周期数、动画速度和训练按钮。
-- `03 熟悉损失函数`：左图用单样本、随机 10 个样本、最大残差前 5 三种模式解释局部残差；右图用残差散点图或残差直方图解释整体误差分布，不再绘制平方误差前 10 图，也不默认展示全量残差线。
-- `04 熟悉优化准则`：中间固定为 4 个卡片：Loss 等高线图、切面图、MSE Loss 随 epoch 变化、3D Loss 曲面图。切面选择放在切面图卡片内部，训练按钮保持“单步训练 / 自动演示 / 暂停 / 重置”。
-- `05 自定义参数训练`：中间保留 5 个区域：标准化散点图、Loss 图、w 参数轨迹图、b 参数轨迹图、本轮计算过程。前四个图默认 2 行 2 列，计算过程在下方独占一行。
-- 如果尚未加载数据集或尚未完成训练，页面使用居中的提示态，不再显示突兀的“加载失败”。
-
-### 模型评估
-
-- 模型评估页是一页式布局。
-- 中间左侧同步“自定义参数训练”的标准化散点图，展示当前模型拟合效果。
-- 中间右侧为评估指标图，内部可切换 `RMSE`、`MAE`、`R²` 三个仪表盘。
-- 指标卡片底部固定显示评估解释，用于说明当前指标值的含义。
-- 右侧只保留空的“控制面板”标题，不再放置指标选择、图表选择或模型信息卡片。
-
-### 模型预测
-
-- 模型预测页中间上方为左右两张图：左侧是标准化空间预测可视化，右侧是原始散点图。
-- 标准化图展示样本点、当前回归线、预测辅助线和预测点。
-- 原始图只展示原始样本点和预测点，不展示回归线和最优参考线。
-- 下方保留预测计算过程，展示输入读取、标准化换算、模型代入和预测还原。
-- 右侧控制面板包含当前模型信息、特征选择、输入类型、输入特征值和开始预测按钮。
-- 输入类型支持“原始特征值”和“标准特征值”。无论使用哪一种输入，系统都会换算出模型空间输入 `x_std`，先计算标准化预测值 `ŷ_std`，再还原为原始房价尺度：
-
-```text
-ŷ_std = w * x_std + b
-ŷ_raw = ŷ_std * target_std + target_mean
-```
-
-其中 `target_mean` 和 `target_std` 来自目标列 `MEDV` 的标准化统计量。
+- 新增教学步骤时，优先补齐“现象展示、参数控制、代码解释、逐行解释”四件事。
+- 新增代码片段时，保持短小、聚焦、动态联动当前参数。
+- 预测相关交互要避免“输入即预测”，因为教学上应让学生明确区分“修改输入”和“执行预测”。
+- 如果调整右侧控制面板按钮布局，尽量让同组按钮处于同一个父容器中，用统一 `gap` 管理间距，避免按钮宽度和间距不一致。
+- 如果未来需要展示前端实现代码，可以单独增加“实现代码”模式，不要混入默认机器学习教学代码。
