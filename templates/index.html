@@ -163,9 +163,16 @@
     .shell.theory {
       grid-template-columns: var(--sidebar-width) 8px minmax(0, 1fr);
     }
+    .shell.theory.theory-with-panel {
+      grid-template-columns: var(--sidebar-width) 8px minmax(0, var(--main-width)) 8px var(--assistant-width);
+    }
     .shell.theory .assistant,
     .shell.theory .splitter-right {
       display: none;
+    }
+    .shell.theory.theory-with-panel .assistant,
+    .shell.theory.theory-with-panel .splitter-right {
+      display: block;
     }
     .sidebar {
       background: #fff;
@@ -915,6 +922,204 @@
       font-size: 12px;
       white-space: nowrap;
     }
+    .theory-layer-panel {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .97), rgba(248, 250, 252, .94));
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+    }
+    .theory-card-style-panel {
+      display: grid;
+      gap: 12px;
+      padding: 14px;
+      border-radius: 20px;
+      background: linear-gradient(180deg, rgba(255, 255, 255, .97), rgba(248, 250, 252, .94));
+      box-shadow: 0 12px 28px rgba(15, 23, 42, .08);
+    }
+    .card-color-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .card-color-swatch {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 1px solid rgba(148, 163, 184, .5);
+      cursor: pointer;
+      padding: 0;
+    }
+    .card-color-swatch.active {
+      box-shadow: 0 0 0 2px rgba(59, 130, 246, .45);
+    }
+    .card-color-swatch:disabled {
+      opacity: .48;
+      cursor: not-allowed;
+    }
+    .card-color-swatch[data-card-color="transparent"] {
+      background: repeating-linear-gradient(45deg, #e2e8f0 0 6px, #ffffff 6px 12px) !important;
+    }
+    .theory-layer-panel-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .theory-layer-panel-head h3 {
+      margin: 4px 0 0;
+      color: #0f172a;
+      font-size: 16px;
+      line-height: 1.2;
+    }
+    .theory-layer-panel-subtitle {
+      color: var(--muted);
+      font-size: 12px;
+      text-align: right;
+      line-height: 1.35;
+    }
+    .theory-layer-panel-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+    .theory-layer-panel-actions button {
+      min-height: 30px;
+      padding: 0 10px;
+      border: 1px solid rgba(226, 232, 240, .96);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .92);
+      color: #172033;
+      font: inherit;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .theory-layer-panel-actions button:hover {
+      background: #fff;
+      border-color: rgba(148, 163, 184, .7);
+    }
+    .theory-layer-list {
+      display: grid;
+      gap: 8px;
+      max-height: min(64vh, 680px);
+      overflow: auto;
+      padding-right: 2px;
+    }
+    .theory-layer-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border: 1px solid rgba(226, 232, 240, .96);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .96);
+      box-shadow: 0 8px 18px rgba(15, 23, 42, .05);
+      cursor: pointer;
+      transition: background .14s ease, border-color .14s ease, transform .14s ease;
+    }
+    .theory-layer-row:hover {
+      background: #f8fbff;
+      border-color: rgba(191, 219, 254, .9);
+      transform: translateY(-1px);
+    }
+    .theory-layer-row.is-selected {
+      background: rgba(37, 99, 235, .08);
+      border-color: rgba(96, 165, 250, .5);
+    }
+    .theory-layer-row.is-hidden {
+      opacity: .58;
+    }
+    .theory-layer-row.is-locked {
+      opacity: .82;
+    }
+    .theory-layer-main {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
+      border: 0;
+      padding: 0;
+      background: transparent;
+      color: inherit;
+      text-align: left;
+      cursor: inherit;
+    }
+    .theory-layer-icon {
+      display: inline-grid;
+      place-items: center;
+      width: 24px;
+      height: 24px;
+      border-radius: 8px;
+      background: rgba(239, 246, 255, .96);
+      color: #2563eb;
+      font-size: 12px;
+      font-weight: 800;
+      flex: 0 0 auto;
+    }
+    .theory-layer-name {
+      min-width: 0;
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      color: #0f172a;
+      font-size: 13px;
+      font-weight: 700;
+    }
+    .theory-layer-meta {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .theory-layer-row-actions {
+      display: inline-flex;
+      gap: 4px;
+      flex: 0 0 auto;
+    }
+    .theory-layer-row-actions button {
+      min-width: 28px;
+      min-height: 28px;
+      border: 1px solid rgba(226, 232, 240, .98);
+      border-radius: 999px;
+      background: rgba(255, 255, 255, .92);
+      color: #172033;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .theory-layer-row-actions button:hover {
+      background: #fff;
+      border-color: rgba(148, 163, 184, .7);
+    }
+    .theory-layer-context-menu {
+      position: fixed;
+      z-index: 10100;
+      display: grid;
+      gap: 4px;
+      min-width: 176px;
+      padding: 8px;
+      border: 1px solid rgba(226, 232, 240, .98);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, .98);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, .16);
+    }
+    .theory-layer-context-menu button {
+      border: 0;
+      border-radius: 10px;
+      padding: 8px 10px;
+      background: transparent;
+      color: #172033;
+      font: inherit;
+      font-size: 12px;
+      text-align: left;
+      cursor: pointer;
+    }
+    .theory-layer-context-menu button:hover {
+      background: rgba(239, 246, 255, .92);
+      color: #1d4ed8;
+    }
     .theory-deck-btn:disabled,
     .theory-export-btn:disabled {
       opacity: .48;
@@ -1001,6 +1206,38 @@
     .theory-component {
       position: relative;
       min-width: 0;
+    }
+    .theory-component.is-hidden {
+      display: none !important;
+    }
+    .theory-component.is-locked .theory-drag-handle,
+    .theory-component.is-locked .theory-resize-handle {
+      display: none !important;
+    }
+    .theory-lock-badge {
+      position: absolute;
+      right: 8px;
+      top: -28px;
+      z-index: 10;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(251, 191, 36, .8);
+      background: rgba(255, 251, 235, .95);
+      color: #b45309;
+      font-size: 12px;
+      line-height: 1.1;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(2px);
+      transition: opacity .14s ease, transform .14s ease;
+    }
+    .theory-component.is-locked .theory-lock-badge {
+      opacity: 1;
+      transform: translateY(0);
     }
     .theory-component.is-free-positioned,
     .theory-list-item.is-free-positioned,
@@ -1109,11 +1346,18 @@
     .theory-list-item-standalone,
     .theory-info-card-standalone {
       width: 100%;
+      height: 100%;
+    }
+    .theory-info-card,
+    .theory-info-card-standalone {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      min-width: 0;
+      min-height: 0;
     }
     .theory-bullet-grid li,
-    .theory-info-card,
-    .theory-list-item-standalone,
-    .theory-info-card-standalone {
+    .theory-list-item-standalone {
       position: relative;
       min-height: 88px;
       padding: 18px 22px 18px 24px;
@@ -1125,6 +1369,49 @@
       color: #334155;
       font-size: clamp(14px, 1.14vw, 16px);
       line-height: 1.62;
+    }
+    .card-component,
+    .card-header,
+    .card-body,
+    .card-header .theory-editable,
+    .card-body .theory-editable {
+      box-sizing: border-box;
+    }
+    .card-component {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid rgba(226, 232, 240, .96);
+      border-radius: 20px;
+      background: rgba(248, 250, 252, .96);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .06);
+      overflow: hidden;
+      color: #334155;
+      font-size: clamp(14px, 1.14vw, 16px);
+      line-height: 1.62;
+    }
+    .card-header,
+    .card-body {
+      width: 100%;
+      min-width: 0;
+    }
+    .card-header {
+      display: flex;
+      align-items: flex-start;
+      flex: 0 0 auto;
+      padding: 14px 22px 10px 22px;
+      border-bottom: 1px solid rgba(226, 232, 240, .92);
+    }
+    .card-body {
+      display: flex;
+      align-items: stretch;
+      flex: 1 1 auto;
+      min-height: 0;
+      overflow: hidden;
+      padding: 12px 22px 16px 22px;
     }
     .theory-list-item-standalone .theory-editable,
     .theory-info-card-standalone .theory-editable {
@@ -1141,14 +1428,108 @@
       background: transparent;
       box-shadow: none;
       padding: 0;
-      min-height: 0;
+      min-height: 100%;
     }
-    .theory-info-card strong {
+    .theory-component-cards > .theory-info-card-standalone .card-component {
+      width: 100%;
+      height: 100%;
+    }
+    .card-header .theory-editable,
+    .card-body .theory-editable {
       display: block;
-      margin-bottom: 10px;
+      width: 100%;
+      height: auto;
+      min-height: 0;
+      margin: 0;
+      padding: 0;
+      overflow: visible;
+      background: transparent;
+      border: 0;
+      outline: none;
+    }
+    .card-header .theory-editable {
       color: #0f172a;
       font-size: clamp(16px, 1.16vw, 18px);
       line-height: 1.24;
+      font-weight: 700;
+    }
+    .card-body .theory-editable {
+      color: #334155;
+      font-size: clamp(14px, 1.14vw, 16px);
+      line-height: 1.62;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+      white-space: pre-wrap;
+      width: 100%;
+      height: auto;
+      box-sizing: border-box;
+      overflow: hidden;
+    }
+    .theory-deck-shell.is-editing .card-header .theory-editable,
+    .theory-deck-shell.is-editing .card-body .theory-editable {
+      width: 100%;
+      height: auto;
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      outline: none;
+      background: transparent;
+    }
+    .card-body .theory-editable {
+      max-width: 100%;
+    }
+    .theory-deck-shell.is-editing .card-header .theory-editable:hover,
+    .theory-deck-shell.is-editing .card-body .theory-editable:hover {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+    .card-header .theory-editable > *:first-child,
+    .card-body .theory-editable > *:first-child {
+      margin-top: 0;
+    }
+    .card-header .theory-editable > *:last-child,
+    .card-body .theory-editable > *:last-child {
+      margin-bottom: 0;
+    }
+    .card-header .theory-editable p,
+    .card-body .theory-editable p {
+      margin: 0;
+    }
+    .theory-component-h1 .theory-editable,
+    .theory-component-h2 .theory-editable,
+    .theory-slide [data-component-type="title"] .theory-editable,
+    .theory-slide [data-component-type="heading"] .theory-editable {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      text-align: left;
+      padding: 0 16px;
+      margin: 0;
+    }
+    .theory-component-h1 .theory-editable > *,
+    .theory-component-h2 .theory-editable > *,
+    .theory-slide [data-component-type="title"] .theory-editable > *,
+    .theory-slide [data-component-type="heading"] .theory-editable > * {
+      margin: 0;
+      padding: 0;
+      line-height: 1.15;
+    }
+    .theory-component-h1 .theory-editable h1,
+    .theory-component-h1 .theory-editable h2,
+    .theory-component-h2 .theory-editable h1,
+    .theory-component-h2 .theory-editable h2,
+    .theory-component-title .theory-editable h1,
+    .theory-component-title .theory-editable h2,
+    .theory-component-heading .theory-editable h1,
+    .theory-component-heading .theory-editable h2 {
+      margin: 0;
+      padding: 0;
+      line-height: 1.15;
     }
     .theory-formula {
       padding: 20px 24px;
@@ -1276,41 +1657,247 @@
       grid-template-rows: minmax(0, 1fr) auto;
       width: 100%;
       height: 100%;
-      min-height: 120px;
+      min-height: 80px;
       margin: 0;
-      overflow: hidden;
-      border: 1px solid rgba(255, 255, 255, .86);
-      border-radius: 14px;
-      background: linear-gradient(180deg, rgba(255, 255, 255, .82), rgba(255, 255, 255, .62));
-      box-shadow: 0 18px 36px rgba(15, 23, 42, .08);
-      backdrop-filter: blur(18px);
+      overflow: visible;
+      box-sizing: border-box;
+      border-radius: 8px;
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+      position: relative;
     }
     .theory-image-frame img {
       width: 100%;
       height: 100%;
       min-height: 0;
       object-fit: contain;
-      padding: 18px 18px 10px;
       display: block;
-      background: rgba(248, 250, 252, .82);
+      background: transparent;
+      border-radius: inherit;
+      box-sizing: border-box;
+    }
+    .theory-image-frame.clean {
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
+    }
+    .theory-image-frame.card {
+      overflow: visible;
+      background: rgba(255, 255, 255, .78);
+      border: 1px solid rgba(226, 232, 240, .9);
+      border-radius: 16px;
+      padding: 10px;
+      box-shadow: 0 8px 24px rgba(15, 23, 42, .06);
+    }
+    .theory-image-frame.figure {
+      background: transparent;
+      box-shadow: none;
+      padding: 0;
     }
     .theory-image-placeholder {
       display: grid;
       place-items: center;
-      min-height: 120px;
+      min-height: 80px;
       color: var(--muted);
       background: rgba(248, 250, 252, .72);
+      border: 1px dashed rgba(148, 163, 184, .52);
+      border-radius: 8px;
     }
     .theory-image-caption {
-      padding: 7px 10px;
-      color: #475569;
-      font-size: 12px;
+      margin-top: 6px;
+      padding: 0;
+      color: #64748b;
+      font-size: 13px;
+      text-align: center;
       line-height: 1.42;
-      background: rgba(255, 255, 255, .82);
+      background: transparent;
+      min-height: 0;
+      height: auto;
+      overflow: visible;
+    }
+    .theory-image-caption.is-empty {
+      display: none;
+    }
+    .theory-image-toolbar {
+      position: absolute;
+      z-index: 6;
+      left: 0;
+      top: -42px;
+      display: none;
+      align-items: center;
+      gap: 4px;
+      padding: 5px 6px;
+      border: 1px solid rgba(203, 213, 225, .92);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .10);
+      backdrop-filter: blur(12px);
+      white-space: nowrap;
+    }
+    .theory-image-toolbar-label {
+      margin: 0 2px 0 4px;
+      color: #64748b;
+      font-size: 11px;
+    }
+    .theory-image-toolbar button {
+      border: 0;
+      border-radius: 8px;
+      padding: 4px 7px;
+      color: #334155;
+      background: transparent;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    .theory-image-toolbar button:hover,
+    .theory-image-toolbar button.is-active {
+      color: #0f172a;
+      background: rgba(37, 99, 235, .10);
+    }
+    .theory-deck-shell.is-editing .theory-component-image.is-selected .theory-image-toolbar {
+      display: flex;
+    }
+    .table-component {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      overflow: visible;
+      position: relative;
+      background: rgba(255, 255, 255, .88);
+      border-radius: 12px;
+      color: var(--table-text-color, #0f172a);
+    }
+    .theory-table-scroll {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      border-radius: inherit;
+      background: inherit;
+    }
+    .table-component table {
+      width: 100%;
+      height: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+    .table-component th,
+    .table-component td {
+      border: 1px solid var(--table-border-color, rgba(203, 213, 225, .9));
+      padding: 8px 10px;
+      font-size: var(--table-font-size, 15px);
+      line-height: 1.35;
+      color: var(--table-text-color, #0f172a);
+      vertical-align: middle;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      outline: none;
+    }
+    .table-component th {
+      background: var(--table-header-bg, #eff6ff);
+      color: var(--table-header-color, #1d4ed8);
+      font-weight: 700;
+    }
+    .table-component-striped tbody tr:nth-child(even) td {
+      background: rgba(248, 250, 252, .92);
+    }
+    .table-component-darkHeader th {
+      background: #1e293b;
+      color: #f8fafc;
+      border-color: rgba(51, 65, 85, .95);
+    }
+    .table-component td.is-active-cell,
+    .table-component th.is-active-cell {
+      box-shadow: inset 0 0 0 2px rgba(59, 130, 246, 0.45);
+      background: rgba(239, 246, 255, 0.7);
+    }
+    .table-component td[contenteditable="true"],
+    .table-component th[contenteditable="true"] {
+      outline: none;
+      word-break: break-word;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+    }
+    .theory-table-toolbar {
+      position: absolute;
+      z-index: 6;
+      left: 0;
+      top: auto;
+      bottom: calc(100% + 8px);
+      display: none;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-width: min(860px, calc(100vw - 48px));
+      padding: 7px 8px;
+      border: 1px solid rgba(203, 213, 225, .92);
+      border-radius: 12px;
+      background: rgba(255, 255, 255, .94);
+      box-shadow: 0 10px 22px rgba(15, 23, 42, .10);
+      backdrop-filter: blur(12px);
+      white-space: normal;
+    }
+    .theory-table-toolbar button {
+      border: 1px solid rgba(226, 232, 240, .96);
+      border-radius: 8px;
+      padding: 5px 9px;
+      color: #1e293b;
+      background: #f8fafc;
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.15;
+      cursor: pointer;
+    }
+    .theory-table-toolbar button:hover,
+    .theory-table-toolbar button.is-active {
+      color: #0f172a;
+      background: rgba(37, 99, 235, .10);
+      border-color: rgba(96, 165, 250, .55);
+    }
+    .theory-table-toolbar-label {
+      display: inline-flex;
+      align-items: center;
+      align-self: stretch;
+      font-size: 11px;
+      color: #475569;
+      font-weight: 800;
+      padding: 0 4px;
+      user-select: none;
+    }
+    .theory-table-toolbar-sep {
+      display: inline-block;
+      width: 1px;
+      height: 18px;
+      margin: 0 2px;
+      background: rgba(203, 213, 225, .85);
+      border-radius: 1px;
+    }
+    .theory-table-toolbar button.theory-table-toolbar-danger {
+      color: #b91c1c;
+      margin-left: 2px;
+    }
+    .theory-table-toolbar button.theory-table-toolbar-danger:hover {
+      color: #dc2626;
+      background: rgba(220, 38, 38, .10);
+    }
+    .theory-deck-shell.is-editing .theory-component-table.is-selected .theory-table-toolbar,
+    .theory-deck-shell.is-editing .theory-component-table:has(.theory-table-cell.is-active-cell) .theory-table-toolbar {
+      display: flex;
     }
     .theory-editable {
+      width: 100%;
+      height: 100%;
+      box-sizing: border-box;
+      display: block;
+      overflow: hidden;
       padding: 5px 8px;
       cursor: text;
+    }
+    p.theory-editable,
+    h1.theory-editable,
+    h2.theory-editable,
+    div.theory-editable {
+      margin: 0;
     }
     .theory-deck-shell.is-editing .theory-editable:hover {
       border-color: rgba(37, 99, 235, .42);
@@ -1320,6 +1907,44 @@
       border-color: #2563eb;
       background: rgba(255, 255, 255, .72);
       box-shadow: 0 0 0 3px rgba(37, 99, 235, .14);
+    }
+    .theory-deck-shell.is-editing .theory-component-h1 .theory-editable:hover,
+    .theory-deck-shell.is-editing .theory-component-h2 .theory-editable:hover,
+    .theory-deck-shell.is-editing .theory-slide [data-component-type="title"] .theory-editable:hover,
+    .theory-deck-shell.is-editing .theory-slide [data-component-type="heading"] .theory-editable:hover {
+      border-color: transparent;
+      background: transparent;
+      box-shadow: none;
+    }
+    .theory-deck-shell.is-editing .theory-component-h1 .theory-editable:focus,
+    .theory-deck-shell.is-editing .theory-component-h2 .theory-editable:focus,
+    .theory-deck-shell.is-editing .theory-slide [data-component-type="title"] .theory-editable:focus,
+    .theory-deck-shell.is-editing .theory-slide [data-component-type="heading"] .theory-editable:focus {
+      outline: none;
+      border-color: transparent;
+      box-shadow: inset 0 0 0 2px rgba(59, 130, 246, .35);
+      border-radius: 10px;
+      background: rgba(255, 255, 255, .76);
+    }
+    .theory-deck-shell.is-editing .card-header .theory-editable:hover,
+    .theory-deck-shell.is-editing .card-body .theory-editable:hover {
+      border-color: transparent;
+      background: rgba(37, 99, 235, .05);
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 246, .12);
+    }
+    .theory-deck-shell.is-editing .card-header .theory-editable:focus,
+    .theory-deck-shell.is-editing .card-body .theory-editable:focus {
+      outline: none;
+      box-shadow: inset 0 0 0 2px rgba(59, 130, 246, .35);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, .76);
+    }
+    .theory-component-card {
+      box-sizing: border-box;
+      border-radius: 20px;
+    }
+    .theory-component-card .card-component {
+      border-radius: inherit;
     }
     .theory-drag-handle {
       position: absolute;
@@ -1458,8 +2083,52 @@
       outline-offset: 5px;
       border-radius: 8px;
     }
+    .theory-deck-shell.is-editing .theory-component-card.is-selected {
+      outline: none;
+      box-shadow: 0 0 0 2px rgba(37, 99, 235, .46);
+      border-radius: 20px;
+    }
+    .theory-deck-shell.is-editing .theory-component-card.is-selected:nth-of-type(2n) {
+      box-shadow: 0 0 0 2px rgba(15, 159, 120, .5);
+    }
     .theory-deck-shell.is-editing .theory-component.is-selected:nth-of-type(2n) {
       outline-color: rgba(15, 159, 120, .5);
+    }
+    .theory-component-card .theory-drag-handle {
+      top: -6px;
+      left: 8px;
+      right: 8px;
+    }
+    .theory-component-card .theory-resize-n,
+    .theory-component-card .theory-resize-ne,
+    .theory-component-card .theory-resize-e,
+    .theory-component-card .theory-resize-se,
+    .theory-component-card .theory-resize-s,
+    .theory-component-card .theory-resize-sw,
+    .theory-component-card .theory-resize-w,
+    .theory-component-card .theory-resize-nw {
+      width: 10px;
+      height: 10px;
+    }
+    .theory-component-card .theory-resize-n,
+    .theory-component-card .theory-resize-ne,
+    .theory-component-card .theory-resize-nw {
+      top: -5px;
+    }
+    .theory-component-card .theory-resize-s,
+    .theory-component-card .theory-resize-se,
+    .theory-component-card .theory-resize-sw {
+      bottom: -5px;
+    }
+    .theory-component-card .theory-resize-e,
+    .theory-component-card .theory-resize-ne,
+    .theory-component-card .theory-resize-se {
+      right: -5px;
+    }
+    .theory-component-card .theory-resize-w,
+    .theory-component-card .theory-resize-nw,
+    .theory-component-card .theory-resize-sw {
+      left: -5px;
     }
     .theory-deck-shell.is-editing .theory-editable.is-selected {
       background: rgba(37, 99, 235, .08);
@@ -3268,7 +3937,7 @@ const DEFAULT_FEATURE = {{ default_feature | tojson }};
 <script src="/static/js/theory-pages/evaluation.js?v=20260522_theory03"></script>
 <script src="/static/js/theory-pages/result.js?v=20260522_theory03"></script>
 <script src="/static/js/theory-pages/thinking.js?v=20260522_theory03"></script>
-<script src="/static/js/theory_page.js?v=20260522_theory03"></script>
+<script src="/static/js/theory_page.js?v=20260525_theory_result01"></script>
 <script src="/static/js/preprocess_page.js?v=20260520_preprocess08"></script>
 <script src="/static/js/predict_page.js?v=20260521_predict02"></script>
 <script src="/static/js/train_page.js?v=20260521_train24"></script>

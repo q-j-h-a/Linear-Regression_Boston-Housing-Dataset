@@ -97,7 +97,7 @@ function saveShellLayout(left, right) {
 }
 
 function shellAvailableWidth(shell) {
-  const splitterCount = shell.classList.contains("theory") ? 1 : 2;
+  const splitterCount = shell.classList.contains("theory") && !shell.classList.contains("theory-with-panel") ? 1 : 2;
   return Math.max(0, shell.clientWidth - splitterCount * SHELL_SPLITTER_WIDTH);
 }
 
@@ -107,7 +107,7 @@ function clamp(value, min, max) {
 
 function normalizedShellWidths(left, right, shell = document.querySelector(".shell")) {
   if (!shell) return null;
-  const isTheory = shell.classList.contains("theory");
+  const isTheory = shell.classList.contains("theory") && !shell.classList.contains("theory-with-panel");
   const total = shellAvailableWidth(shell);
   if (total <= 0) return null;
 
@@ -174,7 +174,7 @@ function bindShellResizers() {
       const sidebar = document.querySelector(".sidebar");
       const assistant = document.querySelector(".assistant");
       if (!shell || !sidebar) return;
-      const isTheory = shell.classList.contains("theory");
+      const isTheory = shell.classList.contains("theory") && !shell.classList.contains("theory-with-panel");
       const edge = splitter.dataset.resizeEdge;
       if (isTheory && edge === "right") return;
       shellResizeDrag = {
@@ -213,9 +213,10 @@ function bindShellResizers() {
     const sidebar = document.querySelector(".sidebar");
     const assistant = document.querySelector(".assistant");
     if (shell && sidebar) {
+      const isTheory = shell.classList.contains("theory") && !shell.classList.contains("theory-with-panel");
       saveShellLayout(
         sidebar.getBoundingClientRect().width,
-        shell.classList.contains("theory") ? shellAvailableWidth(shell) * shellLayoutFromStorage().rightRatio : assistant.getBoundingClientRect().width
+        isTheory ? shellAvailableWidth(shell) * shellLayoutFromStorage().rightRatio : assistant.getBoundingClientRect().width
       );
     }
     shellResizeDrag = null;

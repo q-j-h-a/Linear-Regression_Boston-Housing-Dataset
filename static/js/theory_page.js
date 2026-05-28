@@ -19,6 +19,9 @@ const THEORY_PAGE_STATE = {
   saving: false,
   editVersion: 0,
   chartRuntime: {},
+  formulaEditor: null,
+  pendingReplaceImageId: null,
+  activeTableCell: null,
 };
 
 const THEORY_HISTORY_LIMIT = 50;
@@ -50,6 +53,19 @@ const THEORY_KATEX_STYLE_ID = "theory-katex-style";
 const THEORY_KATEX_SCRIPT_ID = "theory-katex-script";
 const THEORY_DEFAULT_FORMULA = "\\hat{y}=wx+b";
 const THEORY_DEFAULT_INLINE_FORMULA = `$${THEORY_DEFAULT_FORMULA}$`;
+const THEORY_FORMULA_EDITOR_WIDTH = 340;
+const THEORY_FORMULA_EDITOR_HEIGHT = 104;
+const THEORY_CARD_DEFAULT_BACKGROUND = "rgba(248, 250, 252, 0.96)";
+const THEORY_CARD_COLOR_SWATCHES = [
+  { label: "默认", value: THEORY_CARD_DEFAULT_BACKGROUND },
+  { label: "浅蓝", value: "#eff6ff" },
+  { label: "浅绿", value: "#ecfdf5" },
+  { label: "浅黄", value: "#fffbeb" },
+  { label: "浅紫", value: "#f5f3ff" },
+  { label: "浅红", value: "#fef2f2" },
+  { label: "浅灰", value: "#f8fafc" },
+  { label: "透明", value: "transparent" },
+];
 
 const THEORY_PAGE_IDS = ["basic", "purpose", "knowledge", "dataset", "model", "criterion", "optimization", "evaluation", "result", "thinking"];
 const THEORY_PAGE_CONFIGS = window.THEORY_PAGE_CONFIGS || {};
@@ -75,8 +91,143 @@ function uid(prefix = "id") {
   return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function layerLabelForType(type) {
+  const labels = {
+    p: "文本框",
+    h1: "标题",
+    h2: "副标题",
+    eyebrow: "文本框",
+    formula: "公式",
+    image: "图片",
+    table: "表格",
+    chart: "图表",
+    cards: "卡片",
+    bullets: "要点",
+    callout: "提示",
+    visual: "示意",
+  };
+  return labels[type] || "图层";
+}
+
+function parseLayerZIndex(component, fallback = 1) {
+  const raw = component?.zIndex ?? component?.position?.zIndex ?? component?.style?.zIndex ?? fallback;
+  const parsed = parseInt(raw, 10);
+  return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function normalizeTheoryComponentLayerFields(component, countsByType, fallbackZIndex = 1) {
+  const next = component;
+  const type = next.type || "p";
+  const count = (countsByType.get(type) || 0) + 1;
+  countsByType.set(type, count);
+  const zIndex = parseLayerZIndex(next, fallbackZIndex);
+  const position = next.position ? { ...next.position } : null;
+  if (position && !position.zIndex) position.zIndex = String(zIndex);
+  next.position = position;
+  next.zIndex = zIndex;
+  next.visible = next.visible !== false;
+  next.locked = Boolean(next.locked);
+  next.layerName = String(next.layerName || `${layerLabelForType(type)} ${count}`);
+  if (next.layerName.trim() === `${layerLabelForType(type)}`) next.layerName = `${layerLabelForType(type)} ${count}`;
+  if (type === "image") {
+    next.imageStyle = normalizeImageStyle(next.imageStyle);
+    next.objectFit = normalizeImageObjectFit(next.objectFit);
+    next.caption = String(next.caption || "");
+    next.alt = next.alt || "课件图片";
+  } else if (type === "table") {
+    next.tableData = normalizeTableData(next.tableData);
+    next.tableStyle = normalizeTableStyle(next.tableStyle);
+  }
+  return next;
+}
+
+function normalizeTheorySlideComponents(slide) {
+  const nextSlide = slide ? clone(slide) : { components: [] };
+  const countsByType = new Map();
+  const components = Array.isArray(nextSlide.components) ? nextSlide.components.map((component, index) => {
+    const next = normalizeTheoryComponentLayerFields({ ...component, style: component.style ? { ...component.style } : {}, position: component.position ? { ...component.position } : null }, countsByType, index + 1);
+    return next;
+  }) : [];
+  nextSlide.components = components;
+  return nextSlide;
+}
+
+function normalizeTheoryDeckForRuntime(pageId, deck) {
+  const nextDeck = clone(deck);
+  nextDeck.slides = (nextDeck.slides || []).map(slide => normalizeTheorySlideComponents(slide));
+  if (pageId === "purpose") {
+    const slide = nextDeck.slides?.[0];
+    if (slide) slide.components = slide.components.filter(component => component.type !== "visual" && component.type !== "image" && component.type !== "chart");
+  }
+  return nextDeck;
+}
+
+function deckComponentLayers(slide) {
+  return [...(slide?.components || [])].sort((a, b) => parseLayerZIndex(b, 1) - parseLayerZIndex(a, 1));
+}
+
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
+}
+
+function normalizeImageStyle(value) {
+  return ["clean", "card", "figure"].includes(value) ? value : "clean";
+}
+
+function normalizeImageObjectFit(value) {
+  return ["contain", "cover", "fill"].includes(value) ? value : "contain";
+}
+
+function defaultTableData() {
+  return {
+    rows: 4,
+    cols: 3,
+    header: true,
+    cells: [
+      ["字段", "含义", "示例"],
+      ["RM", "平均房间数", "6.5"],
+      ["LSTAT", "低收入人口比例", "12.3"],
+      ["MEDV", "房价中位数", "24.0"],
+    ],
+  };
+}
+
+function defaultTableStyle() {
+  return {
+    preset: "clean",
+    fontSize: 15,
+    headerBackground: "#eff6ff",
+    borderColor: "#cbd5e1",
+    textColor: "#0f172a",
+    headerTextColor: "#1d4ed8",
+  };
+}
+
+function normalizeTableData(tableData = null) {
+  const fallback = defaultTableData();
+  const sourceCells = Array.isArray(tableData?.cells) && tableData.cells.length ? tableData.cells : fallback.cells;
+  const rows = Math.max(1, Number(tableData?.rows) || sourceCells.length || fallback.rows);
+  const cols = Math.max(1, Number(tableData?.cols) || Math.max(...sourceCells.map(row => Array.isArray(row) ? row.length : 0), fallback.cols));
+  const cells = Array.from({ length: rows }, (_, rowIndex) => (
+    Array.from({ length: cols }, (_, colIndex) => String(sourceCells[rowIndex]?.[colIndex] ?? ""))
+  ));
+  return {
+    rows,
+    cols,
+    header: tableData?.header !== false,
+    cells,
+  };
+}
+
+function normalizeTableStyle(tableStyle = null) {
+  const fallback = defaultTableStyle();
+  const preset = ["clean"].includes(tableStyle?.preset) ? tableStyle.preset : fallback.preset;
+  return {
+    ...fallback,
+    ...(tableStyle || {}),
+    preset,
+    fontSize: Number(tableStyle?.fontSize) || fallback.fontSize,
+  };
 }
 
 function makeComponent(type, data = {}) {
@@ -93,7 +244,16 @@ function makeComponent(type, data = {}) {
     position: data.position ? { ...data.position } : null,
     src: data.src || "",
     alt: data.alt || "",
+    caption: data.caption || "",
+    imageStyle: data.imageStyle || "",
+    objectFit: data.objectFit || "",
+    tableData: data.tableData ? normalizeTableData(data.tableData) : null,
+    tableStyle: data.tableStyle ? normalizeTableStyle(data.tableStyle) : null,
     chartSpec: data.chartSpec ? clone(data.chartSpec) : null,
+    zIndex: data.zIndex ?? data.position?.zIndex ?? 1,
+    layerName: data.layerName || layerLabelForType(type),
+    locked: Boolean(data.locked),
+    visible: data.visible !== false,
   };
 }
 
@@ -375,8 +535,720 @@ function makeLearningFlowChartOption(chartSpec = {}, options = {}) {
   };
 }
 
+function makeDatasetHistogramChartOption(chartSpec = {}, options = {}) {
+  const bins = Array.isArray(chartSpec.bins) ? chartSpec.bins : [];
+  const labels = bins.map(bin => bin.label);
+  const values = bins.map(bin => Number(bin.count) || 0);
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    grid: { left: 44, right: 18, top: 36, bottom: 42, containLabel: false },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: {
+      type: "category",
+      data: labels,
+      name: chartSpec.xName || "MEDV 区间",
+      nameLocation: "middle",
+      nameGap: 30,
+      axisTick: { alignWithLabel: true },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      name: chartSpec.yName || "样本数",
+      nameTextStyle: { color: "#475569", fontSize: 11, padding: [0, 0, 4, 0] },
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+    },
+    series: [{
+      type: "bar",
+      data: values,
+      barWidth: "58%",
+      itemStyle: {
+        color: "#2563eb",
+        borderRadius: [6, 6, 0, 0],
+      },
+      emphasis: { itemStyle: { color: "#1d4ed8" } },
+    }],
+  };
+}
+
+function makeDatasetScatterChartOption(chartSpec = {}, options = {}) {
+  const points = Array.isArray(chartSpec.points) ? chartSpec.points : [];
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    grid: { left: 46, right: 20, top: 34, bottom: 44, containLabel: false },
+    tooltip: {
+      trigger: "item",
+      formatter: params => `RM: ${params.value?.[0]}<br>MEDV: ${params.value?.[1]}`,
+    },
+    xAxis: {
+      type: "value",
+      min: chartSpec.xMin ?? 3.4,
+      max: chartSpec.xMax ?? 9,
+      name: chartSpec.xName || "RM 平均房间数",
+      nameLocation: "middle",
+      nameGap: 30,
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      min: chartSpec.yMin ?? 0,
+      max: chartSpec.yMax ?? 52,
+      name: chartSpec.yName || "MEDV",
+      nameTextStyle: { color: "#475569", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    series: [{
+      type: "scatter",
+      data: points,
+      symbolSize: 7,
+      itemStyle: {
+        color: "rgba(37, 99, 235, 0.72)",
+        borderColor: "rgba(255, 255, 255, 0.86)",
+        borderWidth: 1,
+      },
+    }],
+  };
+}
+
+function makeDatasetTrainingFlowChartOption(chartSpec = {}, options = {}) {
+  const theme = theoryChartTheme("learningflow");
+  const steps = (Array.isArray(chartSpec.steps) && chartSpec.steps.length ? chartSpec.steps : [
+    { name: "数据读取", desc: "载入 CSV" },
+    { name: "分离 X / y", desc: "特征与目标" },
+    { name: "划分数据集", desc: "训练 / 测试" },
+    { name: "特征标准化", desc: "统一量纲" },
+    { name: "模型训练", desc: "学习参数" },
+    { name: "预测评估", desc: "检查误差" },
+  ]).map((step, index, list) => ({
+    x: list.length === 1 ? 50 : 8 + index * (84 / (list.length - 1)),
+    y: 50,
+    name: step.name || `步骤 ${index + 1}`,
+    desc: step.desc || "",
+    color: step.color || [theme.blue, theme.violet, theme.emerald, theme.amber, theme.rose, theme.slate][index % 6],
+  }));
+  return {
+    animation: !options.staticMode,
+    grid: { left: 8, right: 8, top: 20, bottom: 18, containLabel: false },
+    xAxis: { min: 0, max: 100, show: false, type: "value" },
+    yAxis: { min: 0, max: 100, show: false, type: "value" },
+    series: [
+      {
+        type: "lines",
+        coordinateSystem: "cartesian2d",
+        z: 1,
+        effect: options.staticMode ? { show: false } : {
+          show: true,
+          period: 4,
+          trailLength: 0.12,
+          symbol: "arrow",
+          symbolSize: 9,
+          color: "#60a5fa",
+        },
+        lineStyle: { color: "#94a3b8", width: 2.5, opacity: 0.9 },
+        data: steps.slice(0, -1).map((step, index) => ({
+          coords: [[step.x, step.y], [steps[index + 1].x, steps[index + 1].y]],
+        })),
+      },
+      {
+        type: "scatter",
+        coordinateSystem: "cartesian2d",
+        z: 2,
+        symbol: "roundRect",
+        symbolSize: [96, 58],
+        label: {
+          show: true,
+          formatter: params => `{name|${params.data.name}}\n{desc|${params.data.desc}}`,
+          rich: {
+            name: { fontSize: 13, fontWeight: 800, color: "#0f172a", lineHeight: 22 },
+            desc: { fontSize: 10, color: "#64748b", lineHeight: 15 },
+          },
+        },
+        data: steps.map(step => ({
+          value: [step.x, step.y],
+          name: step.name,
+          desc: step.desc,
+          itemStyle: {
+            color: "#ffffff",
+            borderColor: step.color,
+            borderWidth: 2.5,
+            shadowColor: "rgba(15, 23, 42, 0.10)",
+            shadowBlur: 12,
+          },
+        })),
+      },
+    ],
+  };
+}
+
+function makeRegressionFitChartOption(chartSpec = {}, options = {}) {
+  const points = Array.isArray(chartSpec.points) ? chartSpec.points : [
+    [4.6, 17], [5.1, 20], [5.6, 21], [5.9, 24], [6.2, 25], [6.6, 29], [7.0, 32], [7.4, 36], [7.8, 39]
+  ];
+  const line = Array.isArray(chartSpec.line) ? chartSpec.line : [[4.4, 16], [8.0, 40]];
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    grid: { left: 58, right: 24, top: 56, bottom: 48 },
+    tooltip: { trigger: "item" },
+    legend: {
+      top: 12,
+      itemWidth: 12,
+      itemHeight: 8,
+      textStyle: { color: "#475569", fontSize: 11 },
+    },
+    xAxis: {
+      type: "value",
+      min: chartSpec.xMin ?? 4.2,
+      max: chartSpec.xMax ?? 8.2,
+      name: chartSpec.xName || "地区特征",
+      nameLocation: "middle",
+      nameGap: 28,
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      min: chartSpec.yMin ?? 12,
+      max: chartSpec.yMax ?? 44,
+      name: chartSpec.yName || "房价",
+      nameLocation: "middle",
+      nameGap: 38,
+      nameTextStyle: { color: "#475569", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    series: [
+      {
+        name: chartSpec.pointLabel || "真实样本",
+        type: "scatter",
+        data: points,
+        symbolSize: 6,
+        itemStyle: {
+          color: "rgba(37,99,235,.7)",
+        },
+      },
+      {
+        name: chartSpec.lineLabel || "回归线",
+        type: "line",
+        data: line,
+        showSymbol: false,
+        lineStyle: { color: "#0f9f78", width: 3 },
+      },
+    ],
+  };
+}
+
+function makeLossCurveChartOption(chartSpec = {}, options = {}) {
+  const values = Array.isArray(chartSpec.values) && chartSpec.values.length
+    ? chartSpec.values
+    : [98, 74, 55, 41, 31, 24, 19, 16, 14, 13, 12.5, 12.2];
+  return {
+    animation: !options.staticMode,
+    animationDuration: 800,
+    grid: { left: 58, right: 24, top: 42, bottom: 42 },
+    tooltip: { trigger: "axis" },
+    xAxis: {
+      type: "value",
+      name: chartSpec.xName || "epoch",
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      name: chartSpec.yName || "MSE",
+      nameTextStyle: { color: "#475569", fontSize: 11 },
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+    },
+    series: [{
+      type: "line",
+      data: values.map((value, index) => [index + 1, value]),
+      smooth: true,
+      symbolSize: 5,
+      lineStyle: { color: "#5b35f5", width: 3 },
+      itemStyle: { color: "#5b35f5" },
+      areaStyle: { color: "#5b35f522" },
+    }],
+  };
+}
+
+function makeFeatureCoefficientChartOption(chartSpec = {}, options = {}) {
+  const features = Array.isArray(chartSpec.features) && chartSpec.features.length ? chartSpec.features : ["RM", "LSTAT", "PTRATIO", "DIS", "NOX"];
+  const values = Array.isArray(chartSpec.values) && chartSpec.values.length ? chartSpec.values : [3.8, -3.2, -1.9, 1.1, -1.4];
+  return {
+    animation: !options.staticMode,
+    animationDuration: 800,
+    grid: { left: 58, right: 26, top: 28, bottom: 36 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: {
+      type: "value",
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "category",
+      data: features,
+      axisLabel: { color: "#334155", fontSize: 12, fontWeight: 700 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+      axisTick: { show: false },
+    },
+    series: [{
+      type: "bar",
+      data: values.map(value => ({
+        value,
+        itemStyle: { color: value >= 0 ? "#5b35f5" : "#d9354f", borderRadius: value >= 0 ? [0, 6, 6, 0] : [6, 0, 0, 6] },
+      })),
+      barWidth: "46%",
+      label: {
+        show: true,
+        position: "right",
+        formatter: params => String(params.value),
+        color: "#475569",
+        fontSize: 11,
+      },
+    }],
+  };
+}
+
+function makeActualPredictionCompareChartOption(chartSpec = {}, options = {}) {
+  const actual = Number(chartSpec.actual ?? 25.0);
+  const predicted = Number(chartSpec.predicted ?? 22.8);
+  const error = Number((actual - predicted).toFixed(2));
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    grid: { left: 48, right: 28, top: 42, bottom: 48 },
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    xAxis: {
+      type: "category",
+      data: ["真实房价", "预测房价"],
+      axisTick: { show: false },
+      axisLabel: { color: "#334155", fontSize: 12, fontWeight: 700 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      name: chartSpec.yName || "MEDV",
+      min: 0,
+      max: Math.max(32, actual + 6, predicted + 6),
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+    },
+    series: [
+      {
+        type: "bar",
+        barWidth: "42%",
+        data: [
+          { value: actual, itemStyle: { color: "rgba(37,99,235,.72)", borderRadius: [8, 8, 0, 0] } },
+          { value: predicted, itemStyle: { color: "#0f9f78", borderRadius: [8, 8, 0, 0] } },
+        ],
+        label: { show: true, position: "top", formatter: params => Number(params.value).toFixed(1), color: "#334155", fontSize: 12, fontWeight: 800 },
+        markLine: {
+          symbol: "none",
+          label: {
+            show: true,
+            formatter: `预测误差 ${Math.abs(error).toFixed(1)}`,
+            color: "#d9354f",
+            fontSize: 12,
+            fontWeight: 800,
+          },
+          lineStyle: { color: "#d9354f", type: "dashed", width: 2 },
+          data: [{ yAxis: predicted }, { yAxis: actual }],
+        },
+      },
+    ],
+    graphic: [{
+      type: "text",
+      right: 18,
+      top: 12,
+      style: {
+        text: `真实值 ${actual.toFixed(1)}  预测值 ${predicted.toFixed(1)}`,
+        fill: "#475569",
+        fontSize: 12,
+        fontWeight: 700,
+      },
+    }],
+  };
+}
+
+function makeResidualFitChartOption(chartSpec = {}, options = {}) {
+  const points = Array.isArray(chartSpec.points) ? chartSpec.points : [
+    [4.6, 17], [5.0, 19], [5.4, 21], [5.7, 23], [6.1, 25], [6.4, 27], [6.8, 31], [7.2, 34], [7.7, 38]
+  ];
+  const line = Array.isArray(chartSpec.line) ? chartSpec.line : [[4.4, 16], [8.0, 40]];
+  const [x0, y0] = line[0];
+  const [x1, y1] = line[line.length - 1];
+  const slope = (y1 - y0) / (x1 - x0 || 1);
+  const intercept = y0 - slope * x0;
+  const residualLines = points.slice(1, 8).map(point => {
+    const predicted = slope * point[0] + intercept;
+    return { coords: [[point[0], predicted], point] };
+  });
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    grid: { left: 58, right: 24, top: 56, bottom: 48 },
+    tooltip: { trigger: "item" },
+    legend: { top: 12, textStyle: { color: "#475569", fontSize: 11 } },
+    xAxis: {
+      type: "value",
+      min: chartSpec.xMin ?? 4.2,
+      max: chartSpec.xMax ?? 8.2,
+      name: chartSpec.xName || "特征值",
+      nameLocation: "middle",
+      nameGap: 28,
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      min: chartSpec.yMin ?? 12,
+      max: chartSpec.yMax ?? 44,
+      name: chartSpec.yName || "房价 MEDV",
+      nameLocation: "middle",
+      nameGap: 38,
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    series: [
+      {
+        name: "残差",
+        type: "lines",
+        coordinateSystem: "cartesian2d",
+        data: residualLines,
+        symbol: ["none", "none"],
+        lineStyle: { color: "#d9354f", width: 2, type: "dashed", opacity: 0.75 },
+        z: 1,
+      },
+      {
+        name: "样本点",
+        type: "scatter",
+        data: points,
+        symbolSize: 6,
+        itemStyle: { color: "rgba(37,99,235,.7)" },
+        z: 3,
+      },
+      {
+        name: "回归线",
+        type: "line",
+        data: line,
+        showSymbol: false,
+        lineStyle: { color: "#0f9f78", width: 3 },
+        z: 2,
+      },
+    ],
+  };
+}
+
+function makeModelTrainingFlowChartOption(chartSpec = {}, options = {}) {
+  const theme = theoryChartTheme("learningflow");
+  const steps = (Array.isArray(chartSpec.steps) && chartSpec.steps.length ? chartSpec.steps : [
+    { name: "X_train", desc: "训练特征", color: theme.blue },
+    { name: "y_train", desc: "真实房价", color: theme.violet },
+    { name: "LinearRegression()", desc: "创建模型", color: theme.emerald },
+    { name: "model.fit()", desc: "学习参数", color: theme.amber },
+    { name: "训练好的模型", desc: "用于预测", color: theme.rose },
+  ]).map((step, index, list) => ({
+    x: 50,
+    y: list.length === 1 ? 50 : 10 + index * (80 / (list.length - 1)),
+    name: step.name || `步骤 ${index + 1}`,
+    desc: step.desc || "",
+    color: step.color || [theme.blue, theme.violet, theme.emerald, theme.amber, theme.rose][index % 5],
+  }));
+  return {
+    animation: !options.staticMode,
+    grid: { left: 10, right: 10, top: 10, bottom: 10 },
+    xAxis: { min: 0, max: 100, show: false, type: "value" },
+    yAxis: { min: 0, max: 100, show: false, inverse: true, type: "value" },
+    series: [
+      {
+        type: "lines",
+        coordinateSystem: "cartesian2d",
+        z: 1,
+        effect: options.staticMode ? { show: false } : {
+          show: true,
+          period: 3.2,
+          trailLength: 0.12,
+          symbol: "arrow",
+          symbolSize: 8,
+          color: "#60a5fa",
+        },
+        lineStyle: { color: "#94a3b8", width: 2, opacity: 0.82 },
+        data: steps.slice(0, -1).map((step, index) => ({
+          coords: [[step.x, step.y + 7], [steps[index + 1].x, steps[index + 1].y - 7]],
+        })),
+      },
+      {
+        type: "scatter",
+        coordinateSystem: "cartesian2d",
+        z: 2,
+        symbol: "roundRect",
+        symbolSize: [190, 42],
+        label: {
+          show: true,
+          formatter: params => `{name|${params.data.name}}\n{desc|${params.data.desc}}`,
+          rich: {
+            name: { fontSize: 13, fontWeight: 800, color: "#0f172a", lineHeight: 18 },
+            desc: { fontSize: 10, color: "#64748b", lineHeight: 14 },
+          },
+        },
+        data: steps.map(step => ({
+          value: [step.x, step.y],
+          name: step.name,
+          desc: step.desc,
+          itemStyle: {
+            color: "#ffffff",
+            borderColor: step.color,
+            borderWidth: 2,
+            shadowColor: "rgba(15, 23, 42, 0.08)",
+            shadowBlur: 10,
+          },
+        })),
+      },
+    ],
+  };
+}
+
+function makeFitBeforeAfterChartOption(chartSpec = {}, options = {}) {
+  const points = Array.isArray(chartSpec.points) ? chartSpec.points : [[4.6, 17], [5.0, 19], [5.4, 21], [5.7, 23], [6.1, 25], [6.4, 27], [6.8, 31], [7.2, 34], [7.7, 38]];
+  const before = Array.isArray(chartSpec.beforeLine) ? chartSpec.beforeLine : [[4.4, 29], [8.0, 24]];
+  const after = Array.isArray(chartSpec.afterLine) ? chartSpec.afterLine : [[4.4, 16], [8.0, 40]];
+  const baseAxis = {
+    type: "value",
+    splitLine: { lineStyle: { color: "#edf2f7" } },
+    axisLabel: { color: "#475569", fontSize: 10 },
+    axisLine: { lineStyle: { color: "#cbd5e1" } },
+  };
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    tooltip: { trigger: "item" },
+    legend: { top: 10, textStyle: { color: "#475569", fontSize: 11 } },
+    grid: [
+      { left: 44, right: "54%", top: 54, bottom: 44 },
+      { left: "56%", right: 20, top: 54, bottom: 44 },
+    ],
+    xAxis: [
+      { ...baseAxis, min: 4.2, max: 8.2, gridIndex: 0, name: "优化前", nameLocation: "middle", nameGap: 26 },
+      { ...baseAxis, min: 4.2, max: 8.2, gridIndex: 1, name: "优化后", nameLocation: "middle", nameGap: 26 },
+    ],
+    yAxis: [
+      { ...baseAxis, min: 12, max: 44, gridIndex: 0, name: "MEDV", nameGap: 30 },
+      { ...baseAxis, min: 12, max: 44, gridIndex: 1 },
+    ],
+    series: [
+      { name: "样本点", type: "scatter", xAxisIndex: 0, yAxisIndex: 0, data: points, symbolSize: 5, itemStyle: { color: "rgba(37,99,235,.7)" } },
+      { name: "优化前拟合线", type: "line", xAxisIndex: 0, yAxisIndex: 0, data: before, showSymbol: false, lineStyle: { color: "#d9354f", width: 3 } },
+      { name: "样本点", type: "scatter", xAxisIndex: 1, yAxisIndex: 1, data: points, symbolSize: 5, itemStyle: { color: "rgba(37,99,235,.7)" } },
+      { name: "优化后拟合线", type: "line", xAxisIndex: 1, yAxisIndex: 1, data: after, showSymbol: false, lineStyle: { color: "#0f9f78", width: 3 } },
+    ],
+  };
+}
+
+function makeMultipleParameterLinesChartOption(chartSpec = {}, options = {}) {
+  const points = Array.isArray(chartSpec.points) ? chartSpec.points : [[4.6, 17], [5.0, 19], [5.4, 21], [5.7, 23], [6.1, 25], [6.4, 27], [6.8, 31], [7.2, 34], [7.7, 38]];
+  const lines = Array.isArray(chartSpec.lines) && chartSpec.lines.length ? chartSpec.lines : [
+    { name: "参数 A：整体偏低", data: [[4.4, 12], [8.0, 26]], color: "#d9354f" },
+    { name: "参数 B：整体偏高", data: [[4.4, 30], [8.0, 43]], color: "#c47a11" },
+    { name: "参数 C：更接近样本", data: [[4.4, 16], [8.0, 40]], color: "#0f9f78" },
+  ];
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    tooltip: { trigger: "item" },
+    legend: { top: 10, textStyle: { color: "#475569", fontSize: 11 } },
+    grid: { left: 58, right: 24, top: 58, bottom: 48 },
+    xAxis: { type: "value", min: 4.2, max: 8.2, name: "特征值", nameLocation: "middle", nameGap: 28, splitLine: { lineStyle: { color: "#edf2f7" } }, axisLabel: { color: "#475569", fontSize: 11 }, axisLine: { lineStyle: { color: "#cbd5e1" } } },
+    yAxis: { type: "value", min: 10, max: 46, name: "房价 MEDV", nameLocation: "middle", nameGap: 38, splitLine: { lineStyle: { color: "#edf2f7" } }, axisLabel: { color: "#475569", fontSize: 11 }, axisLine: { lineStyle: { color: "#cbd5e1" } } },
+    series: [
+      { name: "样本点", type: "scatter", data: points, symbolSize: 6, itemStyle: { color: "rgba(37,99,235,.7)" } },
+      ...lines.map(line => ({ name: line.name, type: "line", data: line.data, showSymbol: false, lineStyle: { color: line.color, width: 3, type: line.type || "solid" } })),
+    ],
+  };
+}
+
+function makeGradientDescentPathChartOption(chartSpec = {}, options = {}) {
+  const path = Array.isArray(chartSpec.path) && chartSpec.path.length ? chartSpec.path : [[-4.8, 6.4], [-3.2, 4.6], [-2.0, 3.2], [-1.1, 2.2], [-0.5, 1.5], [-0.12, 1.1]];
+  const levels = [0.35, 0.75, 1.25, 1.9, 2.8, 4.1, 5.8].map((radius, index) => ({
+    type: "circle",
+    shape: { cx: 0, cy: 1, r: radius },
+    style: { stroke: ["#c7d2fe", "#93c5fd", "#60a5fa", "#22c55e", "#eab308", "#f59e0b", "#f43f5e"][index], fill: "transparent", lineWidth: 1.4, opacity: 0.55 },
+    silent: true,
+  }));
+  return {
+    animation: !options.staticMode,
+    animationDuration: 800,
+    tooltip: { trigger: "item" },
+    grid: { left: 56, right: 28, top: 42, bottom: 48 },
+    xAxis: { type: "value", min: -6, max: 2, name: "w", nameLocation: "middle", nameGap: 28, splitLine: { lineStyle: { color: "#edf2f7" } } },
+    yAxis: { type: "value", min: -1.5, max: 7, name: "b", nameLocation: "middle", nameGap: 34, splitLine: { lineStyle: { color: "#edf2f7" } } },
+    series: [
+      ...levels.map((level, index) => ({
+        name: `loss_level_${index + 1}`,
+        type: "custom",
+        silent: true,
+        renderItem: (params, api) => {
+          const center = api.coord([level.shape.cx, level.shape.cy]);
+          const edge = api.coord([level.shape.cx + level.shape.r, level.shape.cy]);
+          return { type: "circle", shape: { cx: center[0], cy: center[1], r: Math.abs(edge[0] - center[0]) }, style: level.style };
+        },
+        data: [[0, 1]],
+      })),
+      { name: "update_path", type: "line", data: path, symbol: "circle", symbolSize: 6, lineStyle: { color: "#111827", width: 3 }, itemStyle: { color: "#fff", borderColor: "#111827", borderWidth: 1.5 }, z: 8 },
+      { name: "current_params", type: "scatter", data: [path[path.length - 1]], symbolSize: 18, itemStyle: { color: "#5b35f5", borderColor: "#fff", borderWidth: 3 }, z: 10 },
+      { name: "best_params", type: "scatter", data: [[0, 1]], symbol: "diamond", symbolSize: 16, itemStyle: { color: "#0f9f78", borderColor: "#fff", borderWidth: 2 }, z: 9 },
+    ],
+  };
+}
+
+function makeLearningRateCompareChartOption(chartSpec = {}, options = {}) {
+  const slow = chartSpec.slow || [96, 91, 86, 81, 76, 72, 68, 64, 61, 58, 55, 53];
+  const good = chartSpec.good || [96, 70, 50, 35, 25, 19, 16, 14, 13, 12.5, 12.2, 12.1];
+  const large = chartSpec.large || [96, 64, 88, 52, 94, 70, 112, 90, 132, 118, 150, 142];
+  const makeData = values => values.map((value, index) => [index + 1, value]);
+  return {
+    animation: !options.staticMode,
+    animationDuration: 800,
+    tooltip: { trigger: "axis" },
+    legend: { top: 10, textStyle: { color: "#475569", fontSize: 11 } },
+    grid: { left: 52, right: 24, top: 58, bottom: 42 },
+    xAxis: { type: "value", name: "epoch", splitLine: { lineStyle: { color: "#edf2f7" } }, axisLabel: { color: "#475569", fontSize: 11 } },
+    yAxis: { type: "value", name: "MSE", splitLine: { lineStyle: { color: "#edf2f7" } }, axisLabel: { color: "#475569", fontSize: 11 } },
+    series: [
+      { name: "学习率太小", type: "line", smooth: true, data: makeData(slow), showSymbol: false, lineStyle: { color: "#c47a11", width: 3 } },
+      { name: "学习率合适", type: "line", smooth: true, data: makeData(good), showSymbol: false, lineStyle: { color: "#5b35f5", width: 3 }, areaStyle: { color: "#5b35f522" } },
+      { name: "学习率太大", type: "line", smooth: true, data: makeData(large), showSymbol: false, lineStyle: { color: "#d9354f", width: 3, type: "dashed" } },
+    ],
+  };
+}
+
+function makeErrorSquareAmplifyChartOption(chartSpec = {}, options = {}) {
+  const errors = Array.isArray(chartSpec.errors) && chartSpec.errors.length ? chartSpec.errors : [1, 2, 5];
+  const squares = errors.map(value => value * value);
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+    grid: { left: 46, right: 22, top: 42, bottom: 42 },
+    xAxis: {
+      type: "category",
+      data: errors.map(value => `误差 ${value}`),
+      axisTick: { show: false },
+      axisLabel: { color: "#334155", fontSize: 12, fontWeight: 700 },
+      axisLine: { lineStyle: { color: "#cbd5e1" } },
+    },
+    yAxis: {
+      type: "value",
+      name: "平方后",
+      splitLine: { lineStyle: { color: "#edf2f7" } },
+      axisLabel: { color: "#475569", fontSize: 11 },
+    },
+    series: [{
+      type: "bar",
+      barWidth: "42%",
+      data: squares.map((value, index) => ({
+        value,
+        itemStyle: { color: index === squares.length - 1 ? "#d9354f" : "#5b35f5", borderRadius: [8, 8, 0, 0] },
+      })),
+      label: {
+        show: true,
+        position: "top",
+        formatter: params => `${errors[params.dataIndex]}² = ${params.value}`,
+        color: "#334155",
+        fontSize: 12,
+        fontWeight: 800,
+      },
+    }],
+  };
+}
+
+function makeR2ScaleChartOption(chartSpec = {}, options = {}) {
+  const value = Math.max(0, Math.min(1, Number(chartSpec.value ?? 0.78)));
+  return {
+    animation: !options.staticMode,
+    animationDuration: 700,
+    grid: { left: 48, right: 48, top: 80, bottom: 70 },
+    xAxis: {
+      type: "value",
+      min: 0,
+      max: 1,
+      interval: 0.5,
+      axisLabel: { color: "#475569", fontSize: 12, formatter: value => Number(value).toFixed(1) },
+      axisLine: { lineStyle: { color: "#cbd5e1", width: 2 } },
+      axisTick: { length: 8, lineStyle: { color: "#94a3b8" } },
+      splitLine: { show: false },
+    },
+    yAxis: { type: "value", min: 0, max: 1, show: false },
+    series: [
+      {
+        name: "解释能力",
+        type: "bar",
+        data: [[value, 0.5]],
+        barWidth: 18,
+        itemStyle: { color: "#5b35f5", borderRadius: 999 },
+        encode: { x: 0, y: 1 },
+        z: 3,
+      },
+      {
+        name: "刻度背景",
+        type: "bar",
+        data: [[1, 0.5]],
+        barWidth: 18,
+        itemStyle: { color: "rgba(226, 232, 240, .95)", borderRadius: 999 },
+        encode: { x: 0, y: 1 },
+        barGap: "-100%",
+        silent: true,
+        z: 1,
+      },
+      {
+        name: "当前 R²",
+        type: "scatter",
+        data: [[value, 0.5]],
+        symbolSize: 18,
+        itemStyle: { color: "#0f9f78", borderColor: "#fff", borderWidth: 3 },
+        z: 4,
+      },
+    ],
+    graphic: [
+      { type: "text", left: "12%", bottom: 24, style: { text: "较弱", fill: "#64748b", fontSize: 13, fontWeight: 700 } },
+      { type: "text", left: "47%", bottom: 24, style: { text: "一般", fill: "#64748b", fontSize: 13, fontWeight: 700 } },
+      { type: "text", right: "10%", bottom: 24, style: { text: "较好", fill: "#64748b", fontSize: 13, fontWeight: 700 } },
+      { type: "text", left: "center", top: 28, style: { text: `R² = ${value.toFixed(2)}`, fill: "#0f172a", fontSize: 24, fontWeight: 800, textAlign: "center" } },
+      { type: "text", left: "center", top: 58, style: { text: "越接近 1，整体解释能力越强", fill: "#475569", fontSize: 13, textAlign: "center" } },
+    ],
+  };
+}
+
 function resolveTheoryChartOption(component, options = {}) {
   const kind = component.chartSpec?.kind || component.kind || "learningflow";
+  if (kind === "dataset-histogram") return makeDatasetHistogramChartOption(component.chartSpec || {}, options);
+  if (kind === "dataset-scatter") return makeDatasetScatterChartOption(component.chartSpec || {}, options);
+  if (kind === "dataset-training-flow") return makeDatasetTrainingFlowChartOption(component.chartSpec || {}, options);
+  if (kind === "regression-fit") return makeRegressionFitChartOption(component.chartSpec || {}, options);
+  if (kind === "loss-curve") return makeLossCurveChartOption(component.chartSpec || {}, options);
+  if (kind === "feature-coefficients") return makeFeatureCoefficientChartOption(component.chartSpec || {}, options);
+  if (kind === "actual-prediction-compare") return makeActualPredictionCompareChartOption(component.chartSpec || {}, options);
+  if (kind === "residual-fit") return makeResidualFitChartOption(component.chartSpec || {}, options);
+  if (kind === "model-training-flow") return makeModelTrainingFlowChartOption(component.chartSpec || {}, options);
+  if (kind === "fit-before-after") return makeFitBeforeAfterChartOption(component.chartSpec || {}, options);
+  if (kind === "multi-parameter-lines") return makeMultipleParameterLinesChartOption(component.chartSpec || {}, options);
+  if (kind === "gradient-descent-path") return makeGradientDescentPathChartOption(component.chartSpec || {}, options);
+  if (kind === "learning-rate-compare") return makeLearningRateCompareChartOption(component.chartSpec || {}, options);
+  if (kind === "error-square-amplify") return makeErrorSquareAmplifyChartOption(component.chartSpec || {}, options);
+  if (kind === "r2-scale") return makeR2ScaleChartOption(component.chartSpec || {}, options);
   if (kind === "learningflow") return makeLearningFlowChartOption(component.chartSpec || {}, options);
   return makeLearningFlowChartOption(component.chartSpec || {}, options);
 }
@@ -685,6 +1557,7 @@ function renderTheoryDeckDetail(pageId) {
   bindTheoryDeck(pageId);
   setTheoryEditing(false);
   observeTheorySlideViewport();
+  refreshTheoryRightPanel();
   renderTheorySlide(THEORY_PAGE_STATE.currentSlide);
 }
 
@@ -744,11 +1617,13 @@ function renderTheoryDeck(pageId) {
           <button type="button" id="theoryDeleteComponentBtn" disabled>删除组件</button>
         </div>
         <div class="theory-tool-group">
+          <button type="button" data-insert-component="title">插入标题</button>
           <button type="button" data-insert-component="text">插入文本</button>
           <button type="button" data-insert-component="card">插入卡片</button>
           <button type="button" data-insert-component="bullets">插入要点</button>
           <button type="button" data-insert-component="callout">插入提示</button>
           <button type="button" data-insert-component="formula">插入公式</button>
+          <button type="button" data-insert-component="table">插入表格</button>
           <button type="button" id="theoryImageBtn">插入图片</button>
           <input id="theoryImageInput" type="file" accept="image/*" hidden>
         </div>
@@ -777,30 +1652,61 @@ function renderTheoryDeck(pageId) {
   `;
 }
 function renderTheorySlideMarkup(slide, index) {
+  const components = [...(slide.components || [])].sort((a, b) => parseLayerZIndex(a, 1) - parseLayerZIndex(b, 1));
   return `
     <article class="theory-slide ${slide.layout ? `theory-slide-${escapeHtml(slide.layout)}` : ""}" data-slide-id="${escapeHtml(slide.id)}" data-theory-slide="${index}" aria-label="第 ${index + 1} 页">
-      ${slide.components.map(component => renderComponent(component)).join("")}
+      ${components.map(component => renderComponent(component)).join("")}
     </article>
   `;
 }
 function renderComponent(component) {
   const type = component.type || "text";
-  const style = component.position ? `left:${component.position.left || "0px"};top:${component.position.top || "0px"};width:${component.position.width || "240px"};height:${component.position.height || "auto"};z-index:${component.position.zIndex || 1};` : "";
+  const zIndex = parseLayerZIndex(component, 1);
+  const isVisible = component.visible !== false;
+  const isLocked = Boolean(component.locked);
+  const style = component.position ? `left:${component.position.left || "0px"};top:${component.position.top || "0px"};width:${component.position.width || "240px"};height:${component.position.height || "auto"};z-index:${component.position.zIndex || component.zIndex || 1};` : `z-index:${zIndex};`;
   const freeClass = component.position ? " is-free-positioned" : "";
+  const visibilityClass = isVisible ? "" : " is-hidden";
+  const lockedClass = isLocked ? " is-locked" : "";
   let content = "";
-  if (type === "cards") {
+  if (type === "card") {
+    const parts = cardParts(component);
+    const titleStyle = component.style?.titleStyle || component.style || {};
+    const bodyStyle = component.style?.bodyStyle || component.style || {};
+    content = `
+      <div class="card-component" style="${cardContainerStyle(component.style || {})}">
+        <div class="card-header">
+          ${editableTag("div", `${component.id}:title`, parts.title, titleStyle, "theory-card-title-editable")}
+        </div>
+        <div class="card-body">
+          ${editableTag("div", `${component.id}:body`, parts.body, bodyStyle, "theory-card-body-editable")}
+        </div>
+      </div>`;
+  } else if (type === "cards") {
     if (component.items.length === 1) {
       const item = component.items[0];
       content = `
         <div class="theory-info-card theory-info-card-standalone${item.position ? " is-free-positioned" : ""}" data-edit-unit-id="${escapeHtml(component.id)}:${escapeHtml(item.id)}" data-edit-unit-type="card" style="${positionToCss(item.position)}">
-          ${editableTag("strong", `${component.id}:${item.id}:title`, item.title || "卡片标题", item.titleStyle || item.style)}
-          ${editableTag("span", `${component.id}:${item.id}:body`, item.body || "卡片正文", item.bodyStyle || item.style)}
+          <div class="card-component" style="${cardContainerStyle(item.style || {})}">
+            <div class="card-header">
+              ${editableTag("div", `${component.id}:${item.id}:title`, item.title || "卡片标题", item.titleStyle || item.style, "theory-card-title-editable")}
+            </div>
+            <div class="card-body">
+              ${editableTag("div", `${component.id}:${item.id}:body`, item.body || "卡片正文", item.bodyStyle || item.style, "theory-card-body-editable")}
+            </div>
+          </div>
         </div>`;
     } else {
       content = `<div class="theory-card-grid">${component.items.map(item => `
       <div class="theory-info-card${item.position ? " is-free-positioned" : ""}" data-edit-unit-id="${escapeHtml(component.id)}:${escapeHtml(item.id)}" data-edit-unit-type="card" style="${positionToCss(item.position)}">
-        ${editableTag("strong", `${component.id}:${item.id}:title`, item.title || "卡片标题", item.titleStyle || item.style)}
-        ${editableTag("span", `${component.id}:${item.id}:body`, item.body || "卡片正文", item.bodyStyle || item.style)}
+        <div class="card-component" style="${cardContainerStyle(item.style || {})}">
+          <div class="card-header">
+            ${editableTag("div", `${component.id}:${item.id}:title`, item.title || "卡片标题", item.titleStyle || item.style, "theory-card-title-editable")}
+          </div>
+          <div class="card-body">
+            ${editableTag("div", `${component.id}:${item.id}:body`, item.body || "卡片正文", item.bodyStyle || item.style, "theory-card-body-editable")}
+          </div>
+        </div>
       </div>`).join("")}</div>`;
     }
   } else if (type === "bullets") {
@@ -816,7 +1722,18 @@ function renderComponent(component) {
   } else if (type === "image") {
     const src = component.src || "";
     const alt = component.alt || "课件图片";
-    content = `<figure class="theory-image-frame">${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}">` : `<div class="theory-image-placeholder">图片</div>`}${editableTag("figcaption", `${component.id}:alt`, alt, component.style, "theory-image-caption")}</figure>`;
+    const imageStyle = normalizeImageStyle(component.imageStyle);
+    const objectFit = normalizeImageObjectFit(component.objectFit);
+    const caption = String(component.caption || "");
+    const captionClass = caption.trim() ? "" : " is-empty";
+    content = `
+      <figure class="theory-image-frame image-component ${escapeHtml(imageStyle)}" data-image-style="${escapeHtml(imageStyle)}" data-object-fit="${escapeHtml(objectFit)}">
+        ${src ? `<img src="${escapeHtml(src)}" alt="${escapeHtml(alt)}" style="object-fit:${escapeHtml(objectFit)};">` : `<div class="theory-image-placeholder">图片</div>`}
+        ${editableTag("figcaption", `${component.id}:caption`, caption, component.style, `theory-image-caption${captionClass}`)}
+        ${renderImageQuickToolbar(component)}
+      </figure>`;
+  } else if (type === "table") {
+    content = renderTableComponent(component);
   } else if (type === "chart") {
     content = `
       <figure class="theory-chart-frame">
@@ -838,11 +1755,58 @@ function renderComponent(component) {
     ? ` data-visual-kind="${escapeHtml(component.kind || "")}" data-visual-label="${escapeHtml(component.label || "")}"`
     : "";
   return `
-    <div class="theory-component theory-component-${escapeHtml(type)}${freeClass}" data-component-id="${escapeHtml(component.id)}" data-component-type="${escapeHtml(type)}"${visualAttrs} style="${style}">
+    <div class="theory-component theory-component-${escapeHtml(type)}${freeClass}${visibilityClass}${lockedClass}" data-component-id="${escapeHtml(component.id)}" data-component-type="${escapeHtml(type)}" data-layer-name="${escapeHtml(component.layerName || layerLabelForType(type))}" data-layer-visible="${String(isVisible)}" data-layer-locked="${String(isLocked)}"${visualAttrs} style="${style}">
       ${renderEditHandles()}
+      ${isLocked ? `<span class="theory-lock-badge" aria-hidden="true">已锁定</span>` : ""}
       ${content}
     </div>
   `;
+}
+
+function renderTableComponent(component) {
+  const tableData = normalizeTableData(component.tableData);
+  const tableStyle = normalizeTableStyle(component.tableStyle);
+  const cssVars = [
+    `--table-font-size:${tableStyle.fontSize}px`,
+    `--table-header-bg:${tableStyle.headerBackground}`,
+    `--table-border-color:${tableStyle.borderColor}`,
+    `--table-text-color:${tableStyle.textColor}`,
+    `--table-header-color:${tableStyle.headerTextColor}`,
+  ].join(";");
+  const rows = tableData.cells.map((row, rowIndex) => {
+    const tag = tableData.header && rowIndex === 0 ? "th" : "td";
+    const cells = row.map((cell, colIndex) => `<${tag} class="theory-table-cell" contenteditable="false" spellcheck="false" data-table-cell="true" data-row="${rowIndex}" data-col="${colIndex}" data-raw-text="${escapeHtml(cell)}">${escapeHtml(cell)}</${tag}>`).join("");
+    return `<tr>${cells}</tr>`;
+  }).join("");
+  return `
+    <div class="table-component table-component-${escapeHtml(tableStyle.preset)}" data-table-preset="${escapeHtml(tableStyle.preset)}" data-table-header="${String(tableData.header)}" style="${cssVars}">
+      <div class="theory-table-scroll">
+        <table><tbody>${rows}</tbody></table>
+      </div>
+      ${renderTableQuickToolbar(component, tableData, tableStyle)}
+    </div>`;
+}
+
+function renderTableQuickToolbar(component, tableData, tableStyle) {
+  const presets = [
+    ["clean", "简洁"],
+  ];
+  return `
+    <div class="theory-table-toolbar" data-html2canvas-ignore="true" aria-label="表格工具栏">
+      <span class="theory-table-toolbar-label">行操作</span>
+      <button type="button" data-table-action="insert-row-above" title="在当前单元格所在行上方插入一行">上方插入</button>
+      <button type="button" data-table-action="insert-row-below" title="在当前单元格所在行下方插入一行">下方插入</button>
+      <button type="button" data-table-action="delete-row" title="删除当前单元格所在行">删除行</button>
+      <span class="theory-table-toolbar-label">列操作</span>
+      <button type="button" data-table-action="insert-col-left" title="在当前单元格所在列左侧插入一列">左侧插入</button>
+      <button type="button" data-table-action="insert-col-right" title="在当前单元格所在列右侧插入一列">右侧插入</button>
+      <button type="button" data-table-action="delete-col" title="删除当前单元格所在列">删除列</button>
+      <span class="theory-table-toolbar-sep"></span>
+      <span class="theory-table-toolbar-label">表格</span>
+      <button type="button" class="${tableData.header ? "is-active" : ""}" data-table-action="toggle-header">表头</button>
+      ${presets.map(([value, label]) => `<button type="button" class="${tableStyle.preset === value ? "is-active" : ""}" data-table-preset-option="${value}">${label}</button>`).join("")}
+      <button type="button" class="theory-table-toolbar-danger" data-table-action="delete-table">删除表格</button>
+    </div>`;
 }
 
 function renderEditHandles() {
@@ -850,6 +1814,22 @@ function renderEditHandles() {
     <button class="theory-drag-handle" type="button" data-drag-handle data-html2canvas-ignore="true" aria-label="拖动组件"></button>
     ${["n", "ne", "e", "se", "s", "sw", "w", "nw"].map(handle => `<button class="theory-resize-handle theory-resize-${handle}" type="button" data-resize-handle="${handle}" data-html2canvas-ignore="true" aria-label="${resizeHandleLabel(handle)}"></button>`).join("")}
   `;
+}
+
+function renderImageQuickToolbar(component) {
+  const imageStyle = normalizeImageStyle(component.imageStyle);
+  const styleOptions = [
+    ["clean", "无边框"],
+    ["card", "卡片"],
+    ["figure", "图注"],
+  ];
+  return `
+    <div class="theory-image-toolbar" data-html2canvas-ignore="true" aria-label="图片工具条">
+      <span class="theory-image-toolbar-label">样式</span>
+      ${styleOptions.map(([value, label]) => `<button type="button" class="${imageStyle === value ? "is-active" : ""}" data-image-style-option="${value}">${label}</button>`).join("")}
+      <button type="button" data-image-action="replace">替换</button>
+      <button type="button" data-image-action="delete">删除</button>
+    </div>`;
 }
 function positionToCss(position) {
   if (!position) return "";
@@ -873,6 +1853,118 @@ function resizeHandleLabel(handle) {
 function editableTag(tag, editId, text, style = {}, extraClass = "") {
   const rawText = String(text ?? "");
   return `<${tag} class="theory-editable ${extraClass}" contenteditable="false" spellcheck="false" data-edit-id="${escapeHtml(editId)}" data-raw-text="${escapeHtml(rawText)}" style="${styleToCss(style)}">${renderTextWithInlineMath(rawText)}</${tag}>`;
+}
+
+function cardParts(component) {
+  const title = String(component?.title || "").trim();
+  const body = String(component?.body || "").trim();
+  if (title || body) {
+    return {
+      title: title || "卡片标题",
+      body: body || "卡片正文"
+    };
+  }
+  const rawText = String(component?.text || "");
+  const lines = rawText.split(/\r?\n/);
+  const first = String(lines.shift() || "").trim();
+  const rest = lines.join("\n").trim();
+  return {
+    title: first || "卡片标题",
+    body: rest || "卡片正文"
+  };
+}
+
+function cardContainerStyle(style = {}) {
+  const next = {};
+  const background = style.backgroundColor || style.background;
+  if (background) next.background = background;
+  if (style.borderColor) next.borderColor = style.borderColor;
+  if (style.borderRadius !== undefined && style.borderRadius !== null) next.borderRadius = style.borderRadius;
+  if (style.boxShadow) next.boxShadow = style.boxShadow;
+  return styleToCss(next);
+}
+
+function normalizeCardColorValue(value) {
+  return String(value || "").toLowerCase().replace(/\s+/g, "");
+}
+
+function resolveCardBackground(style = {}) {
+  return style.backgroundColor || style.background || "";
+}
+
+function selectedCardItem(component) {
+  if (!component || component.type !== "cards") return null;
+  const selectedId = String(THEORY_PAGE_STATE.selectedId || "");
+  if (selectedId.startsWith(component.id + ":")) {
+    const parts = selectedId.split(":");
+    if (parts.length >= 3) {
+      const item = component.items.find(entry => entry.id === parts[1]);
+      if (item) return item;
+    }
+  }
+  return component.items?.[0] || null;
+}
+
+function updateCardComponentBackground(componentEl, component, itemId, color) {
+  if (!componentEl) return;
+  if (component.type === "card") {
+    const card = componentEl.querySelector(".card-component");
+    if (card) card.style.background = color;
+    return;
+  }
+  if (component.type === "cards") {
+    const item = component.items.find(entry => entry.id === itemId) || component.items?.[0];
+    if (!item) return;
+    const unitId = `${component.id}:${item.id}`;
+    const card = componentEl.querySelector(`[data-edit-unit-id="${cssEscape(unitId)}"] .card-component`);
+    if (card) card.style.background = color;
+  }
+}
+
+function applyCardBackgroundColor(componentId, itemId, color) {
+  if (!THEORY_PAGE_STATE.editing || !componentId) return;
+  const component = findComponentById(componentId);
+  if (!component) return;
+  const componentEl = document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(componentId)}"]`);
+  if (componentEl?.classList.contains("is-locked") || component.locked) return;
+  pushDeckHistory("card-background");
+  if (component.type === "card") {
+    component.style = { ...(component.style || {}), backgroundColor: color };
+  } else if (component.type === "cards") {
+    const item = component.items.find(entry => entry.id === itemId) || component.items?.[0];
+    if (!item) return;
+    item.style = { ...(item.style || {}), backgroundColor: color };
+  }
+  updateCardComponentBackground(componentEl, component, itemId, color);
+  commitDomToState();
+  markTheoryDirty();
+  refreshTheoryRightPanel();
+}
+
+function renderCardStylePanel(component, componentEl) {
+  if (!component || (component.type !== "card" && component.type !== "cards")) return "";
+  const locked = componentEl?.classList.contains("is-locked") || component.locked;
+  const item = component.type === "cards" ? selectedCardItem(component) : null;
+  const style = component.type === "cards" ? (item?.style || {}) : (component.style || {});
+  const current = normalizeCardColorValue(resolveCardBackground(style) || THEORY_CARD_DEFAULT_BACKGROUND);
+  const itemId = item?.id || "";
+  return `
+    <section class="content-card theory-card-style-panel" data-card-style-panel data-card-component-id="${escapeHtml(component.id)}" data-card-item-id="${escapeHtml(itemId)}">
+      <div class="theory-layer-panel-head">
+        <div>
+          <div class="eyebrow">样式</div>
+          <h3>卡片底色</h3>
+        </div>
+        <div class="theory-layer-panel-subtitle">选择当前卡片的背景色</div>
+      </div>
+      <div class="card-color-row">
+        ${THEORY_CARD_COLOR_SWATCHES.map(({ label, value }) => {
+          const normalized = normalizeCardColorValue(value);
+          const active = normalized === current;
+          return `<button type="button" class="card-color-swatch${active ? " active" : ""}" data-card-color="${escapeHtml(value)}" title="${escapeHtml(label)}" aria-label="${escapeHtml(label)}" ${locked ? "disabled" : ""} style="background:${escapeHtml(value)}"></button>`;
+        }).join("")}
+      </div>
+    </section>`;
 }
 
 function renderTextWithInlineMath(text) {
@@ -907,18 +1999,19 @@ function renderFormulaComponent(component) {
   ensureTheoryFormulaSupport();
   const latex = normalizeFormulaLatex(component.text || THEORY_DEFAULT_FORMULA);
   const style = {
-    fontSize: "28px",
-    lineHeight: "1.8",
+    fontSize: "24px",
+    lineHeight: "1.15",
     color: "#0f172a",
     textAlign: "center",
     ...component.style,
   };
   const editId = `${component.id}:text`;
   return `
-    <div class="theory-formula-box" data-formula-box="${escapeHtml(editId)}" style="${styleToCss(style)}">
+    <div class="theory-formula-box" data-formula-box="${escapeHtml(editId)}" data-edit-id="${escapeHtml(editId)}" data-formula-latex="${escapeHtml(latex)}" style="${styleToCss(style)}">
       <div class="theory-formula-preview" data-formula-preview="${escapeHtml(editId)}" aria-label="公式预览">${renderLatexToHtml(latex)}</div>
-      <div class="theory-editable theory-formula-source" contenteditable="false" spellcheck="false" data-edit-id="${escapeHtml(editId)}" data-formula-source="true" aria-label="LaTeX 公式源码">${escapeHtml(latex)}</div>
-    </div>`;
+      <div class="theory-formula-source-data" data-edit-id="${escapeHtml(editId)}" data-formula-source="true" data-formula-latex="${escapeHtml(latex)}" aria-hidden="true">${escapeHtml(latex)}</div>
+    </div>
+    <span class="formula-edit-hint" aria-hidden="true" data-selected-text="双击编辑公式" data-hover-text="双击编辑"></span>`;
 }
 
 function normalizeFormulaLatex(value) {
@@ -956,59 +2049,102 @@ function ensureTheoryFormulaStyles() {
   style.id = THEORY_FORMULA_STYLE_ID;
   style.textContent = `
     .theory-component-formula .theory-formula-box {
+      width: 100%;
+      height: 100%;
+      min-height: 0;
+      padding: 6px 10px;
+      box-sizing: border-box;
       display: flex;
-      flex-direction: column;
+      align-items: center;
       justify-content: center;
-      gap: 10px;
-      min-height: 86px;
-      padding: 18px 22px;
+      overflow: hidden;
       border: 1px solid rgba(148, 163, 184, 0.24);
       border-radius: 20px;
       background: linear-gradient(180deg, rgba(255,255,255,0.96), rgba(248,250,252,0.94));
       box-shadow: 0 16px 34px rgba(15, 23, 42, 0.08);
-      overflow: hidden;
     }
     .theory-component-formula .theory-formula-preview {
+      flex: 1 1 auto;
       width: 100%;
-      min-height: 38px;
+      height: 100%;
+      min-height: 0;
       display: flex;
       align-items: center;
       justify-content: center;
       text-align: center;
       color: inherit;
+      overflow: hidden;
       overflow-wrap: anywhere;
     }
-    .theory-component-formula .theory-formula-source {
+    .theory-component-formula .theory-formula-source-data {
       display: none;
-      width: 100%;
-      min-height: 34px;
-      padding: 8px 10px;
-      border-radius: 12px;
-      border: 1px dashed rgba(37,99,235,0.28);
-      background: rgba(239,246,255,0.74);
-      color: #1e293b;
-      font-family: Consolas, "SFMono-Regular", "Courier New", monospace;
-      font-size: 15px;
-      line-height: 1.55;
-      text-align: left;
-      white-space: pre-wrap;
-      outline: none;
-      box-sizing: border-box;
-    }
-    .theory-deck-shell.is-editing .theory-component-formula .theory-formula-source {
-      display: block;
-    }
-    .theory-deck-shell.is-editing .theory-component-formula .theory-formula-box {
-      justify-content: flex-start;
-    }
-    .theory-component-formula .theory-formula-source:focus {
-      border-color: rgba(37,99,235,0.55);
-      box-shadow: 0 0 0 3px rgba(37,99,235,0.10);
-      background: #ffffff;
     }
     .theory-component-formula .katex-display {
       margin: 0;
       width: 100%;
+    }
+    .theory-component-formula .katex {
+      font-size: inherit;
+      line-height: 1.1;
+    }
+    .theory-component-formula .formula-edit-hint {
+      position: absolute;
+      right: 8px;
+      top: -28px;
+      z-index: 10;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px 8px;
+      border-radius: 999px;
+      border: 1px solid rgba(147, 197, 253, 0.8);
+      background: rgba(239, 246, 255, 0.95);
+      color: #2563eb;
+      font-size: 12px;
+      line-height: 1.1;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transform: translateY(2px);
+      transition: opacity .14s ease, transform .14s ease;
+    }
+    .theory-component-formula .formula-edit-hint::before {
+      content: attr(data-selected-text);
+    }
+    .theory-deck-shell.is-editing .theory-component-formula:hover .formula-edit-hint,
+    .theory-deck-shell.is-editing .theory-component-formula.is-selected .formula-edit-hint,
+    .theory-deck-shell.is-editing .theory-component-formula.is-editing-formula .formula-edit-hint {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .theory-deck-shell.is-editing .theory-component-formula:hover .formula-edit-hint::before {
+      content: attr(data-hover-text);
+    }
+    .theory-component-formula.is-editing-formula .formula-edit-hint {
+      opacity: 0 !important;
+    }
+    .theory-formula-source-editor {
+      position: fixed;
+      z-index: 10020;
+      width: min(${THEORY_FORMULA_EDITOR_WIDTH}px, calc(100vw - 24px));
+      min-width: 240px;
+      max-width: calc(100vw - 24px);
+      min-height: ${THEORY_FORMULA_EDITOR_HEIGHT}px;
+      max-height: min(260px, calc(100vh - 24px));
+      padding: 10px 12px;
+      border: 1px solid rgba(37, 99, 235, 0.42);
+      border-radius: 14px;
+      background: rgba(255, 255, 255, 0.98);
+      box-shadow: 0 18px 40px rgba(15, 23, 42, 0.18);
+      color: #0f172a;
+      font-family: Consolas, "SFMono-Regular", "Courier New", monospace;
+      font-size: 15px;
+      line-height: 1.5;
+      white-space: pre-wrap;
+      overflow: auto;
+      resize: none;
+      outline: none;
+      box-sizing: border-box;
     }
     .theory-formula-fallback {
       display: inline-flex;
@@ -1129,9 +2265,9 @@ function queueTheoryFormulaRender() {
 }
 
 function renderTheoryFormulaPreviews() {
-  const sourceNodes = Array.from(document.querySelectorAll(".theory-formula-source[data-edit-id]"));
+  const sourceNodes = Array.from(document.querySelectorAll(".theory-formula-source-data[data-edit-id]"));
   const inlineNodes = Array.from(document.querySelectorAll(".theory-editable[data-raw-text]"))
-    .filter(node => !node.classList.contains("theory-formula-source") && node.dataset.inlineMathEditing !== "true");
+    .filter(node => node.dataset.inlineMathEditing !== "true");
   if (!sourceNodes.length && !inlineNodes.length) return;
   ensureTheoryFormulaSupport();
   sourceNodes.forEach(sourceNode => {
@@ -1143,9 +2279,14 @@ function renderTheoryFormulaPreviews() {
 }
 
 function updateTheoryFormulaPreview(sourceNode) {
-  const latex = normalizeFormulaLatex(sourceNode.innerText || sourceNode.textContent || sourceNode.dataset.formulaLatex || THEORY_DEFAULT_FORMULA);
-  sourceNode.dataset.formulaLatex = latex;
-  const box = sourceNode.closest(".theory-formula-box");
+  const box = sourceNode?.classList?.contains("theory-formula-box") ? sourceNode : sourceNode?.closest(".theory-formula-box");
+  const dataNode = box?.querySelector(".theory-formula-source-data[data-formula-source='true']") || sourceNode;
+  const latex = normalizeFormulaLatex(dataNode?.dataset.formulaLatex || dataNode?.innerText || dataNode?.textContent || box?.dataset.formulaLatex || THEORY_DEFAULT_FORMULA);
+  if (box) box.dataset.formulaLatex = latex;
+  if (dataNode) {
+    dataNode.dataset.formulaLatex = latex;
+    dataNode.textContent = latex;
+  }
   const preview = box?.querySelector(".theory-formula-preview");
   if (!preview) return;
   preview.innerHTML = renderLatexToHtml(latex);
@@ -1190,15 +2331,6 @@ function isSparseTheorySlide(slide) {
   return ["h1", "h2", "h3", "p", "text"].includes(component.type || "text") && Boolean(text);
 }
 
-function normalizeTheoryDeckForRuntime(pageId, deck) {
-  const nextDeck = clone(deck);
-  if (pageId !== "purpose") return nextDeck;
-  const slide = nextDeck.slides?.[0];
-  if (!slide) return nextDeck;
-  slide.components = slide.components.filter(component => component.type !== "visual" && component.type !== "image" && component.type !== "chart");
-  return nextDeck;
-}
-
 function readSavedState(pageId) {
   const override = THEORY_PAGE_STATE.serverOverrides?.[pageId];
   if (!override?.slides?.length) return null;
@@ -1219,6 +2351,7 @@ function bindTheoryDeck(pageId) {
     renderTheoryDeckDetail(pageId);
   });
   $("theorySaveBtn")?.addEventListener("click", async () => {
+    finishTextEditing();
     commitDomToState();
     await saveTheoryEdits(pageId, { source: "manual" });
     playTheoryModeTransition("readonly");
@@ -1226,17 +2359,36 @@ function bindTheoryDeck(pageId) {
   });
   $("theoryExportBtn")?.addEventListener("click", () => exportTheoryPdf(pageId));
   document.querySelector("[data-theory-detail]")?.addEventListener("click", () => renderTheoryDetail(pageId));
-  $("theoryAddSlideBtn")?.addEventListener("click", addTheorySlide);
-  $("theoryDeleteSlideBtn")?.addEventListener("click", deleteTheorySlide);
-  $("theoryDeleteComponentBtn")?.addEventListener("click", deleteSelectedComponents);
+  $("theoryAddSlideBtn")?.addEventListener("click", () => {
+    finishTextEditing();
+    addTheorySlide();
+  });
+  $("theoryDeleteSlideBtn")?.addEventListener("click", () => {
+    finishTextEditing();
+    deleteTheorySlide();
+  });
+  $("theoryDeleteComponentBtn")?.addEventListener("click", () => {
+    finishTextEditing();
+    deleteSelectedComponents();
+  });
   $("theoryUndoBtn")?.addEventListener("click", undoDeckChange);
   $("theoryRedoBtn")?.addEventListener("click", redoDeckChange);
-  $("theoryDuplicateBtn")?.addEventListener("click", duplicateSelectedComponents);
+  $("theoryDuplicateBtn")?.addEventListener("click", () => {
+    finishTextEditing();
+    duplicateSelectedComponents();
+  });
   $("theorySnapBtn")?.addEventListener("click", toggleSnapToGrid);
-  $("theoryImageBtn")?.addEventListener("click", () => $("theoryImageInput")?.click());
+  $("theoryImageBtn")?.addEventListener("click", () => {
+    finishTextEditing();
+    THEORY_PAGE_STATE.pendingReplaceImageId = null;
+    $("theoryImageInput")?.click();
+  });
   $("theoryImageInput")?.addEventListener("change", event => {
+    finishTextEditing();
     const file = event.target.files?.[0];
-    if (file) insertImageComponent(file);
+    if (file && THEORY_PAGE_STATE.pendingReplaceImageId) replaceImageComponent(THEORY_PAGE_STATE.pendingReplaceImageId, file);
+    else if (file) insertImageComponent(file);
+    THEORY_PAGE_STATE.pendingReplaceImageId = null;
     event.target.value = "";
   });
   document.querySelectorAll("[data-insert-component]").forEach(button => {
@@ -1245,7 +2397,13 @@ function bindTheoryDeck(pageId) {
     });
     button.addEventListener("click", () => {
       const insertType = button.dataset.insertComponent;
+      if (THEORY_PAGE_STATE.activeTableCell) {
+        finishTableCellEditing();
+        insertTheoryComponent(insertType);
+        return;
+      }
       if (insertType === "formula" && insertInlineFormulaAtSelection()) return;
+      finishTextEditing();
       insertTheoryComponent(insertType);
     });
   });
@@ -1258,13 +2416,55 @@ function bindTheoryDeck(pageId) {
 function bindEditableEvents(pageId) {
   const deck = $("theoryDeck");
   if (!deck) return;
+  deck.addEventListener("pointerdown", event => {
+    if (!THEORY_PAGE_STATE.editing) return;
+    if (event.target.closest(".theory-component, .theory-deck-toolbar, .theory-editor-tools, input, textarea, select, button")) return;
+    finishTableCellEditing();
+    finishTextEditing({ preserveComponentSelection: true });
+  });
   deck.querySelectorAll(".theory-component").forEach(component => {
     component.addEventListener("pointerdown", event => {
       if (!THEORY_PAGE_STATE.editing || event.target.closest("[data-edit-unit-id], [data-drag-handle], [data-resize-handle]")) return;
+      if (event.target.closest(".card-header .theory-editable, .card-body .theory-editable")) {
+        return;
+      }
       if (event.target.closest(".theory-editable")) return;
       selectTheoryComponent(component, event.target.closest(".theory-editable"), event.shiftKey);
     });
+    component.addEventListener("contextmenu", event => {
+      if (!THEORY_PAGE_STATE.editing) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectTheoryComponent(component);
+      openTheoryLayerContextMenu(component, event.clientX, event.clientY);
+    });
   });
+  deck.querySelectorAll(".theory-component-formula").forEach(component => {
+    component.addEventListener("dblclick", event => {
+      if (!THEORY_PAGE_STATE.editing || component.classList.contains("is-locked")) return;
+      if (event.target.closest("[data-drag-handle], [data-resize-handle]")) return;
+      event.preventDefault();
+      event.stopPropagation();
+      openTheoryFormulaEditor(component);
+    });
+  });
+  deck.querySelectorAll("[data-image-style-option]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      const component = button.closest(".theory-component-image");
+      updateImageComponentOptions(component, { imageStyle: button.dataset.imageStyleOption });
+      if (button.dataset.imageStyleOption === "figure") focusImageCaption(component);
+    });
+  });
+  deck.querySelectorAll("[data-image-action]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.preventDefault();
+      event.stopPropagation();
+      handleImageToolbarAction(button.closest(".theory-component-image"), button.dataset.imageAction);
+    });
+  });
+  deck.querySelectorAll(".theory-component-table").forEach(bindTableComponentEvents);
   deck.querySelectorAll("[data-edit-unit-id]").forEach(unit => {
     unit.addEventListener("pointerdown", event => {
       if (!THEORY_PAGE_STATE.editing || event.target.closest("[data-drag-handle], [data-resize-handle]")) return;
@@ -1272,9 +2472,20 @@ function bindEditableEvents(pageId) {
     });
   });
   deck.querySelectorAll(".theory-editable").forEach(node => {
+    node.addEventListener("pointerdown", event => {
+      const component = node.closest(".theory-component");
+      const isCardComponent = component?.dataset.componentType === "card" || component?.dataset.componentType === "cards";
+      if (!THEORY_PAGE_STATE.editing || !isCardComponent || component?.classList.contains("is-locked")) return;
+      event.stopPropagation();
+      node.setAttribute("contenteditable", "true");
+      selectTheoryComponent(component, node);
+      focusEditableText(node);
+    });
     node.addEventListener("focus", () => {
       const component = node.closest(".theory-component");
-      if (component && THEORY_PAGE_STATE.selectedIds.includes(component.dataset.componentId)) {
+      if (component?.dataset.componentType === "card" || component?.dataset.componentType === "cards") {
+        selectTheoryComponent(component, node);
+      } else if (component && THEORY_PAGE_STATE.selectedIds.includes(component.dataset.componentId)) {
         document.querySelectorAll(".theory-editable.is-selected").forEach(item => item.classList.remove("is-selected"));
         node.classList.add("is-selected");
         THEORY_PAGE_STATE.selectedId = node.dataset.editId || component.dataset.componentId;
@@ -1293,26 +2504,407 @@ function bindEditableEvents(pageId) {
       }
     });
     node.addEventListener("input", () => {
-      if (node.classList.contains("theory-formula-source")) updateTheoryFormulaPreview(node);
+      if (node.classList.contains("theory-formula-source-data")) updateTheoryFormulaPreview(node);
       else syncInlineMathRawText(node);
       markTheoryDirty();
     });
     node.addEventListener("blur", () => {
-      if (node.classList.contains("theory-formula-source")) updateTheoryFormulaPreview(node);
+      if (node.classList.contains("theory-formula-source-data")) updateTheoryFormulaPreview(node);
       else exitInlineMathEdit(node);
       delete node.dataset.historyPending;
+      const component = node.closest(".theory-component");
+      if (component?.dataset.componentType === "card" || component?.dataset.componentType === "cards") {
+        node.setAttribute("contenteditable", "false");
+      }
       commitDomToState();
     });
     node.addEventListener("dblclick", event => {
-      if (!THEORY_PAGE_STATE.editing) return;
+      const component = node.closest(".theory-component");
+      if (!THEORY_PAGE_STATE.editing || component?.classList.contains("is-locked")) return;
+      if (component?.dataset.componentType === "card" || component?.dataset.componentType === "cards") {
+        return;
+      }
       event.stopPropagation();
       focusEditableText(node);
     });
   });
 }
 
+function updateImageComponentOptions(componentEl, updates = {}) {
+  if (!THEORY_PAGE_STATE.editing || !componentEl || componentEl.classList.contains("is-locked")) return;
+  const frame = componentEl.querySelector(".theory-image-frame");
+  if (!frame) return;
+  pushDeckHistory("image-options");
+  const nextStyle = normalizeImageStyle(updates.imageStyle || frame.dataset.imageStyle);
+  const nextFit = normalizeImageObjectFit(updates.objectFit || frame.dataset.objectFit);
+  frame.dataset.imageStyle = nextStyle;
+  frame.dataset.objectFit = nextFit;
+  frame.classList.remove("clean", "card", "figure");
+  frame.classList.add(nextStyle);
+  const image = frame.querySelector("img");
+  if (image) image.style.objectFit = nextFit;
+  const caption = frame.querySelector(".theory-image-caption");
+  if (caption) caption.classList.toggle("is-empty", !captionText(caption).trim());
+  frame.querySelectorAll("[data-image-style-option]").forEach(button => button.classList.toggle("is-active", button.dataset.imageStyleOption === nextStyle));
+  selectTheoryComponent(componentEl);
+  commitDomToState();
+  markTheoryDirty();
+}
+
+function handleImageToolbarAction(componentEl, action) {
+  if (!THEORY_PAGE_STATE.editing || !componentEl || componentEl.classList.contains("is-locked")) return;
+  const componentId = componentEl.dataset.componentId;
+  selectTheoryComponent(componentEl);
+  if (action === "replace") {
+    THEORY_PAGE_STATE.pendingReplaceImageId = componentId;
+    $("theoryImageInput")?.click();
+  } else if (action === "delete") {
+    deleteSelectedComponentsById([componentId]);
+  }
+}
+
+function focusImageCaption(componentEl) {
+  const caption = componentEl?.querySelector(".theory-image-caption");
+  if (!caption) return;
+  if (!captionText(caption).trim()) {
+    caption.dataset.rawText = "图：";
+    caption.textContent = "图：";
+    caption.classList.remove("is-empty");
+    commitDomToState();
+    markTheoryDirty();
+  }
+  focusEditableText(caption);
+}
+
+function captionText(node) {
+  return node?.dataset?.rawText ?? node?.innerText ?? node?.textContent ?? "";
+}
+
+function bindTableComponentEvents(componentEl) {
+  if (!componentEl || componentEl.dataset.tableEventsBound === "true") return;
+  componentEl.dataset.tableEventsBound = "true";
+  componentEl.addEventListener("pointerdown", event => {
+    if (!THEORY_PAGE_STATE.editing) return;
+    const toolbarButton = event.target.closest("[data-table-action], [data-table-preset-option]");
+    if (toolbarButton) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
+    const cell = event.target.closest(".theory-table-cell");
+    if (!cell || !componentEl.contains(cell)) return;
+    if (cell.getAttribute("contenteditable") === "true") {
+      event.stopPropagation();
+      return;
+    }
+    if (componentEl.classList.contains("is-locked")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    beginTableCellEditing(cell);
+  });
+  componentEl.addEventListener("dblclick", event => {
+    const cell = event.target.closest(".theory-table-cell");
+    if (!THEORY_PAGE_STATE.editing || !cell || componentEl.classList.contains("is-locked")) return;
+    if (cell.getAttribute("contenteditable") !== "true") {
+      event.preventDefault();
+      event.stopPropagation();
+      beginTableCellEditing(cell);
+    }
+  });
+  componentEl.addEventListener("input", event => {
+    const cell = event.target.closest(".theory-table-cell");
+    if (cell?.getAttribute("contenteditable") === "true") {
+      cell.dataset.rawText = cell.innerText || cell.textContent || "";
+      markTheoryDirty();
+    }
+  });
+  componentEl.addEventListener("keydown", event => {
+    const cell = event.target.closest(".theory-table-cell");
+    if (!cell || cell.getAttribute("contenteditable") !== "true") return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      finishTableCellEditing({ cancel: true });
+    } else if (event.key === "Tab") {
+      event.preventDefault();
+      event.stopPropagation();
+      const row = Number(cell.dataset.row);
+      const col = Number(cell.dataset.col);
+      const tableData = normalizeTableData(findComponentById(componentEl.dataset.componentId)?.tableData);
+      const nextCol = col + 1;
+      if (nextCol < tableData.cols) {
+        moveTableCellEditing(cell, 0, 1);
+      } else if (row + 1 < tableData.rows) {
+        moveTableCellEditing(cell, 1, -col);
+      }
+    } else if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      event.stopPropagation();
+      const componentId = componentEl.dataset.componentId;
+      const tableData = normalizeTableData(findComponentById(componentId)?.tableData);
+      if (Number(cell.dataset.row) + 1 < tableData.rows) {
+        moveTableCellEditing(cell, 1, 0);
+      } else {
+        const col = Number(cell.dataset.col);
+        const newRow = tableData.rows;
+        handleTableToolbarAction(componentEl, "insert-row-below");
+        requestAnimationFrame(() => {
+          const nextComponent = document.querySelector(`.theory-component-table[data-component-id="${cssEscape(componentId)}"]`);
+          const next = nextComponent?.querySelector(`.theory-table-cell[data-row="${newRow}"][data-col="${col}"]`);
+          if (next) beginTableCellEditing(next);
+        });
+      }
+    }
+  });
+  componentEl.addEventListener("focusout", event => {
+    const cell = event.target.closest(".theory-table-cell");
+    if (THEORY_PAGE_STATE.activeTableCell?.cell === cell) finishTableCellEditing();
+  });
+  componentEl.addEventListener("click", event => {
+    const actionButton = event.target.closest("[data-table-action]");
+    if (actionButton && componentEl.contains(actionButton)) {
+      event.preventDefault();
+      event.stopPropagation();
+      handleTableToolbarAction(componentEl, actionButton.dataset.tableAction);
+      return;
+    }
+    const presetButton = event.target.closest("[data-table-preset-option]");
+    if (presetButton && componentEl.contains(presetButton)) {
+      event.preventDefault();
+      event.stopPropagation();
+      updateTableComponent(componentEl, tableData => tableData, tableStyle => ({ ...tableStyle, preset: presetButton.dataset.tablePresetOption }));
+    }
+  });
+}
+
+function beginTableCellEditing(cell) {
+  if (!cell) return;
+  finishTextEditing();
+  finishTableCellEditing();
+  const component = cell.closest(".theory-component-table");
+  if (!component || component.classList.contains("is-locked")) return;
+  selectTheoryComponent(component);
+  component.querySelectorAll(".theory-table-cell.is-active-cell, .theory-table-cell.is-editing").forEach(item => {
+    item.classList.remove("is-active-cell", "is-editing");
+    item.setAttribute("contenteditable", "false");
+  });
+  THEORY_PAGE_STATE.activeTableCell = {
+    componentId: component.dataset.componentId,
+    rowIndex: Number(cell.dataset.row),
+    colIndex: Number(cell.dataset.col),
+    cell,
+    originalText: cell.dataset.rawText ?? cell.innerText ?? cell.textContent ?? "",
+  };
+  cell.setAttribute("contenteditable", "true");
+  cell.classList.add("is-editing", "is-active-cell");
+  cell.focus();
+  const range = document.createRange();
+  range.selectNodeContents(cell);
+  range.collapse(false);
+  const selection = document.getSelection();
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function finishTableCellEditing(options = {}) {
+  const active = THEORY_PAGE_STATE.activeTableCell;
+  if (!active?.cell) {
+    if (!options.preserveCellSelection) THEORY_PAGE_STATE.activeTableCell = null;
+    return;
+  }
+  const cell = active.cell;
+  const wasEditing = cell.getAttribute("contenteditable") === "true" || cell.classList.contains("is-editing");
+  if (options.cancel && wasEditing) {
+    cell.textContent = active.originalText;
+    cell.dataset.rawText = active.originalText;
+  } else if (wasEditing) {
+    const text = cell.innerText || cell.textContent || "";
+    cell.dataset.rawText = text;
+    cell.textContent = text;
+  }
+  cell.setAttribute("contenteditable", "false");
+  cell.classList.remove("is-editing");
+  if (options.preserveCellSelection) {
+    cell.classList.add("is-active-cell");
+    active.originalText = cell.dataset.rawText ?? cell.innerText ?? cell.textContent ?? "";
+  } else {
+    cell.classList.remove("is-active-cell");
+    THEORY_PAGE_STATE.activeTableCell = null;
+    cell.blur?.();
+    document.getSelection?.()?.removeAllRanges();
+  }
+  if (wasEditing) {
+    commitDomToState();
+    markTheoryDirty();
+  }
+}
+
+function moveTableCellEditing(cell, rowStep, colStep) {
+  const row = Number(cell.dataset.row) + rowStep;
+  const col = Number(cell.dataset.col) + colStep;
+  const component = cell.closest(".theory-component-table");
+  finishTableCellEditing();
+  const next = component?.querySelector(`.theory-table-cell[data-row="${row}"][data-col="${col}"]`);
+  if (next) beginTableCellEditing(next);
+}
+
+function selectedTableCell(componentEl) {
+  const active = THEORY_PAGE_STATE.activeTableCell?.cell;
+  if (active && (!componentEl || active.closest(".theory-component-table") === componentEl)) return active;
+  return componentEl?.querySelector(".theory-table-cell.is-editing, .theory-table-cell.is-active-cell") || null;
+}
+
+function setActiveTableCell(componentEl, rowIndex, colIndex) {
+  if (!componentEl) return null;
+  const tableData = normalizeTableData(findComponentById(componentEl.dataset.componentId)?.tableData);
+  const row = Math.max(0, Math.min(Number(rowIndex) || 0, tableData.rows - 1));
+  const col = Math.max(0, Math.min(Number(colIndex) || 0, tableData.cols - 1));
+  componentEl.querySelectorAll(".theory-table-cell.is-active-cell, .theory-table-cell.is-editing").forEach(item => {
+    item.classList.remove("is-active-cell", "is-editing");
+    item.setAttribute("contenteditable", "false");
+  });
+  const cell = componentEl.querySelector(`.theory-table-cell[data-row="${row}"][data-col="${col}"]`);
+  if (!cell) return null;
+  cell.classList.add("is-active-cell");
+  THEORY_PAGE_STATE.activeTableCell = {
+    componentId: componentEl.dataset.componentId,
+    rowIndex: row,
+    colIndex: col,
+    cell,
+    originalText: cell.dataset.rawText ?? cell.innerText ?? cell.textContent ?? "",
+  };
+  return cell;
+}
+
+function tableCellForAction(componentEl, tableData) {
+  const active = THEORY_PAGE_STATE.activeTableCell;
+  if (active?.componentId === componentEl?.dataset.componentId && Number.isFinite(active.rowIndex) && Number.isFinite(active.colIndex)) {
+    return {
+      rowIndex: Math.max(0, Math.min(active.rowIndex, tableData.rows - 1)),
+      colIndex: Math.max(0, Math.min(active.colIndex, tableData.cols - 1)),
+    };
+  }
+  const selected = selectedTableCell(componentEl);
+  if (selected) {
+    return {
+      rowIndex: Math.max(0, Math.min(Number(selected.dataset.row) || 0, tableData.rows - 1)),
+      colIndex: Math.max(0, Math.min(Number(selected.dataset.col) || 0, tableData.cols - 1)),
+    };
+  }
+  return {
+    rowIndex: tableData.rows - 1,
+    colIndex: tableData.cols - 1,
+  };
+}
+
+function tableDataFromComponentEl(componentEl) {
+  const rows = Array.from(componentEl.querySelectorAll(".table-component table tr")).map(row => (
+    Array.from(row.querySelectorAll(".theory-table-cell")).map(cell => cell.dataset.rawText ?? cell.innerText ?? cell.textContent ?? "")
+  ));
+  const fallback = normalizeTableData(findComponentById(componentEl.dataset.componentId)?.tableData);
+  return normalizeTableData({
+    rows: rows.length || fallback.rows,
+    cols: rows[0]?.length || fallback.cols,
+    header: componentEl.querySelector(".table-component")?.dataset.tableHeader !== "false",
+    cells: rows.length ? rows : fallback.cells,
+  });
+}
+
+function tableStyleFromComponentEl(componentEl) {
+  const table = componentEl.querySelector(".table-component");
+  const current = normalizeTableStyle(findComponentById(componentEl.dataset.componentId)?.tableStyle);
+  return normalizeTableStyle({
+    ...current,
+    preset: table?.dataset.tablePreset || current.preset,
+  });
+}
+
+function updateTableComponent(componentEl, dataUpdater, styleUpdater = null, options = {}) {
+  if (!THEORY_PAGE_STATE.editing || !componentEl || componentEl.classList.contains("is-locked")) return;
+  const activeCell = options.activeCell || (
+    THEORY_PAGE_STATE.activeTableCell?.componentId === componentEl.dataset.componentId
+      ? {
+          rowIndex: THEORY_PAGE_STATE.activeTableCell.rowIndex,
+          colIndex: THEORY_PAGE_STATE.activeTableCell.colIndex,
+        }
+      : null
+  );
+  finishTableCellEditing({ preserveCellSelection: Boolean(activeCell) });
+  pushDeckHistory("table-edit");
+  commitDomToState();
+  const slide = THEORY_PAGE_STATE.deck.slides[THEORY_PAGE_STATE.currentSlide];
+  const component = slide?.components?.find(item => item.id === componentEl.dataset.componentId);
+  if (!component) return;
+  const nextData = normalizeTableData(dataUpdater(normalizeTableData(component.tableData)));
+  const nextStyle = normalizeTableStyle(styleUpdater ? styleUpdater(normalizeTableStyle(component.tableStyle)) : component.tableStyle);
+  component.tableData = nextData;
+  component.tableStyle = nextStyle;
+  THEORY_PAGE_STATE.selectedIds = [component.id];
+  THEORY_PAGE_STATE.selectedId = component.id;
+  componentEl.classList.add("is-selected");
+  const tableNode = componentEl.querySelector(".table-component");
+  if (tableNode) {
+    tableNode.outerHTML = renderTableComponent(component);
+  }
+  bindTableComponentEvents(componentEl);
+  if (activeCell) {
+    setActiveTableCell(componentEl, activeCell.rowIndex, activeCell.colIndex);
+  }
+  updateEditorToolState();
+  refreshTheoryRightPanel();
+  markTheoryDirty();
+}
+
+function handleTableToolbarAction(componentEl, action) {
+  if (!componentEl) return;
+  if (action === "delete-table") {
+    deleteSelectedComponentsById([componentEl.dataset.componentId]);
+    return;
+  }
+  const current = normalizeTableData(findComponentById(componentEl.dataset.componentId)?.tableData);
+  const { rowIndex: activeRow, colIndex: activeCol } = tableCellForAction(componentEl, current);
+  if (action === "delete-row" && current.rows <= 1) return;
+  if (action === "delete-col" && current.cols <= 1) return;
+  if (action === "delete-row" && current.header && activeRow === 0) {
+    const confirmed = window.confirm?.("删除第一行会移除当前表头内容，确认删除？") ?? false;
+    if (!confirmed) return;
+  }
+  let nextActiveCell = { rowIndex: activeRow, colIndex: activeCol };
+  if (action === "insert-row-above") nextActiveCell = { rowIndex: current.header && activeRow === 0 ? 1 : activeRow, colIndex: activeCol };
+  if (action === "insert-row-below") nextActiveCell = { rowIndex: activeRow + 1, colIndex: activeCol };
+  if (action === "delete-row") nextActiveCell = { rowIndex: Math.min(activeRow, current.rows - 2), colIndex: activeCol };
+  if (action === "insert-col-left") nextActiveCell = { rowIndex: activeRow, colIndex: activeCol };
+  if (action === "insert-col-right") nextActiveCell = { rowIndex: activeRow, colIndex: activeCol + 1 };
+  if (action === "delete-col") nextActiveCell = { rowIndex: activeRow, colIndex: Math.min(activeCol, current.cols - 2) };
+  updateTableComponent(componentEl, tableData => {
+    const next = normalizeTableData(tableData);
+    if (action === "insert-row-above") {
+      const newRow = Array.from({ length: next.cols }, () => "");
+      const insertIndex = next.header && activeRow === 0 ? 1 : activeRow;
+      next.cells.splice(insertIndex, 0, newRow);
+    } else if (action === "insert-row-below") {
+      const newRow = Array.from({ length: next.cols }, () => "");
+      next.cells.splice(activeRow + 1, 0, newRow);
+    } else if (action === "delete-row" && next.cells.length > 1) {
+      next.cells.splice(activeRow, 1);
+    } else if (action === "insert-col-left") {
+      next.cells.forEach(row => row.splice(activeCol, 0, ""));
+    } else if (action === "insert-col-right") {
+      next.cells.forEach(row => row.splice(activeCol + 1, 0, ""));
+    } else if (action === "delete-col" && next.cols > 1) {
+      next.cells.forEach(row => row.splice(activeCol, 1));
+    } else if (action === "toggle-header") {
+      next.header = !next.header;
+    }
+    next.rows = next.cells.length;
+    next.cols = Math.max(1, ...next.cells.map(row => row.length));
+    next.cells = next.cells.map(row => Array.from({ length: next.cols }, (_, index) => String(row[index] ?? "")));
+    return next;
+  }, null, { activeCell: nextActiveCell });
+}
+
 function enterInlineMathEdit(node) {
-  if (!node || node.classList.contains("theory-formula-source")) return;
+  if (!node || node.classList.contains("theory-formula-source-data")) return;
   if (node.dataset.inlineMathEditing === "true") return;
   const rawText = node.dataset.rawText ?? node.innerText ?? node.textContent ?? "";
   node.dataset.rawText = rawText;
@@ -1321,16 +2913,39 @@ function enterInlineMathEdit(node) {
 }
 
 function syncInlineMathRawText(node) {
-  if (!node || node.classList.contains("theory-formula-source")) return;
+  if (!node || node.classList.contains("theory-formula-source-data")) return;
   node.dataset.rawText = node.innerText || node.textContent || "";
 }
 
 function exitInlineMathEdit(node) {
-  if (!node || node.classList.contains("theory-formula-source")) return;
+  if (!node || node.classList.contains("theory-formula-source-data")) return;
   const rawText = node.innerText || node.textContent || node.dataset.rawText || "";
   node.dataset.rawText = rawText;
   delete node.dataset.inlineMathEditing;
   node.innerHTML = renderTextWithInlineMath(rawText);
+}
+
+function finishTextEditing(options = {}) {
+  finishTableCellEditing();
+  const { preserveComponentSelection = true } = options;
+  const activeEditable = document.activeElement?.closest?.(".theory-slide.active .theory-editable");
+  const editables = new Set(document.querySelectorAll(".theory-slide.active .theory-editable[data-inline-math-editing='true']"));
+  if (activeEditable?.classList?.contains("theory-editable")) editables.add(activeEditable);
+
+  editables.forEach(node => {
+    if (node.classList.contains("theory-formula-source-data")) updateTheoryFormulaPreview(node);
+    else exitInlineMathEdit(node);
+    delete node.dataset.historyPending;
+    node.setAttribute("contenteditable", "false");
+    node.blur?.();
+  });
+
+  if (THEORY_PAGE_STATE.formulaEditor) closeTheoryFormulaEditor({ save: true });
+  document.getSelection?.()?.removeAllRanges();
+  if (!preserveComponentSelection) clearSelection();
+  commitDomToState();
+  updateFontTools();
+  updateEditorToolState();
 }
 
 function insertInlineFormulaAtSelection() {
@@ -1349,26 +2964,15 @@ function insertInlineFormulaAtSelection() {
 }
 
 function inlineFormulaInsertionTarget() {
-  const selected = window.getSelection();
-  if (selected?.rangeCount) {
-    const range = selected.getRangeAt(0);
-    const node = range.commonAncestorContainer.nodeType === Node.ELEMENT_NODE
-      ? range.commonAncestorContainer
-      : range.commonAncestorContainer.parentElement;
-    const editable = node?.closest?.(".theory-slide.active .theory-editable");
-    if (isInlineFormulaEditable(editable)) return editable;
-  }
   const active = document.activeElement?.closest?.(".theory-slide.active .theory-editable");
-  if (isInlineFormulaEditable(active)) return active;
-  const selectedEditable = document.querySelector(".theory-slide.active .theory-editable.is-selected");
-  if (isInlineFormulaEditable(selectedEditable)) return selectedEditable;
+  if (isInlineFormulaEditable(active) && active.getAttribute("contenteditable") === "true") return active;
   return null;
 }
 
 function isInlineFormulaEditable(node) {
   return Boolean(node
     && node.classList?.contains("theory-editable")
-    && !node.classList.contains("theory-formula-source")
+    && !node.classList.contains("theory-formula-source-data")
     && !node.closest(".theory-component-formula"));
 }
 
@@ -1395,6 +2999,7 @@ function insertTextIntoEditable(node, text) {
 }
 
 function focusEditableText(node) {
+  node.setAttribute("contenteditable", "true");
   node.focus();
   const selection = window.getSelection();
   const range = document.createRange();
@@ -1402,6 +3007,119 @@ function focusEditableText(node) {
   range.collapse(false);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function formulaDataNode(editId) {
+  return document.querySelector(".theory-formula-source-data[data-edit-id=\"" + cssEscape(editId) + "\"]");
+}
+
+function formulaBoxByEditId(editId) {
+  return document.querySelector(".theory-formula-box[data-edit-id=\"" + cssEscape(editId) + "\"]");
+}
+
+function currentFormulaLatexForComponent(component) {
+  const componentId = component?.dataset?.componentId || component?.id || "";
+  const editId = componentId ? `${componentId}:text` : null;
+  const dataNode = editId ? formulaDataNode(editId) : null;
+  const box = editId ? formulaBoxByEditId(editId) : null;
+  return normalizeFormulaLatex(dataNode?.dataset.formulaLatex || box?.dataset.formulaLatex || dataNode?.textContent || box?.textContent || THEORY_DEFAULT_FORMULA);
+}
+
+function positionTheoryFormulaEditor(editor, box) {
+  const rect = box.getBoundingClientRect();
+  const editorWidth = Math.min(THEORY_FORMULA_EDITOR_WIDTH, Math.max(240, Math.min(window.innerWidth - 24, rect.width)));
+  const editorHeight = THEORY_FORMULA_EDITOR_HEIGHT;
+  let left = rect.left;
+  let top = rect.bottom + 8;
+  if (window.innerWidth - rect.right - 12 >= editorWidth) {
+    left = rect.right + 8;
+    top = rect.top;
+  } else if (top + editorHeight > window.innerHeight - 12) {
+    top = Math.max(12, rect.top - editorHeight - 8);
+  }
+  if (left + editorWidth > window.innerWidth - 12) left = window.innerWidth - editorWidth - 12;
+  if (left < 12) left = 12;
+  if (top + editorHeight > window.innerHeight - 12) top = window.innerHeight - editorHeight - 12;
+  if (top < 12) top = 12;
+  editor.style.left = Math.round(left) + "px";
+  editor.style.top = Math.round(top) + "px";
+  editor.style.width = Math.round(editorWidth) + "px";
+}
+
+function openTheoryFormulaEditor(component) {
+  if (!component || !THEORY_PAGE_STATE.editing) return;
+  const existing = THEORY_PAGE_STATE.formulaEditor;
+  if (existing?.componentId === component.dataset.componentId) {
+    existing.editor?.focus?.();
+    return;
+  }
+  closeTheoryFormulaEditor({ save: true });
+  selectTheoryComponent(component);
+  const box = component.querySelector(".theory-formula-box");
+  if (!box) return;
+  const editId = box.dataset.editId || `${component.dataset.componentId}:text`;
+  const latex = currentFormulaLatexForComponent(component);
+  component.classList.add("is-editing-formula");
+  const editor = document.createElement("textarea");
+  editor.className = "theory-formula-source-editor";
+  editor.value = latex;
+  editor.spellcheck = false;
+  editor.setAttribute("aria-label", "LaTeX 公式源码编辑框");
+  editor.dataset.componentId = component.dataset.componentId || "";
+  editor.dataset.editId = editId;
+  editor.addEventListener("keydown", event => {
+    event.stopPropagation();
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeTheoryFormulaEditor({ save: false });
+      return;
+    }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      closeTheoryFormulaEditor({ save: true });
+    }
+  });
+  editor.addEventListener("blur", () => {
+    closeTheoryFormulaEditor({ save: true });
+  });
+  document.body.appendChild(editor);
+  positionTheoryFormulaEditor(editor, box);
+  editor.focus();
+  editor.setSelectionRange(editor.value.length, editor.value.length);
+  THEORY_PAGE_STATE.formulaEditor = {
+    componentId: component.dataset.componentId,
+    editId,
+    editor,
+    component,
+    box,
+    initialLatex: latex,
+  };
+}
+
+function closeTheoryFormulaEditor(options = {}) {
+  const session = THEORY_PAGE_STATE.formulaEditor;
+  if (!session) return;
+  const { save = true } = options;
+  const { editor, component, box, initialLatex, editId } = session;
+  if (save && editor && component && box) {
+    const nextLatex = normalizeFormulaLatex(editor.value || THEORY_DEFAULT_FORMULA);
+    const currentLatex = normalizeFormulaLatex(initialLatex || THEORY_DEFAULT_FORMULA);
+    if (nextLatex !== currentLatex) {
+      pushDeckHistory("formula-edit");
+      const dataNode = formulaDataNode(editId);
+      if (dataNode) {
+        dataNode.dataset.formulaLatex = nextLatex;
+        dataNode.textContent = nextLatex;
+      }
+      box.dataset.formulaLatex = nextLatex;
+      updateTheoryFormulaPreview(box);
+      markTheoryDirty();
+      commitDomToState();
+    }
+  }
+  if (editor?.isConnected) editor.remove();
+  component?.classList?.remove("is-editing-formula");
+  THEORY_PAGE_STATE.formulaEditor = null;
 }
 
 function renderTheorySlide(index) {
@@ -1427,7 +3145,28 @@ function renderTheorySlide(index) {
 document.addEventListener("keydown", event => {
   const deck = $("theoryDeck");
   if (!deck || !document.querySelector(".shell.theory")) return;
-  if (event.target.closest?.(".theory-editable")) return;
+  if (THEORY_PAGE_STATE.editing && event.key === "Escape" && !event.target.closest?.(".theory-formula-source-editor")) {
+    event.preventDefault();
+    finishTextEditing({ preserveComponentSelection: true });
+    return;
+  }
+  if (event.target.closest?.("input, textarea, select, [contenteditable='true'], .theory-editable, .theory-formula-source-editor")) return;
+  const isLayerShortcut = THEORY_PAGE_STATE.editing && (event.ctrlKey || event.metaKey) && !event.altKey;
+  if (isLayerShortcut && event.key.toLowerCase() === "l") {
+    event.preventDefault();
+    applyTheoryLayerAction("lock-toggle");
+    return;
+  }
+  if (isLayerShortcut && event.key === "]") {
+    event.preventDefault();
+    applyTheoryLayerAction(event.shiftKey ? "front" : "forward");
+    return;
+  }
+  if (isLayerShortcut && event.key === "[") {
+    event.preventDefault();
+    applyTheoryLayerAction(event.shiftKey ? "back" : "backward");
+    return;
+  }
   if (THEORY_PAGE_STATE.editing && (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
     event.preventDefault();
     if (event.shiftKey) redoDeckChange();
@@ -1456,8 +3195,12 @@ window.addEventListener("resize", updateTheorySlideScale);
 
 function setTheoryEditing(enabled) {
   const wasEditing = THEORY_PAGE_STATE.editing;
+  if (!enabled && wasEditing) finishTextEditing({ preserveComponentSelection: false });
   THEORY_PAGE_STATE.editing = Boolean(enabled);
   const deck = $("theoryDeck");
+  const shell = document.querySelector(".shell");
+  if (shell) shell.classList.toggle("theory-with-panel", THEORY_PAGE_STATE.editing);
+  if (typeof applyShellLayout === "function") applyShellLayout();
   if (!deck) return;
   if (THEORY_PAGE_STATE.editing && !wasEditing) {
     THEORY_PAGE_STATE.historyPast = [];
@@ -1472,13 +3215,17 @@ function setTheoryEditing(enabled) {
   $("theoryCancelBtn").hidden = !THEORY_PAGE_STATE.editing;
   $("theorySaveBtn").hidden = !THEORY_PAGE_STATE.editing;
   deck.querySelectorAll(".theory-editable").forEach(node => {
-    node.setAttribute("contenteditable", String(THEORY_PAGE_STATE.editing));
+    const component = node.closest(".theory-component");
+    const locked = Boolean(component?.classList.contains("is-locked"));
+    const isCardComponent = component?.dataset.componentType === "card" || component?.dataset.componentType === "cards";
+    node.setAttribute("contenteditable", String(THEORY_PAGE_STATE.editing && !locked && !isCardComponent));
   });
   renderTheoryFormulaPreviews();
   if (!THEORY_PAGE_STATE.editing) clearSelection();
   setTheoryStatus(THEORY_PAGE_STATE.editing ? "编辑模式" : "只读模式");
   updateFontTools();
   updateEditorToolState();
+  refreshTheoryRightPanel();
   renderTheorySlide(THEORY_PAGE_STATE.currentSlide);
 }
 
@@ -1537,6 +3284,378 @@ function updateEditorToolState() {
   }
 }
 
+function refreshTheoryRightPanel() {
+  const panel = $("rightPanel");
+  if (!panel) return;
+  if (!THEORY_PAGE_STATE.editing) {
+    panel.innerHTML = "";
+    hideTheoryLayerContextMenu();
+    return;
+  }
+  const slide = THEORY_PAGE_STATE.deck?.slides?.[THEORY_PAGE_STATE.currentSlide];
+  const layers = deckComponentLayers(slide);
+  if (!layers.length) {
+    panel.innerHTML = `
+      <section class="content-card theory-layer-panel">
+        <div class="theory-layer-panel-head">
+          <div>
+            <div class="eyebrow">图层</div>
+            <h3>当前没有可显示的图层</h3>
+          </div>
+        </div>
+      </section>`;
+    return;
+  }
+  const selectedIds = new Set(THEORY_PAGE_STATE.selectedIds);
+  const selectedComponentEl = selectedComponents()[selectedComponents().length - 1] || null;
+  const selectedComponent = selectedComponentEl ? findComponentById(selectedComponentEl.dataset.componentId) : null;
+  const cardPanel = renderCardStylePanel(selectedComponent, selectedComponentEl);
+  panel.innerHTML = `${cardPanel}
+    <section class="content-card theory-layer-panel" data-theory-layer-panel>
+      <div class="theory-layer-panel-head">
+        <div>
+          <div class="eyebrow">图层</div>
+          <h3>当前页图层</h3>
+        </div>
+        <div class="theory-layer-panel-subtitle">从上到下对应画布中的层级</div>
+      </div>
+      <div class="theory-layer-panel-actions">
+        <button type="button" data-layer-action="front">置顶</button>
+        <button type="button" data-layer-action="forward">上移</button>
+        <button type="button" data-layer-action="backward">下移</button>
+        <button type="button" data-layer-action="back">置底</button>
+        <button type="button" data-layer-action="lock-toggle">锁定/解锁</button>
+        <button type="button" data-layer-action="visible-toggle">显示/隐藏</button>
+      </div>
+      <div class="theory-layer-list" data-layer-list>
+        ${layers.map(component => {
+          const isSelected = selectedIds.has(component.id);
+          const isLocked = Boolean(component.locked);
+          const isVisible = component.visible !== false;
+          return `
+            <div class="theory-layer-row${isSelected ? " is-selected" : ""}${isLocked ? " is-locked" : ""}${isVisible ? "" : " is-hidden"}" data-layer-component-id="${escapeHtml(component.id)}" draggable="true" role="button" tabindex="0" aria-pressed="${String(isSelected)}">
+              <button type="button" class="theory-layer-main" data-layer-select>
+                <span class="theory-layer-icon" aria-hidden="true">${escapeHtml(layerIconForType(component.type))}</span>
+                <span class="theory-layer-name">${escapeHtml(component.layerName || layerLabelForType(component.type || "p"))}</span>
+                <span class="theory-layer-meta">${escapeHtml(layerLabelForType(component.type || "p"))}</span>
+              </button>
+              <div class="theory-layer-row-actions">
+                <button type="button" data-layer-visible title="${isVisible ? "隐藏组件" : "显示组件"}">${isVisible ? "👁" : "◻"}</button>
+                <button type="button" data-layer-locked title="${isLocked ? "解锁组件" : "锁定组件"}">${isLocked ? "🔒" : "🔓"}</button>
+                <button type="button" data-layer-more title="更多操作">⋯</button>
+              </div>
+            </div>`;
+        }).join("")}
+      </div>
+    </section>`;
+  bindCardStylePanel(panel);
+  bindTheoryLayerPanel(panel);
+}
+
+function layerIconForType(type) {
+  const icons = {
+    p: "T",
+    h1: "H",
+    h2: "H2",
+    eyebrow: "T",
+    formula: "∑",
+    image: "▣",
+    chart: "⟡",
+    table: "▦",
+    cards: "▤",
+    bullets: "•",
+    callout: "!",
+    visual: "◧",
+  };
+  return icons[type] || "•";
+}
+
+function bindTheoryLayerPanel(panel) {
+  panel.querySelectorAll("[data-layer-select]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      const row = button.closest("[data-layer-component-id]");
+      if (row) selectTheoryComponentById(row.dataset.layerComponentId);
+    });
+  });
+  panel.querySelectorAll("[data-layer-visible]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      toggleTheoryComponentVisible(button.closest("[data-layer-component-id]")?.dataset.layerComponentId);
+    });
+  });
+  panel.querySelectorAll("[data-layer-locked]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      toggleTheoryComponentLocked(button.closest("[data-layer-component-id]")?.dataset.layerComponentId);
+    });
+  });
+  panel.querySelectorAll("[data-layer-more]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      const componentId = button.closest("[data-layer-component-id]")?.dataset.layerComponentId;
+      const component = componentId ? findComponentById(componentId) : null;
+      if (!component) return;
+      const rect = button.getBoundingClientRect();
+      openTheoryLayerContextMenu(component, rect.right, rect.bottom + 6);
+    });
+  });
+  panel.querySelectorAll("[data-layer-component-id]").forEach(row => {
+    row.addEventListener("click", event => {
+      if (event.target.closest("button")) return;
+      selectTheoryComponentById(row.dataset.layerComponentId);
+    });
+    row.addEventListener("dblclick", event => {
+      if (event.target.closest("[data-layer-visible], [data-layer-locked], [data-layer-more]")) return;
+      renameTheoryLayer(row.dataset.layerComponentId);
+    });
+    row.addEventListener("keydown", event => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectTheoryComponentById(row.dataset.layerComponentId);
+      }
+    });
+    row.addEventListener("dragstart", event => {
+      THEORY_PAGE_STATE.layerPanelDragId = row.dataset.layerComponentId;
+      row.classList.add("is-dragging");
+      event.dataTransfer.effectAllowed = "move";
+      try { event.dataTransfer.setData("text/plain", row.dataset.layerComponentId); } catch (err) {}
+    });
+    row.addEventListener("dragover", event => {
+      if (!THEORY_PAGE_STATE.layerPanelDragId) return;
+      event.preventDefault();
+      row.classList.add("is-drop-target");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
+    row.addEventListener("drop", event => {
+      event.preventDefault();
+      const draggedId = THEORY_PAGE_STATE.layerPanelDragId || event.dataTransfer.getData("text/plain");
+      row.classList.remove("is-drop-target");
+      if (!draggedId || draggedId === row.dataset.layerComponentId) return;
+      reorderTheoryLayerByDrop(draggedId, row.dataset.layerComponentId, event.offsetY < row.clientHeight / 2 ? "before" : "after");
+    });
+    row.addEventListener("dragend", () => {
+      THEORY_PAGE_STATE.layerPanelDragId = null;
+      panel.querySelectorAll(".is-dragging, .is-drop-target").forEach(node => node.classList.remove("is-dragging", "is-drop-target"));
+    });
+  });
+  panel.querySelectorAll("[data-layer-action]").forEach(button => {
+    button.addEventListener("click", () => applyTheoryLayerAction(button.dataset.layerAction));
+  });
+}
+
+function bindCardStylePanel(panel) {
+  const cardPanel = panel.querySelector("[data-card-style-panel]");
+  if (!cardPanel) return;
+  cardPanel.querySelectorAll("[data-card-color]").forEach(button => {
+    button.addEventListener("click", event => {
+      event.stopPropagation();
+      if (button.disabled) return;
+      const componentId = cardPanel.dataset.cardComponentId || "";
+      const itemId = cardPanel.dataset.cardItemId || "";
+      const color = button.dataset.cardColor || "";
+      applyCardBackgroundColor(componentId, itemId, color);
+    });
+  });
+}
+
+function selectTheoryComponentById(componentId) {
+  if (!componentId) return;
+  const component = document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(componentId)}"]`)
+    || document.querySelector(`[data-component-id="${cssEscape(componentId)}"]`);
+  if (component) selectTheoryComponent(component);
+}
+
+function applyTheoryLayerAction(action, componentIds = selectedComponents().map(component => component.dataset.componentId)) {
+  if (!THEORY_PAGE_STATE.editing) return;
+  const slide = THEORY_PAGE_STATE.deck?.slides?.[THEORY_PAGE_STATE.currentSlide];
+  if (!slide || !componentIds.length) {
+    setTheoryStatus("请先选择图层");
+    return;
+  }
+  pushDeckHistory("layer-" + action);
+  const components = componentIds
+    .map(id => document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(id)}"]`))
+    .filter(Boolean);
+  const sorted = [...components].sort((a, b) => parseLayerZIndex(a, 1) - parseLayerZIndex(b, 1));
+  const layerNodes = Array.from(slide.components || [])
+    .map(component => document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(component.id)}"]`))
+    .filter(Boolean)
+    .sort((a, b) => parseLayerZIndex(a, 1) - parseLayerZIndex(b, 1));
+  const currentLayers = layerNodes.map(node => ({ node, z: parseLayerZIndex(node, 1) }));
+  const layerValues = currentLayers.map(item => item.z);
+  const maxZ = layerValues.length ? Math.max(...layerValues) : 1;
+  const minZ = layerValues.length ? Math.min(...layerValues) : 1;
+  if (action === "front") {
+    let nextZ = maxZ + 1;
+    sorted.forEach(node => {
+      node.style.zIndex = String(nextZ);
+      nextZ += 1;
+    });
+  } else if (action === "back") {
+    let nextZ = minZ - sorted.length;
+    sorted.forEach(node => {
+      node.style.zIndex = String(nextZ);
+      nextZ += 1;
+    });
+  } else if (action === "forward" || action === "backward") {
+    sorted.forEach(node => moveTheoryLayerOneStep(node, action === "forward" ? 1 : -1, currentLayers.map(item => item.node)));
+  } else if (action === "lock-toggle") {
+    sorted.forEach(node => toggleTheoryComponentLocked(node.dataset.componentId));
+    return;
+  } else if (action === "visible-toggle") {
+    sorted.forEach(node => toggleTheoryComponentVisible(node.dataset.componentId));
+    return;
+  }
+  commitDomToState();
+  markTheoryDirty();
+  refreshTheoryRightPanel();
+}
+
+function moveTheoryLayerOneStep(node, step, allLayerNodes = []) {
+  const current = parseLayerZIndex(node, 1);
+  const others = allLayerNodes.filter(item => item !== node).map(item => ({ item, z: parseLayerZIndex(item, 1) })).sort((a, b) => a.z - b.z);
+  const neighbor = step > 0
+    ? others.find(item => item.z > current)
+    : [...others].reverse().find(item => item.z < current);
+  if (!neighbor) {
+    node.style.zIndex = String(current + step);
+    return;
+  }
+  const neighborZ = neighbor.z;
+  neighbor.item.style.zIndex = String(current);
+  node.style.zIndex = String(neighborZ);
+}
+
+function toggleTheoryComponentLocked(componentId) {
+  const component = componentId ? document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(componentId)}"]`) : null;
+  if (!component) return;
+  const locked = !component.classList.contains("is-locked");
+  component.classList.toggle("is-locked", locked);
+  component.dataset.layerLocked = String(locked);
+  syncTheoryComponentEditableState(component);
+  commitDomToState();
+  markTheoryDirty();
+  refreshTheoryRightPanel();
+}
+
+function toggleTheoryComponentVisible(componentId) {
+  const component = componentId ? document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(componentId)}"]`) : null;
+  if (!component) return;
+  const nextVisible = component.classList.contains("is-hidden");
+  component.classList.toggle("is-hidden", !nextVisible);
+  component.dataset.layerVisible = String(nextVisible);
+  commitDomToState();
+  markTheoryDirty();
+  refreshTheoryRightPanel();
+}
+
+function renameTheoryLayer(componentId) {
+  const component = componentId ? findComponentById(componentId) : null;
+  if (!component) return;
+  const nextName = window.prompt("输入图层名称", component.layerName || layerLabelForType(component.type || "p"));
+  if (nextName === null) return;
+  const name = String(nextName).trim();
+  if (!name) return;
+  const node = document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(componentId)}"]`);
+  if (node) node.dataset.layerName = name;
+  component.layerName = name;
+  markTheoryDirty();
+  refreshTheoryRightPanel();
+}
+
+function reorderTheoryLayerByDrop(draggedId, targetId, position = "before") {
+  const panel = $("rightPanel");
+  if (!panel) return;
+  const list = panel.querySelector("[data-layer-list]");
+  const dragged = panel.querySelector(`[data-layer-component-id="${cssEscape(draggedId)}"]`);
+  const target = panel.querySelector(`[data-layer-component-id="${cssEscape(targetId)}"]`);
+  if (!list || !dragged || !target) return;
+  if (position === "before") list.insertBefore(dragged, target);
+  else list.insertBefore(dragged, target.nextSibling);
+  applyLayerOrderFromPanel();
+}
+
+function applyLayerOrderFromPanel() {
+  const panel = $("rightPanel");
+  const slide = THEORY_PAGE_STATE.deck?.slides?.[THEORY_PAGE_STATE.currentSlide];
+  if (!panel || !slide) return;
+  const rows = Array.from(panel.querySelectorAll("[data-layer-component-id]"));
+  const maxZ = rows.length + 10;
+  rows.forEach((row, index) => {
+    const component = document.querySelector(`.theory-slide.active [data-component-id="${cssEscape(row.dataset.layerComponentId)}"]`);
+    if (!component) return;
+    component.style.zIndex = String(maxZ - index);
+  });
+  commitDomToState();
+  markTheoryDirty();
+  refreshTheoryRightPanel();
+}
+
+function syncTheoryComponentEditableState(component) {
+  const locked = component.classList.contains("is-locked");
+  component.querySelectorAll(".theory-editable").forEach(node => {
+    const isCardComponent = component.dataset.componentType === "card" || component.dataset.componentType === "cards";
+    node.setAttribute("contenteditable", String(THEORY_PAGE_STATE.editing && !locked && !isCardComponent));
+  });
+  component.querySelectorAll(".theory-table-cell").forEach(node => {
+    node.setAttribute("contenteditable", "false");
+    node.classList.remove("is-editing");
+  });
+  const formulaEditor = THEORY_PAGE_STATE.formulaEditor;
+  if (formulaEditor?.componentId === component.dataset.componentId && locked) {
+    closeTheoryFormulaEditor({ save: true });
+  }
+}
+
+function openTheoryLayerContextMenu(component, x, y) {
+  if (!THEORY_PAGE_STATE.editing || !component) return;
+  hideTheoryLayerContextMenu();
+  const menu = document.createElement("div");
+  menu.className = "theory-layer-context-menu";
+  menu.innerHTML = `
+    <button type="button" data-layer-menu-action="front">置于顶层</button>
+    <button type="button" data-layer-menu-action="forward">上移一层</button>
+    <button type="button" data-layer-menu-action="backward">下移一层</button>
+    <button type="button" data-layer-menu-action="back">置于底层</button>
+    <button type="button" data-layer-menu-action="lock-toggle">锁定/解锁</button>
+    <button type="button" data-layer-menu-action="rename">重命名</button>
+    <button type="button" data-layer-menu-action="delete">删除</button>
+  `;
+  menu.style.left = Math.max(12, Math.min(window.innerWidth - 220, x)) + "px";
+  menu.style.top = Math.max(12, Math.min(window.innerHeight - 280, y)) + "px";
+  menu.dataset.componentId = component.dataset.componentId;
+  document.body.appendChild(menu);
+  THEORY_PAGE_STATE.componentContextMenu = menu;
+  menu.querySelectorAll("[data-layer-menu-action]").forEach(button => {
+    button.addEventListener("click", () => {
+      const action = button.dataset.layerMenuAction;
+      hideTheoryLayerContextMenu();
+      if (action === "rename") renameTheoryLayer(component.dataset.componentId);
+      else if (action === "delete") deleteSelectedComponentsById([component.dataset.componentId]);
+      else if (action === "visible-toggle") return;
+      else applyTheoryLayerAction(action, [component.dataset.componentId]);
+    });
+  });
+  window.addEventListener("pointerdown", onTheoryLayerMenuOutsideClick, { once: true, capture: true });
+  window.addEventListener("keydown", onTheoryLayerMenuEscape, { once: true });
+}
+
+function hideTheoryLayerContextMenu() {
+  const menu = THEORY_PAGE_STATE.componentContextMenu;
+  if (menu?.isConnected) menu.remove();
+  THEORY_PAGE_STATE.componentContextMenu = null;
+}
+
+function onTheoryLayerMenuOutsideClick(event) {
+  if (event.target.closest?.(".theory-layer-context-menu")) return;
+  hideTheoryLayerContextMenu();
+}
+
+function onTheoryLayerMenuEscape(event) {
+  if (event.key === "Escape") hideTheoryLayerContextMenu();
+}
+
 function pushDeckHistory(reason = "edit") {
   if (!THEORY_PAGE_STATE.editing || THEORY_PAGE_STATE.historyLocked) return;
   commitDomToState();
@@ -1586,6 +3705,7 @@ function playTheoryModeTransition(mode) {
 }
 
 function addTheorySlide() {
+  finishTextEditing();
   pushDeckHistory("add-slide");
   commitDomToState();
   const newSlide = {
@@ -1603,6 +3723,7 @@ function addTheorySlide() {
 }
 
 function deleteTheorySlide() {
+  finishTextEditing();
   commitDomToState();
   if (THEORY_PAGE_STATE.deck.slides.length <= 1) return;
   pushDeckHistory("delete-slide");
@@ -1619,6 +3740,12 @@ function deleteSelectedComponents() {
     setTheoryStatus("请先选择要删除的组件");
     return false;
   }
+  return deleteSelectedComponentsById(componentIds);
+}
+
+function deleteSelectedComponentsById(componentIds) {
+  if (!THEORY_PAGE_STATE.editing || !componentIds?.length) return false;
+  finishTextEditing();
   pushDeckHistory("delete-components");
   commitDomToState();
   const slide = THEORY_PAGE_STATE.deck.slides[THEORY_PAGE_STATE.currentSlide];
@@ -1635,12 +3762,14 @@ function deleteSelectedComponents() {
 }
 
 function insertTheoryComponent(type) {
+  finishTextEditing();
   pushDeckHistory("insert-component");
   commitDomToState();
   const slide = THEORY_PAGE_STATE.deck.slides[THEORY_PAGE_STATE.currentSlide];
   if (!slide) return;
   const position = defaultInsertPosition();
   const component = newInsertedComponent(type, position);
+  applyTheoryLayerDefaultsForSlide(slide, component);
   slide.components.push(component);
   refreshDeckDom(true);
   selectTheoryComponent(document.querySelector("[data-component-id=\"" + cssEscape(component.id) + "\"]"));
@@ -1654,6 +3783,7 @@ function duplicateSelectedComponents() {
     setTheoryStatus("请先选择要复制的组件");
     return;
   }
+  finishTextEditing();
   pushDeckHistory("duplicate");
   selectedComponents().forEach(component => ensureFreePositioned(component, component.closest(".theory-slide")));
   commitDomToState();
@@ -1665,7 +3795,7 @@ function duplicateSelectedComponents() {
     if (!source) return;
     const copy = cloneComponentWithNewIds(source);
     copy.position = offsetPosition(copy.position || defaultInsertPosition(), 72, 48);
-    copy.position.zIndex = nextZIndex();
+    applyTheoryLayerDefaultsForSlide(slide, copy);
     slide.components.push(copy);
     newIds.push(copy.id);
   });
@@ -1802,19 +3932,49 @@ function toggleSnapToGrid() {
 
 function insertImageComponent(file) {
   if (!THEORY_PAGE_STATE.editing || !file?.type?.startsWith("image/")) return;
+  finishTextEditing();
   const reader = new FileReader();
   reader.onload = () => {
-    pushDeckHistory("insert-image");
+    const src = String(reader.result || "");
+    loadImageNaturalSize(src).then(size => {
+      pushDeckHistory("insert-image");
+      commitDomToState();
+      const slide = THEORY_PAGE_STATE.deck.slides[THEORY_PAGE_STATE.currentSlide];
+      if (!slide) return;
+      const position = defaultImageInsertPosition(size.width, size.height);
+      const component = makeComponent("image", {
+        src,
+        alt: "课件图片",
+        caption: "",
+        imageStyle: "clean",
+        objectFit: "contain",
+        position,
+      });
+      applyTheoryLayerDefaultsForSlide(slide, component);
+      slide.components.push(component);
+      THEORY_PAGE_STATE.selectedIds = [component.id];
+      refreshDeckDom(true);
+      markTheoryDirty();
+    });
+  };
+  reader.onerror = () => setTheoryStatus("图片读取失败");
+  reader.readAsDataURL(file);
+}
+
+function replaceImageComponent(componentId, file) {
+  if (!THEORY_PAGE_STATE.editing || !componentId || !file?.type?.startsWith("image/")) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    pushDeckHistory("replace-image");
     commitDomToState();
     const slide = THEORY_PAGE_STATE.deck.slides[THEORY_PAGE_STATE.currentSlide];
-    if (!slide) return;
-    const position = { ...defaultInsertPosition(), width: "360px", height: "220px" };
-    const component = makeComponent("image", {
-      src: String(reader.result || ""),
-      alt: file.name || "课件图片",
-      position,
-    });
-    slide.components.push(component);
+    const component = slide?.components?.find(item => item.id === componentId && item.type === "image");
+    if (!component) return;
+    component.src = String(reader.result || "");
+    component.alt = "课件图片";
+    component.imageStyle = normalizeImageStyle(component.imageStyle);
+    component.objectFit = normalizeImageObjectFit(component.objectFit);
+    component.caption = String(component.caption || "");
     THEORY_PAGE_STATE.selectedIds = [component.id];
     refreshDeckDom(true);
     markTheoryDirty();
@@ -1823,7 +3983,67 @@ function insertImageComponent(file) {
   reader.readAsDataURL(file);
 }
 
+function loadImageNaturalSize(src) {
+  return new Promise(resolve => {
+    const image = new Image();
+    image.onload = () => resolve({ width: image.naturalWidth || 360, height: image.naturalHeight || 220 });
+    image.onerror = () => resolve({ width: 360, height: 220 });
+    image.src = src;
+  });
+}
+
+function defaultImageInsertPosition(naturalWidth = 360, naturalHeight = 220) {
+  const slideEl = document.querySelector(".theory-slide.active");
+  const slideWidth = slideEl?.clientWidth || THEORY_SLIDE_WIDTH;
+  const slideHeight = slideEl?.clientHeight || Math.round(THEORY_SLIDE_WIDTH * 9 / 16);
+  const maxWidth = Math.round(slideWidth * 0.35);
+  const maxHeight = Math.round(slideHeight * 0.45);
+  const ratio = naturalWidth > 0 && naturalHeight > 0 ? naturalWidth / naturalHeight : 1.6;
+  let width;
+  let height;
+  if (ratio >= 1) {
+    width = Math.min(360, maxWidth);
+    height = width / ratio;
+    if (height > maxHeight) {
+      height = maxHeight;
+      width = height * ratio;
+    }
+  } else {
+    height = Math.min(260, maxHeight);
+    width = height * ratio;
+    if (width > maxWidth) {
+      width = maxWidth;
+      height = width / ratio;
+    }
+  }
+  width = Math.max(120, Math.round(width));
+  height = Math.max(80, Math.round(height));
+  const preferredLeft = Math.round(slideWidth * 0.58);
+  const left = Math.min(Math.max(32, preferredLeft), Math.max(32, slideWidth - width - 40));
+  const top = Math.min(Math.max(126, Math.round((slideHeight - height) / 2)), Math.max(126, slideHeight - height - 36));
+  return {
+    left: left + "px",
+    top: top + "px",
+    width: width + "px",
+    height: height + "px",
+    zIndex: nextZIndex()
+  };
+}
+
 function newInsertedComponent(type, position) {
+  if (type === "title") {
+    const slide = document.querySelector(".theory-slide.active");
+    const titlePosition = {
+      ...position,
+      left: slide ? Math.max(24, (slide.clientWidth - 460) / 2) + "px" : position.left,
+      top: position.top || "72px",
+      width: "460px",
+      height: "92px",
+    };
+    const component = makeDeckTitle("新标题");
+    component.position = titlePosition;
+    return component;
+  }
   if (type === "card") {
     return makeComponent("cards", { position, items: [{ id: uid("card"), title: "新卡片", body: "填写卡片说明。", style: {} }] });
   }
@@ -1834,18 +4054,35 @@ function newInsertedComponent(type, position) {
   if (type === "formula") {
     const formulaPosition = {
       ...position,
-      width: position?.width || "380px",
-      height: position?.height || "150px",
+      width: position?.width || "320px",
+      height: position?.height || "96px",
     };
     return makeComponent("formula", {
       text: THEORY_DEFAULT_FORMULA,
       position: formulaPosition,
       style: {
-        fontSize: "28px",
-        lineHeight: "1.8",
+        fontSize: "24px",
+        lineHeight: "1.15",
         color: "#0f172a",
         textAlign: "center",
       }
+    });
+  }
+  if (type === "table") {
+    const slide = document.querySelector(".theory-slide.active");
+    const width = 520;
+    const height = 220;
+    const tablePosition = {
+      ...position,
+      left: slide ? Math.max(24, (slide.clientWidth - width) / 2) + "px" : position.left,
+      top: slide ? Math.max(110, (slide.clientHeight - height) / 2) + "px" : position.top,
+      width: width + "px",
+      height: height + "px",
+    };
+    return makeComponent("table", {
+      position: tablePosition,
+      tableData: defaultTableData(),
+      tableStyle: defaultTableStyle(),
     });
   }
   return makeComponent("p", { text: "新的文本框", position });
@@ -1863,8 +4100,34 @@ function defaultInsertPosition() {
   };
 }
 
+function nextLayerZIndex(slide = document.querySelector(".theory-slide.active")) {
+  const components = typeof slide?.querySelectorAll === "function"
+    ? Array.from(slide.querySelectorAll(":scope > .theory-component"))
+    : Array.isArray(slide?.components)
+      ? slide.components
+      : [];
+  const values = components
+    .map(item => parseLayerZIndex(item, 1))
+    .filter(Number.isFinite);
+  return (values.length ? Math.max(...values) : 0) + 1;
+}
+
+function nextLayerNameForType(slide, type) {
+  const count = (slide?.components || []).filter(component => (component.type || "p") === type).length + 1;
+  return `${layerLabelForType(type)} ${count}`;
+}
+
+function applyTheoryLayerDefaultsForSlide(slide, component) {
+  component.zIndex = nextLayerZIndex(slide);
+  if (component.position) component.position.zIndex = String(component.zIndex);
+  component.layerName = nextLayerNameForType(slide, component.type || "p");
+  component.locked = Boolean(component.locked);
+  component.visible = component.visible !== false;
+  return component;
+}
+
 function nextZIndex() {
-  return String(Date.now() % 100000);
+  return String(nextLayerZIndex());
 }
 
 function snapValue(value) {
@@ -1875,6 +4138,7 @@ function snapValue(value) {
 function refreshDeckDom(keepEditing) {
   const viewport = $("theorySlideViewport");
   if (!viewport) return;
+  closeTheoryFormulaEditor({ save: true });
   disposeTheoryCharts();
   viewport.innerHTML = THEORY_PAGE_STATE.deck.slides.map((slide, index) => renderTheorySlideMarkup(slide, index)).join("");
   updateTheorySlideScale();
@@ -1883,6 +4147,7 @@ function refreshDeckDom(keepEditing) {
   setTheoryEditing(keepEditing);
   renderTheorySlide(THEORY_PAGE_STATE.currentSlide);
   restoreSelection();
+  refreshTheoryRightPanel();
   queueTheoryChartRender();
 }
 
@@ -1960,19 +4225,23 @@ function selectTheoryComponent(component, editable = null, append = false) {
     return;
   }
   component.classList.add("is-selected");
-  const target = editable || component.querySelector(".theory-editable");
+  const isCardComponent = component.dataset.componentType === "card" || component.dataset.componentType === "cards";
+  const target = editable || (!isCardComponent ? component.querySelector(".theory-editable") : null);
   if (target) target.classList.add("is-selected");
   if (!THEORY_PAGE_STATE.selectedIds.includes(componentId)) THEORY_PAGE_STATE.selectedIds.push(componentId);
   THEORY_PAGE_STATE.selectedId = target?.dataset.editId || componentId;
   updateFontTools();
   updateEditorToolState();
+  refreshTheoryRightPanel();
 }
 
 function clearSelection() {
+  finishTableCellEditing();
   document.querySelectorAll(".is-selected").forEach(node => node.classList.remove("is-selected"));
   THEORY_PAGE_STATE.selectedId = null;
   THEORY_PAGE_STATE.selectedIds = [];
   updateEditorToolState();
+  refreshTheoryRightPanel();
 }
 
 function selectedComponents() {
@@ -2002,6 +4271,7 @@ function bindFontTools() {
     boldBtn.addEventListener("click", () => {
       const selection = window.getSelection();
       if (selection && selection.rangeCount > 0) {
+    if (isCardComponent) component.querySelectorAll(".theory-editable.is-selected").forEach(node => node.classList.remove("is-selected"));
         const range = selection.getRangeAt(0);
         const activeEl = document.querySelector(".theory-slide.active .theory-editable[data-inline-math-editing='true']") || document.activeElement;
         if (activeEl && activeEl.classList.contains("theory-editable") && activeEl.getAttribute("contenteditable") === "true") {
@@ -2095,7 +4365,7 @@ function applyTextStyle(prop, value) {
   pushDeckHistory("text-style");
   targets.forEach(node => {
     node.style[prop] = value;
-    if (node.classList.contains("theory-formula-source")) {
+    if (node.classList.contains("theory-formula-source-data")) {
       const box = node.closest(".theory-formula-box");
       if (box) box.style[prop] = value;
     }
@@ -2111,7 +4381,7 @@ function toggleTextStyle(prop, onValue, offValue) {
   const shouldTurnOff = targets.every(node => node.style[prop] === onValue);
   targets.forEach(node => {
     node.style[prop] = shouldTurnOff ? offValue : onValue;
-    if (node.classList.contains("theory-formula-source")) {
+    if (node.classList.contains("theory-formula-source-data")) {
       const box = node.closest(".theory-formula-box");
       if (box) box.style[prop] = shouldTurnOff ? offValue : onValue;
     }
@@ -2161,7 +4431,7 @@ function bindTheoryDragAndDrop(pageId) {
 }
 
 function startFreeDrag(event, component, pageId) {
-  if (!THEORY_PAGE_STATE.editing || event.button !== 0) return;
+  if (!THEORY_PAGE_STATE.editing || event.button !== 0 || component.classList.contains("is-locked")) return;
   event.preventDefault();
   event.stopPropagation();
   queueDragSession(event, () => startFreeDragSession(component, pageId, event.clientX, event.clientY, event));
@@ -2188,8 +4458,9 @@ function startFreeDragSession(component, pageId, startX, startY, sourceEvent) {
     top: parseFloat(item.style.top || "0"),
   }));
   movingComponents.forEach(item => {
-    item.classList.add("is-dragging");
-    item.style.zIndex = nextZIndex();
+  const isCardComponent = item.dataset.componentType === "card" || item.dataset.componentType === "cards";
+  const target = isCardComponent ? null : item.querySelector(".theory-editable");
+  if (target) target.classList.add("is-selected");
   });
   handlePointerCapture(sourceEvent);
 
@@ -2239,7 +4510,7 @@ function queueDragSession(event, startSession) {
 }
 
 function startResizeComponent(event, component, pageId, direction = "se") {
-  if (!THEORY_PAGE_STATE.editing || event.button !== 0) return;
+  if (!THEORY_PAGE_STATE.editing || event.button !== 0 || component.classList.contains("is-locked")) return;
   event.preventDefault();
   event.stopPropagation();
   queueDragSession(event, () => startResizeSession(component, pageId, direction, event.clientX, event.clientY, event));
@@ -2258,8 +4529,10 @@ function startResizeSession(component, pageId, direction, startX, startY, source
   const startHeight = component.offsetHeight;
   const left = parseFloat(component.style.left || "0");
   const top = parseFloat(component.style.top || "0");
-  const minWidth = Math.min(120, Math.max(72, slide.clientWidth * 0.18));
-  const minHeight = Math.min(72, Math.max(48, slide.clientHeight * 0.12));
+  const isFormula = component.classList.contains("theory-component-formula");
+  const isCardComponent = component.dataset.componentType === "card" || component.dataset.componentType === "cards";
+  const minWidth = isFormula ? 120 : isCardComponent ? 136 : Math.min(120, Math.max(72, slide.clientWidth * 0.18));
+  const minHeight = isFormula ? 48 : isCardComponent ? 72 : Math.min(72, Math.max(48, slide.clientHeight * 0.12));
   component.classList.add("is-resizing");
   component.style.zIndex = nextZIndex();
   handlePointerCapture(sourceEvent);
@@ -2425,6 +4698,10 @@ function collectComponent(componentEl) {
   component.position = componentEl.classList.contains("is-free-positioned")
     ? { left: componentEl.style.left, top: componentEl.style.top, width: componentEl.style.width, height: componentEl.style.height, zIndex: componentEl.style.zIndex }
     : null;
+  component.zIndex = parseLayerZIndex({ zIndex: componentEl.style.zIndex || component.position?.zIndex || component.zIndex || 1 }, 1);
+  component.layerName = componentEl.dataset.layerName || component.layerName || layerLabelForType(component.type || componentEl.dataset.componentType || "p");
+  component.locked = componentEl.classList.contains("is-locked") || componentEl.dataset.layerLocked === "true";
+  component.visible = !(componentEl.classList.contains("is-hidden") || componentEl.dataset.layerVisible === "false");
   if (component.type === "cards") {
     component.items = component.items.map(item => ({
       ...item,
@@ -2434,6 +4711,15 @@ function collectComponent(componentEl) {
       bodyStyle: styleFor(component.id + ":" + item.id + ":body"),
       position: positionForEditUnit(component.id + ":" + item.id)
     }));
+  } else if (component.type === "card") {
+    component.title = textFor(component.id + ":title");
+    component.body = textFor(component.id + ":body");
+    component.text = [component.title, component.body].filter(Boolean).join("\n");
+    component.style = {
+      ...(component.style || {}),
+      titleStyle: styleFor(component.id + ":title"),
+      bodyStyle: styleFor(component.id + ":body")
+    };
   } else if (component.type === "bullets") {
     component.items = component.items.map(item => ({
       ...item,
@@ -2442,8 +4728,15 @@ function collectComponent(componentEl) {
       position: positionForEditUnit(component.id + ":" + item.id)
     }));
   } else if (component.type === "image") {
-    component.alt = textFor(component.id + ":alt") || component.alt || "课件图片";
-    component.style = styleFor(component.id + ":alt");
+    const frame = componentEl.querySelector(".theory-image-frame");
+    component.alt = component.alt || "课件图片";
+    component.caption = textFor(component.id + ":caption") || "";
+    component.style = styleFor(component.id + ":caption");
+    component.imageStyle = normalizeImageStyle(frame?.dataset.imageStyle || component.imageStyle);
+    component.objectFit = normalizeImageObjectFit(frame?.dataset.objectFit || component.objectFit);
+  } else if (component.type === "table") {
+    component.tableData = tableDataFromComponentEl(componentEl);
+    component.tableStyle = tableStyleFromComponentEl(componentEl);
   } else {
     component.text = textFor(component.id + ":text");
     component.style = component.type === "formula"
@@ -2470,11 +4763,14 @@ function findComponentById(componentId) {
 }
 
 function textFor(editId) {
-  const node = document.querySelector("[data-edit-id=\"" + cssEscape(editId) + "\"]");
+  const node = document.querySelector(".theory-formula-source-data[data-edit-id=\"" + cssEscape(editId) + "\"]")
+    || document.querySelector(".theory-formula-box[data-edit-id=\"" + cssEscape(editId) + "\"]")
+    || document.querySelector("[data-edit-id=\"" + cssEscape(editId) + "\"]");
   if (!node) return "";
-  if (node.classList.contains("theory-formula-source")) {
-    const latex = normalizeFormulaLatex(node.innerText || node.textContent || node.dataset.formulaLatex || THEORY_DEFAULT_FORMULA);
+  if (node.classList.contains("theory-formula-source-data") || node.classList.contains("theory-formula-box")) {
+    const latex = normalizeFormulaLatex(node.dataset.formulaLatex || node.innerText || node.textContent || THEORY_DEFAULT_FORMULA);
     node.dataset.formulaLatex = latex;
+    if (node.classList.contains("theory-formula-source-data")) node.textContent = latex;
     return latex;
   }
   if (node.dataset.inlineMathEditing === "true") syncInlineMathRawText(node);
@@ -2482,8 +4778,9 @@ function textFor(editId) {
 }
 
 function formulaStyleFor(editId) {
-  const sourceNode = document.querySelector("[data-edit-id=\"" + cssEscape(editId) + "\"]");
-  const box = sourceNode?.closest(".theory-formula-box");
+  const box = document.querySelector(".theory-formula-box[data-edit-id=\"" + cssEscape(editId) + "\"]");
+  const sourceNode = box?.querySelector(".theory-formula-source-data[data-formula-source='true']")
+    || document.querySelector(".theory-formula-source-data[data-edit-id=\"" + cssEscape(editId) + "\"]");
   const node = box || sourceNode;
   if (!node) return {};
   return {
