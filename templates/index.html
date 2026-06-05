@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8" />
@@ -2061,6 +2061,90 @@
     }
     .theory-deck-shell.is-editing .theory-drag-handle {
       pointer-events: auto;
+    }
+    /* Hover outline indicator for components in editing mode to show selectability */
+    .theory-deck-shell.is-editing .theory-component:hover:not(.is-selected) {
+      outline: 1px solid rgba(37, 99, 235, 0.22) !important;
+      outline-offset: 4px !important;
+      border-radius: 6px !important;
+    }
+    /* Beautiful pill-shaped grab handle that uses Glassmorphism (frosted white and blur) */
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle {
+      background: rgba(255, 255, 255, 0.82) !important;
+      backdrop-filter: blur(8px) !important;
+      -webkit-backdrop-filter: blur(8px) !important;
+      border: 1px solid rgba(148, 163, 184, 0.25) !important;
+      height: 20px !important;
+      width: 46px !important;
+      top: -12px !important;
+      left: calc(50% - 23px) !important;
+      right: auto !important;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.08) !important;
+      border-radius: 999px !important;
+      opacity: 1 !important;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      cursor: grab !important;
+      transition: all 0.2s ease !important;
+    }
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle::after,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle::after {
+      content: "⠿" !important;
+      font-size: 14px !important;
+      font-weight: normal !important;
+      color: #64748b !important;
+      display: block !important;
+      line-height: 1 !important;
+      transition: color 0.2s ease !important;
+    }
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle:hover,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle:hover {
+      background: rgba(255, 255, 255, 0.95) !important;
+      border-color: rgba(37, 99, 235, 0.35) !important;
+      transform: scale(1.06) !important;
+    }
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle:hover::after,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle:hover::after {
+      color: #2563eb !important;
+    }
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle:active,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle:active {
+      cursor: grabbing !important;
+      transform: scale(0.96) !important;
+      box-shadow: 0 2px 6px rgba(15, 23, 42, 0.06) !important;
+    }
+    /* Floating helper tooltip that appears right above the handle when hovered or selected */
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle::before,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle::before {
+      content: "按住拖拽移动" !important;
+      position: absolute !important;
+      bottom: 26px !important;
+      left: 50% !important;
+      transform: translateX(-50%) !important;
+      background: #0f172a !important; /* Premium dark slate background */
+      color: #ffffff !important;
+      font-size: 10px !important;
+      font-weight: 500 !important;
+      padding: 4px 8px !important;
+      border-radius: 6px !important;
+      white-space: nowrap !important;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.15) !important;
+      pointer-events: none !important;
+      opacity: 0.9 !important;
+      transition: opacity 0.2s ease, transform 0.2s ease !important;
+      z-index: 100 !important;
+      line-height: 1 !important;
+    }
+    .theory-deck-shell.is-editing .theory-component.is-selected .theory-drag-handle:hover::before,
+    .theory-deck-shell.is-editing .theory-component:hover .theory-drag-handle:hover::before {
+      opacity: 1 !important;
+      transform: translateX(-50%) translateY(-2px) !important;
+    }
+    /* Hide the tooltip while actively dragging to prevent visual clutter */
+    .theory-deck-shell.is-editing .theory-component.is-dragging .theory-drag-handle::before {
+      display: none !important;
     }
     .theory-deck-shell.is-editing .theory-resize-handle {
       pointer-events: auto;
@@ -4676,7 +4760,7 @@ const DEFAULT_FEATURE = {{ default_feature | tojson }};
 <script src="static/js/theory-pages/evaluation.js?v=20260522_theory03"></script>
 <script src="static/js/theory-pages/result.js?v=20260522_theory03"></script>
 <script src="static/js/theory-pages/thinking.js?v=20260522_theory03"></script>
-<script src="static/js/theory_page.js?v=20260603_subpath01"></script>
+<script src="static/js/theory_page.js?v=20260605_pptx_formula_fixed"></script>
 <script src="static/js/preprocess_page.js?v=20260601_standard_viz_guide04"></script>
 <script src="static/js/predict_page.js?v=20260521_predict02"></script>
 <script src="static/js/train_page.js?v=20260601_train_loss_random01"></script>

@@ -6053,6 +6053,128 @@ function captureChartCanvasInMemory(component) {
   }
 }
 
+let mathjaxSvgLoadPromise = null;
+
+function loadMathJaxSvg() {
+  if (window.MathJax && typeof window.MathJax.tex2svg === "function") {
+    return Promise.resolve();
+  }
+  if (mathjaxSvgLoadPromise) {
+    return mathjaxSvgLoadPromise;
+  }
+  mathjaxSvgLoadPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = "https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js";
+    script.async = true;
+    script.onload = () => {
+      resolve();
+    };
+    script.onerror = (err) => {
+      mathjaxSvgLoadPromise = null;
+      reject(err);
+    };
+    document.head.appendChild(script);
+  });
+  return mathjaxSvgLoadPromise;
+}
+
+async function renderFormulaToPng(latex) {
+  let formula = normalizeFormulaLatex(latex);
+  if (formula.startsWith("$$") && formula.endsWith("$$")) {
+    formula = formula.slice(2, -2).trim();
+  } else if (formula.startsWith("$") && formula.endsWith("$")) {
+    formula = formula.slice(1, -1).trim();
+  }
+
+  // 1. Try local MathJax SVG rendering first
+  try {
+    await loadMathJaxSvg();
+    if (window.MathJax && typeof window.MathJax.tex2svg === "function") {
+      const svgNode = window.MathJax.tex2svg(formula).querySelector("svg");
+      if (svgNode) {
+        let valWidth = svgNode.getAttribute("width");
+        let valHeight = svgNode.getAttribute("height");
+        let w = 400; 
+        let h = 100;
+        if (valWidth && valWidth.endsWith("ex")) {
+          w = parseFloat(valWidth) * 9; 
+        }
+        if (valHeight && valHeight.endsWith("ex")) {
+          h = parseFloat(valHeight) * 9;
+        }
+        
+        const padding = 15;
+        w += padding * 2;
+        h += padding * 2;
+
+        svgNode.setAttribute("fill", "#0F172A");
+        svgNode.style.color = "#0F172A";
+
+        const serializer = new XMLSerializer();
+        const svgString = serializer.serializeToString(svgNode);
+        
+        const svgBase64 = btoa(unescape(encodeURIComponent(svgString)));
+        const svgDataUrl = "data:image/svg+xml;base64," + svgBase64;
+        
+        const pngDataUrl = await new Promise((resolvePng, rejectPng) => {
+          const img = new Image();
+          img.src = svgDataUrl;
+          img.onload = () => {
+            const canvas = document.createElement("canvas");
+            const scale = 3; 
+            canvas.width = w * scale;
+            canvas.height = h * scale;
+            const ctx = canvas.getContext("2d");
+            ctx.scale(scale, scale);
+            
+            ctx.fillStyle = "#F8FAFC";
+            ctx.fillRect(0, 0, w, h);
+            
+            ctx.drawImage(img, padding, padding, w - padding * 2, h - padding * 2);
+            resolvePng(canvas.toDataURL("image/png"));
+          };
+          img.onerror = (err) => {
+            rejectPng(err);
+          };
+        });
+        return { data: pngDataUrl, width: w, height: h };
+      }
+    }
+  } catch (err) {
+    console.warn("MathJax SVG render failed, falling back to online API:", err);
+  }
+
+  // 2. Fallback to online CodeCogs API
+  try {
+    const encodedFormula = encodeURIComponent(`\\dpi{300}\\bg{F8FAFC}\\fg{0F172A} ${formula}`);
+    const url = `https://latex.codecogs.com/png.image?${encodedFormula}`;
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error("CodeCogs request failed");
+    const blob = await resp.blob();
+    const base64 = await new Promise((resolveBlob) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolveBlob(reader.result);
+      reader.readAsDataURL(blob);
+    });
+    
+    const dimensions = await new Promise((resolveDim) => {
+      const img = new Image();
+      img.src = base64;
+      img.onload = () => {
+        resolveDim({ width: img.width, height: img.height });
+      };
+      img.onerror = () => {
+        resolveDim({ width: 400, height: 100 });
+      };
+    });
+    
+    return { data: base64, width: dimensions.width, height: dimensions.height };
+  } catch (err) {
+    console.error("Formula rendering fallback failed:", err);
+    return null;
+  }
+}
+
 async function exportTheoryPptx(pageId) {
   const exportBtn = $("theoryExportBtn");
   if (!exportBtn) return;
@@ -6277,19 +6399,48 @@ async function exportTheoryPptx(pageId) {
             });
           } 
           else if (type === "formula") {
-            const cleanedFormulaText = cleanMathFormula(comp.text || "");
-            slide.addText(cleanedFormulaText, {
+            slide.addText("", {
               x, y, w, h,
               fill: { color: "F8FAFC" },
               line: { color: "E2E8F0", width: 1 },
-              color: "0F172A",
-              fontSize: 13,
-              fontFace: "Microsoft YaHei",
-              bold: true,
-              valign: "middle",
-              align: "center",
               rectRadius: 0.08
             });
+            const formulaResult = await renderFormulaToPng(comp.text || "");
+            if (formulaResult && formulaResult.data) {
+              const formulaRatio = formulaResult.width / formulaResult.height;
+              const targetW = w - 0.2;
+              const targetH = h - 0.2;
+              let finalW = targetW;
+              let finalH = targetH;
+              if (formulaRatio > targetW / targetH) {
+                finalW = targetW;
+                finalH = targetW / formulaRatio;
+              } else {
+                finalH = targetH;
+                finalW = targetH * formulaRatio;
+              }
+              const finalX = x + 0.1 + (targetW - finalW) / 2;
+              const finalY = y + 0.1 + (targetH - finalH) / 2;
+
+              slide.addImage({
+                data: formulaResult.data,
+                x: finalX,
+                y: finalY,
+                w: finalW,
+                h: finalH
+              });
+            } else {
+              const cleanedFormulaText = cleanMathFormula(comp.text || "");
+              slide.addText(cleanedFormulaText, {
+                x, y, w, h,
+                color: "0F172A",
+                fontSize: 13,
+                fontFace: "Microsoft YaHei",
+                bold: true,
+                valign: "middle",
+                align: "center"
+              });
+            }
           } 
           else if (type === "table") {
             const tableData = normalizeTableData(comp.tableData);
